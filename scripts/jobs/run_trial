@@ -1,0 +1,175 @@
+#!/bin/bash
+#MSUB -l nodes=1
+#MSUB -l partition=atlas
+#MSUB -q pbatch
+#MSUB -m ae
+#MSUB -V
+#MSUB -j oe
+#
+# Run a single fpanalysis trial.
+#
+# Requires the following environment variables to be defined:
+#
+#   APPNAME             mutatee base filename (ROOT/apps/APPNAME/APPNAME)
+#   TAG                 short (filename-safe) description of trial
+#
+# Optional environment variables:
+#
+#   ROOT_PATH           base path (defaults to working dir)
+#   LOG_PATH            path for log files (defaults to ROOT/log)
+#   COPY_FILES          files to copy to temp dir (e.g. input files)
+#   PROFILER            optional profiler command prefix (e.g. callgrind)
+#   SKIP_FPINST         skips fpinst step if defined
+#   INST_PARAMS         parameters to fpinst
+#   CONFIG              special configuration for fpinst
+#   SKIP_MUTANT         skips mutant run step if defined
+#   MUTANT_PARAMS       parameters to rewritten mutant
+#
+
+# check for required environment variables
+if [ -z "$APPNAME" ]; then
+    echo "ERROR: APPNAME must be defined!"
+    exit 1
+fi
+if [ -z "$TAG" ]; then
+    echo "ERROR: TAG must be defined!"
+    exit 1
+fi
+
+# grab paths if not present in environment
+if [ -z "$ROOT_PATH" ]; then
+    export ROOT_PATH=`pwd`
+fi
+if [ -z "$LOG_PATH" ]; then
+    export LOG_PATH="$ROOT_PATH/log"
+fi
+
+# timing command
+#export TIME_CMD="time"
+export TIME_CMD="/usr/bin/time -v"
+
+# more paths
+export ORIG_PATH=`pwd`
+export APP_PATH="$ROOT_PATH/apps/$APPNAME"
+export TMP_PATH="$ROOT_PATH/tmp/$APPNAME-$TAG"
+
+# more filenames and parameters
+export MUTATEE="$APP_PATH/$APPNAME"
+export MUTANT="$TMP_PATH/$APPNAME"
+export LOGFILE="$LOG_PATH/$APPNAME-$TAG.log"
+export CFG_PARAMS="-c $TMP_PATH/$APPNAME.cfg"
+export LOG_PARAMS="-L $LOGFILE"
+export OUT_PARAMS="-o $MUTANT"
+
+# output tag
+echo "===  $APPNAME - $TAG  ==="
+
+# output environment
+echo ""
+echo "ENVIRONMENT:"
+echo ""
+env
+echo ""
+
+# perform instrumentation and create a mutated binary
+if [ -z "$SKIP_FPINST" ]; then
+
+    # check for app folder
+    if [ ! -d "$APP_PATH" ]; then
+        echo "ERROR: $APP_PATH does not exist!"
+        exit 1
+    fi
+
+    # clear/create temporary folder
+    if [ -e "$TMP_PATH" ]; then
+        echo "rm -rf $TMP_PATH"
+        rm -rf $TMP_PATH
+    fi
+    echo "mkdir -p $TMP_PATH"
+    mkdir -p $TMP_PATH
+
+    # change to app folder and copy files to temp folder
+    echo "cd $APP_PATH"
+    cd $APP_PATH
+    if [ -n "$COPY_FILES" ]; then
+        echo "cp -r $COPY_FILES $TMP_PATH/"
+        cp -r $COPY_FILES $TMP_PATH/
+    fi
+    if [ -f "$APPNAME.cfg" ]; then
+        echo "cp -f $APPNAME.cfg $TMP_PATH/"
+        cp -f $APPNAME.cfg $TMP_PATH/
+    fi
+
+    # finalize and print configuration
+    if [ -n "$CONFIG" ]; then
+        echo "$CONFIG" >>$TMP_PATH/$APPNAME.cfg
+    fi
+    touch $TMP_PATH/$APPNAME.cfg
+    echo ""
+    echo "CONFIG:"
+    echo ""
+    cat $TMP_PATH/$APPNAME.cfg
+
+    # change to temp folder
+    echo ""
+    echo "cd $TMP_PATH"
+    cd $TMP_PATH
+
+    # RUN MUTATOR
+    echo ""
+    echo "$TIME_CMD $PROFILER fpinst $INST_PARAMS $CFG_PARAMS $LOG_PARAMS $OUT_PARAMS $MUTATEE"
+    eval "$TIME_CMD $PROFILER fpinst $INST_PARAMS $CFG_PARAMS $LOG_PARAMS $OUT_PARAMS $MUTATEE"
+
+    # return to original path (to avoid any rewritten shared libraries)
+    echo ""
+    echo "cd $ORIG_PATH"
+    cd $ORIG_PATH
+
+    # zip mutant (can be rather large) to save space
+    echo "gzip $MUTANT"
+    gzip $MUTANT
+
+fi
+
+# run the mutated binary
+if [ -z "$SKIP_MUTANT" ]; then
+
+    # check for temp folder
+    if [ ! -d "$TMP_PATH" ]; then
+        echo "ERROR: $TMP_PATH does not exist!"
+        exit 1
+    fi
+
+    # uncompress mutant if necessary
+    if [ -f "$MUTANT.gz" ]; then
+        echo "gunzip $MUTANT.gz"
+        gunzip $MUTANT.gz
+    fi
+
+    # check for mutant
+    if [ ! -f "$MUTANT" ]; then
+        echo "ERROR: $MUTANT does not exist!"
+        exit 1
+    fi
+
+    # change to temp folder
+    echo ""
+    echo "cd $TMP_PATH"
+    cd $TMP_PATH
+
+    # RUN MUTANT
+    echo ""
+    echo "$TIME_CMD $PROFILER $MUTANT $MUTANT_PARAMS"
+    eval "$TIME_CMD $PROFILER $MUTANT $MUTANT_PARAMS"
+
+    # return to original path (to avoid any rewritten shared libraries)
+    echo ""
+    echo "cd $ORIG_PATH"
+    cd $ORIG_PATH
+
+    # zip mutant (can be rather large) to save space
+    echo "gzip $MUTANT"
+    gzip $MUTANT
+
+fi
+

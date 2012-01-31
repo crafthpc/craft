@@ -1,0 +1,6 @@
+#/bin/bash
+
+. setpaths
+
+./fpview demo/quake_*.log
+

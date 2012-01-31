@@ -1,0 +1,18 @@
+#!/bin/bash
+
+source $HOME/jobs/msub_func
+
+export APPNAME="arith"
+
+export TAG="d_cancel"
+export INST_PARAMS="-i --count-inst --detect-cancel"
+startjob
+
+export TAG="ptr_double"
+export INST_PARAMS="-i --pointer-double -r"
+startjob
+
+export TAG="ptr_single"
+export INST_PARAMS="-i --pointer-single -r"
+startjob
+

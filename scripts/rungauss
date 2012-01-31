@@ -1,0 +1,51 @@
+#!/bin/bash
+
+#ANALYSIS="--detect-cancel"
+#TAG="cancel"
+
+#ANALYSIS="--pointer-single"
+#TAG="single"
+
+ANALYSIS="--pointer-quad"
+TAG="quad"
+
+#OPTIONS="-i -l -r"
+OPTIONS="-i -l"
+
+#FUNCS="-f tests/fptest7.funcs"
+FUNCS=
+
+#DEBUG="-g"
+DEBUG=
+
+#EXENAME="tests/fptest7"
+EXENAME="tests/gauss/gauss"
+
+rm -f libm.so.6 libc.so.6
+make
+
+echo "" >$TAG.out
+
+ALL_SIZES="10 25 50 75 100 250 500 750 1000"
+#ALL_SIZES="10 25 50"
+#ALL_SIZES="1000"
+for SIZE in $ALL_SIZES
+do
+    echo "### SIZE = $SIZE"
+    echo "### SIZE = $SIZE" >>$TAG.out
+
+    CONFIG1="report:*mat=$SIZE $SIZE"
+    LOGFILE="gauss-$TAG-$SIZE.log"
+
+    echo ./fpinst $ANALYSIS $OPTIONS $DEBUG $FUNCS -C "$CONFIG1" -L $LOGFILE $EXENAME >>$TAG.out
+    ./fpinst $ANALYSIS $OPTIONS $DEBUG $FUNCS -C "$CONFIG1" -L $LOGFILE $EXENAME >>$TAG.out
+
+    MATFILE="tests/gauss/jun2_rand_$SIZE""x$SIZE.txt"
+
+    echo time ./mutant $MATFILE >>$TAG.out
+    time ./mutant $MATFILE >>$TAG.out
+
+    rm -f libm.so.6 libc.so.6
+done
+
+

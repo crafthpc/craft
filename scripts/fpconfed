@@ -1,0 +1,10 @@
+#!/bin/sh
+
+BACKGROUND="y"
+
+if [ "$BACKGROUND" = "y" ]; then
+    java -Xmx1024M -cp $DYNINST_ROOT/fpanalysis/viewer ConfigEditorApp $@ &
+else
+    java -Xmx1024M -cp $DYNINST_ROOT/fpanalysis/viewer ConfigEditorApp $@
+fi
+

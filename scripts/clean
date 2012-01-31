@@ -1,0 +1,4 @@
+#!/bin/sh
+
+rm -f fpinst.log mutant libm.* libc.*
+

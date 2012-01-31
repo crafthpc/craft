@@ -1,0 +1,19 @@
+#!/bin/sh
+
+BACKGROUND="y"
+
+for p in $@; do
+    if [ "$p" = "-c" ]; then
+        BACKGROUND="n"
+    fi
+    if [ "$p" = "-i" ]; then
+        BACKGROUND="n"
+    fi
+done
+
+if [ "$BACKGROUND" = "y" ]; then
+    java -Xmx1024M -cp $DYNINST_ROOT/fpanalysis/viewer ViewerApp $@ &
+else
+    java -Xmx1024M -cp $DYNINST_ROOT/fpanalysis/viewer ViewerApp $@
+fi
+

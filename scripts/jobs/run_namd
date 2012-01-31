@@ -1,0 +1,31 @@
+#!/bin/bash
+
+source $HOME/jobs/msub_func
+
+export APPNAME="namd"
+export COPY_FILES="namd.input"
+
+# for profiling
+#export PROFILER="valgrind --tool=callgrind --dump-every-bb=1000000000 --combine-dumps=yes"
+#export SKIP_MUTANT="yes"
+
+export ITERATIONS=1
+
+export TAG="d_cancel-$ITERATIONS"
+#export TAG="d_cancel-callgrind"
+export INST_PARAMS="-i --count-inst --detect-cancel"
+export MUTANT_PARAMS="--input namd.input --iterations $ITERATIONS"
+startjob
+
+export TAG="ptr_double-$ITERATIONS"
+#export TAG="ptr_double-callgrind"
+export INST_PARAMS="-i --pointer-double"
+export MUTANT_PARAMS="--input namd.input --iterations $ITERATIONS"
+startjob
+
+export TAG="ptr_single-$ITERATIONS"
+#export TAG="ptr_single-callgrind"
+export INST_PARAMS="-i --pointer-single"
+export MUTANT_PARAMS="--input namd.input --iterations $ITERATIONS"
+startjob
+

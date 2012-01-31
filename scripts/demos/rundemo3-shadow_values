@@ -1,0 +1,10 @@
+#/bin/bash
+
+. setpaths
+
+gedit tests/sum1.c &
+xterm -hold -e tests/sum1 &
+./fpdemo --shadow-quad tests/sum1
+#gedit tests/sum1.cfg &
+#./fpdemo --shadow-quad -c tests/sum1.cfg tests/sum1
+

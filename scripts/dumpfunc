@@ -1,0 +1,80 @@
+#!/usr/bin/ruby
+#
+# Prints a function from a binary, following all unconditional jumps
+# (ex. trampolines).
+#
+
+obj_file = ARGV[0]
+func_name = ARGV[1]
+
+
+# grab disassembly
+if func_name.start_with?("0x") then
+
+    # start at an address
+    addr = func_name
+    puts "Printing from #{addr} in #{obj_file}:"
+    obj_disas = `objdump -D --start-address=#{addr} #{obj_file}`
+    obj_disas = obj_disas.split("\n")
+    in_tramp = true
+    oi = 0
+    obj_done = false
+    while (oi < obj_disas.length) && (not obj_disas[oi] =~ /.*#{addr[2,addr.length]}.*:/)
+        oi += 1
+    end
+
+else
+
+    # specific function
+    puts "Printing function \"#{func_name}\" from #{obj_file}:"
+    obj_disas = `objdump -D #{obj_file}`
+    obj_disas = obj_disas.split("\n")
+    in_tramp = false
+    oi = 0
+    obj_done = false
+
+    # find function
+    while (oi < obj_disas.length) && (not obj_disas[oi] =~ /<.*#{func_name}.*>:/)
+        oi += 1
+    end
+    if oi >= obj_disas.length then
+        obj_done = true
+    end
+end
+
+# scan code
+while not obj_done do
+    oline = obj_disas[oi]
+    puts oline
+    oi += 1
+
+    # ending conditions
+    if (oline =~ /^$/) || (oline =~ /\(baddd\)/) || (oline =~ /ret(q?)\s*$/) then
+        obj_done = true
+    end
+
+    # follow unconditional jumps
+    if (not in_tramp) and (oline =~ /(jmp)(q?)\s*([0-9a-fA-F]+).*dyninst.*$/) then
+        puts "JUMP:"
+        addr = $3
+        in_tramp = true
+        obj_disas = `objdump -D --start-address=0x#{addr} #{obj_file}`
+        obj_disas = obj_disas.split("\n")
+        oi = 0
+        while not obj_disas[oi] =~ /^\s*#{addr}/ do
+            oi += 1
+        end
+    #elsif (in_tramp) and (oline =~ /jmp(q?)\s*([0-9a-fA-F]+)\s*$/) and (not (oline =~ /dyninst/)) then
+    elsif (in_tramp) and (oline =~ /(jmp)(q?)\s*([0-9a-fA-F]+)/) then
+        puts "JUMP:"
+        addr = $3
+        #in_tramp = false
+        obj_disas = `objdump -D --start-address=0x#{addr} #{obj_file}`
+        obj_disas = obj_disas.split("\n")
+        oi = 0
+        while not obj_disas[oi] =~ /^\s*#{addr}/ do
+            oi += 1
+        end
+    end
+end
+

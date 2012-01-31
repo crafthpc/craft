@@ -1,0 +1,323 @@
+#!/bin/bash
+
+#./fpinst --count-inst tests/catastrophic
+#mv c_inst.log demo/catastrophic_count.log
+#./fpinst --count-inst tests/quadroot 1 2 1
+#mv c_inst.log demo/quadroot_count.log
+#./fpinst --count-inst tests/sum1
+#mv c_inst.log demo/sum1_count.log
+
+#./fpinst --detect-cancel tests/catastrophic
+#mv d_cancel.log demo/catastrophic_cancel.log
+#./fpinst --detect-cancel tests/quadroot 1 2 1
+#mv d_cancel.log demo/quadroot_cancel.log
+#./fpinst --detect-cancel tests/sum1
+#mv d_cancel.log demo/sum1_cancel.log
+
+#./fpinst -m --shadow-quad tests/catastrophic
+#mv sh_quad.log demo/catastrophic_quad.log
+#./fpinst -m --shadow-quad tests/quadroot 1 2 1
+#mv sh_quad.log demo/quadroot_quad.log
+#./fpinst -m --shadow-quad -c tests/sum1.cfg tests/sum1
+#mv sh_quad.log demo/sum1_quad.log
+
+#./fpinst -m --shadow-single tests/catastrophic
+#mv sh_single.log demo/catastrophic_single.log
+#./fpinst -m --shadow-single tests/quadroot 1 2 1
+#mv sh_single.log demo/quadroot_single.log
+#./fpinst -m --shadow-single -c tests/sum1.cfg tests/sum1
+#mv sh_single.log demo/sum1_single.log
+
+# QUAKE (count/cancel: <2 min; quad: 18 min; single: 19 min)
+#./fpinst -i --count-inst -o quake.modified tests/quake
+#time ./quake.modified <tests/quake.in.short
+#mv c_inst.log demo/quake_count.log
+#./fpinst -i --detect-cancel -o quake.modified tests/quake
+#time ./quake.modified <tests/quake.in.short
+#mv d_cancel.log demo/quake_cancel.log
+#./fpinst -i -m --shadow-quad -o quake.modified tests/quake
+#time ./quake.modified <tests/quake.in.short
+#mv sh_quad.log demo/quake_quad.log
+#./fpinst -i -m --shadow-single -o quake.modified tests/quake
+#time ./quake.modified <tests/quake.in.short
+#mv sh_single.log demo/quake_single.log
+
+# MINDLESS - muller
+#./fpinst --count-inst tests/mindless/muller 80
+#mv c_inst.log demo/muller_count.log
+#./fpinst --detect-cancel tests/mindless/muller 80
+#mv d_cancel.log demo/muller_cancel.log
+#./fpinst --shadow-rational -c tests/mindless/muller.cfg tests/mindless/muller 80
+#mv sh_rational.log demo/muller_rational.log
+
+# PARTIAL PIVOTING PATHOLOGICAL EXAMPLES
+#PP_PATH_SIZES="5 25 50 100"
+#for s in $PP_PATH_SIZES
+#do
+    #ppcountname="pp_path_"$s"_pp_count"
+    #fpcountname="pp_path_"$s"_fp_count"
+    #ppcancelname="pp_path_"$s"_pp_cancel"
+    #fpcancelname="pp_path_"$s"_fp_cancel"
+    #ppquadname="pp_path_"$s"_pp_quad"
+    #fpquadname="pp_path_"$s"_fp_quad"
+    #ruby tests/gen_pp_pathological.rb $s tests/pp_path_$s
+
+    #./fpinst --count-inst tests/gauss/gauss -pp tests/pp_path_$s.mat
+    #mv c_inst.log demo/$ppcountname.log
+    #./fpinst --count-inst tests/gauss/gauss -fp tests/pp_path_$s.mat
+    #mv c_inst.log demo/$fpcountname.log
+
+    #./fpinst --detect-cancel tests/gauss/gauss -pp tests/pp_path_$s.mat
+    #mv d_cancel.log demo/$ppcancelname.log
+    #./fpinst --detect-cancel tests/gauss/gauss -fp tests/pp_path_$s.mat
+    #mv d_cancel.log demo/$fpcancelname.log
+
+    #./fpinst --shadow-quad -m -c tests/pp_path_$s.cfg tests/gauss/gauss -pp tests/pp_path_$s.mat
+    #mv sh_quad.log demo/$ppquadname.log
+    #./fpinst --shadow-quad -m -c tests/pp_path_$s.cfg tests/gauss/gauss -fp tests/pp_path_$s.mat
+    #mv sh_quad.log demo/$fpquadname.log
+#done
+
+
+
+###################   BEGIN GAUSSIAN EXAMPLE ##################
+
+# run with these parameters and find scanf fld instruction
+#GAUSS_ANALYSIS_MODES="cinst dcancel"
+#GAUSS_PROGRAM_MODES="all"
+#GAUSS_MATRIX_TAG="apr2"
+#GAUSS_OUTPUT_TAG="apr2test"
+
+# cancel run
+#GAUSS_ANALYSIS_MODES="cinst dcancel"
+#GAUSS_PROGRAM_MODES="czp cpp cfp sm pc pcpp cm cmpp"
+#GAUSS_MATRIX_TAG="mar31"
+#GAUSS_OUTPUT_TAG="mar31reg"
+
+# cancel (diagonal-only) run
+#GAUSS_ANALYSIS_MODES="cinst dcancel"
+#GAUSS_PROGRAM_MODES="czp cpp cfp sm pc pcpp cm cmpp"
+#GAUSS_MATRIX_TAG="apr2"
+#GAUSS_OUTPUT_TAG="apr2diag"
+
+# cancel (diagonal-only with varying logkap)
+#GAUSS_ANALYSIS_MODES="cinst dcancel"
+#GAUSS_PROGRAM_MODES="czp sm"
+#GAUSS_MATRIX_TAG="apr5"
+#GAUSS_OUTPUT_TAG="apr5t05"
+
+# cancel (diagonal-only with varying logkap)
+#GAUSS_ANALYSIS_MODES="cinst dcancel"
+#GAUSS_PROGRAM_MODES="czp sm"
+#GAUSS_MATRIX_TAG="apr6type4"
+#GAUSS_OUTPUT_TAG="apr6type4t5"
+
+# cancel (diagonal-only with varying pvtsize)
+#GAUSS_ANALYSIS_MODES="cinst dcancel"
+#GAUSS_PROGRAM_MODES="czp"
+#GAUSS_MATRIX_TAG="apr6"
+#GAUSS_OUTPUT_TAG="apr6stop"
+
+# full run
+#GAUSS_ANALYSIS_MODES="cinst dcancel shquad"
+#GAUSS_PROGRAM_MODES="czp cpp cfp sm pc pcpp cm cmpp"
+#GAUSS_MATRIX_TAG="mar31"
+#GAUSS_OUTPUT_TAG="mar31full"
+
+#for amode in $GAUSS_ANALYSIS_MODES
+#do
+    #fpargs="--null"
+    #if [[ "$amode" == "cinst" ]]; then
+        #fpargs="--count-inst"
+    #elif [[ "$amode" == "dcancel" ]]; then
+        #fpargs="--detect-cancel"
+    #elif [[ "$amode" == "shquad" ]]; then
+        #fpargs="-m --shadow-quad"
+    #fi
+    #./fpinst -i $fpargs -o gauss.$amode tests/gauss/gauss
+    #echo "log_file=gauss.log" >>fpinst.cfg
+    #echo "enable_sampling=no" >>fpinst.cfg
+    #OPTIONAL echo "mismatch_addresses=8048fe5" >>fpinst.cfg
+    #OPTIONAL echo "dcancel_addresses=8049b19 804a724 804b77e 804bfb5 804c72a 804cfc6 804d951 804e1ea" >>fpinst.cfg
+    #cp fpinst.cfg fpinst.cfg.orig
+
+    #for pmode in $GAUSS_PROGRAM_MODES
+    #do
+        #geargs=""
+        #if [[ "$pmode" == "czp" ]]; then
+            #geargs=""
+        #elif [[ "$pmode" == "cpp" ]]; then
+            #geargs="-cpp"
+        #elif [[ "$pmode" == "cfp" ]]; then
+            #geargs="-cfp"
+        #elif [[ "$pmode" == "sm" ]]; then
+            #geargs="-sm"
+        #elif [[ "$pmode" == "pc" ]]; then
+            #geargs="-pc"
+        #elif [[ "$pmode" == "pcpp" ]]; then
+            #geargs="-pcpp"
+        #elif [[ "$pmode" == "cm" ]]; then
+            #geargs="-cm"
+        #elif [[ "$pmode" == "cmpp" ]]; then
+            #geargs="-cmpp"
+        #elif [[ "$pmode" == "all" ]]; then
+            #geargs="-a"
+        #fi
+
+        #filter="tests/gauss/"$GAUSS_MATRIX_TAG"_*_*x*.txt"
+        #for file in `ls $filter`
+        #do
+            #cp fpinst.cfg.orig fpinst.cfg
+            #extract="s/.*"$GAUSS_MATRIX_TAG"_\(.*\)_\(.*\)x\(.*\)\.txt/\\1/"
+            #matrix=`echo $file | sed $extract`
+            #extract="s/.*"$GAUSS_MATRIX_TAG"_\(.*\)_\(.*\)x\(.*\)\.txt/\\2/"
+            #size=`echo $file | sed $extract`
+            #if [[ "$matrix" == "pvt1" ]]; then
+                #echo "min_priority=1" >>fpinst.cfg
+            #elif [[ "$matrix" == "pvt2" ]]; then
+                #echo "min_priority=1" >>fpinst.cfg
+            #elif [[ "$matrix" == "pvt4" ]]; then
+                #echo "min_priority=7" >>fpinst.cfg
+            #elif [[ "$matrix" == "pvt6" ]]; then
+                #echo "min_priority=13" >>fpinst.cfg
+            #elif [[ "$matrix" == "pvt8" ]]; then
+                #echo "min_priority=20" >>fpinst.cfg
+            #else
+                #echo "min_priority=1" >>fpinst.cfg
+            #fi
+            #echo "report:*mat="$size" "$size >>fpinst.cfg
+            #outtag="gauss_"$GAUSS_OUTPUT_TAG"_"$matrix"_"$size"x"$size"_"$pmode"_"$amode
+            #echo " "
+            #echo "TAG: $outtag"
+            #time ./gauss.$amode $geargs $file
+            #mv gauss.log demo/$outtag.log
+        #done
+    #done
+#done
+
+###################   END GAUSSIAN EXAMPLE ##################
+
+
+# SPEC_CPU06 - milc  (count: 110 min; cancel: 156 min)
+# optimized time: 77m53.184s
+# normal: 1m48.825s
+#./fpinst -i --count-inst --detect-cancel -o milc.modified tests/milc/milc
+#time ./milc.modified <tests/milc/milc.in.short
+#mv milc.modified.log demo/milc.log
+#./fpinst -i --pointer-single -o milc.modified tests/milc/milc
+#time ./milc.modified <tests/milc/milc.in.short
+#mv milc.modified.log demo/milc.log
+
+# SPEC_CPU06 - soplex (count/cancel: <1 min)
+#./fpinst -i --count-inst -o soplex.modified tests/soplex/soplex
+#time ./soplex.modified tests/soplex/soplex.input.short
+#mv soplex.modified.log demo/soplex_count.log
+#./fpinst -i --detect-cancel -o soplex.modified tests/soplex/soplex
+#time ./soplex.modified tests/soplex/soplex.input.short
+#mv d_cancel.log demo/soplex_cancel.log
+#./fpinst -i --shadow-quad -m -c tests/soplex/soplex.cfg -o soplex.modified tests/soplex/soplex
+#time ./soplex.modified tests/soplex/soplex.input.short
+#mv sh_quad.log demo/soplex_quad.log
+#./fpinst -i --pointer-single -m -c tests/soplex/soplex.cfg -o soplex.modified tests/soplex/soplex
+#time ./soplex.modified tests/soplex/soplex.input.short
+#mv soplex.modified.log demo/soplex_ptr_single.log
+
+# SPEC_CPU06 - lbm  (count: 23 min; cancel: 38 min)
+# optimized: 36m12.291s
+#./fpinst -i --count-inst --detect-cancel -o lbm.modified tests/lbm/lbm
+#time ./lbm.modified 20 reference.dat 0 1 tests/lbm/100_100_130_cf_a.of
+#mv lbm.modified.log demo/lbm.log
+./fpinst -i --pointer-single -o lbm.modified tests/lbm/lbm
+time ./lbm.modified 20 reference.dat 0 1 tests/lbm/100_100_130_cf_a.of
+mv lbm.modified.log demo/lbm.log
+
+# SPEC_CPU06 - namd  (count: 156 min; cancel: 305 min)
+# optimized: 180m13.355s
+#./fpinst -i --count-inst --detect-cancel -o namd.modified tests/namd/namd
+#time ./namd.modified --input tests/namd/namd.input --iterations 1
+#mv namd.modified.log demo/namd.log
+
+# SPEC_CPU06 - povray  (count: 4 min; cancel: 6 min)
+#./fpinst -i --count-inst -o povray.modified tests/povray/povray
+#time ./povray.modified tests/povray/test.ini +Itests/povray/test.pov +Otests/povray/test.tga +Ltests/povray/include
+#mv c_inst.log demo/povray_count.log
+#./fpinst -i --detect-cancel -o povray.modified tests/povray/povray
+#time ./povray.modified tests/povray/test.ini +Itests/povray/test.pov +Otests/povray/test.tga +Ltests/povray/include
+#mv d_cancel.log demo/povray_cancel.log
+#./fpinst -i --count-inst --detect-cancel -o povray.modified tests/povray/povray
+#time ./povray.modified tests/povray/test.ini +Itests/povray/test.pov +Otests/povray/test.tga +Ltests/povray/include
+#mv mutant.log demo/povray.log
+
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# !!!!!                    TAKES TOO LONG                    !!!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# SPEC_CPU06 - dealII  (count:  min; cancel:  min)
+#./fpinst -i --count-inst --detect-cancel -o dealII.modified tests/dealII/dealII
+#time ./dealII.modified 1
+#mv dealII.modified.log demo/dealII.log
+
+# ANN (D. Mount) - randomized points in [-1,1)  
+#   (orig: 2 sec; count: 4 sec; cancel: 6 sec)
+#./fpinst -i --count-inst -o ann.modified tests/ann/ann_sample
+#time ./ann.modified -df tests/ann/rand500k.pts -qf tests/ann/rand5k.pts
+#mv c_inst.log demo/ann_rand_count.log
+#./fpinst -i --detect-cancel -o ann.modified tests/ann/ann_sample
+#time ./ann.modified -df tests/ann/rand500k.pts -qf tests/ann/rand5k.pts
+#mv d_cancel.log demo/ann_rand_cancel.log
+
+# ANN (D. Mount) - randomized smaller points
+#   (orig: 2 sec; count: 3 sec; cancel: 3 sec)
+#./fpinst -i --count-inst -o ann.modified tests/ann/ann_sample
+#time ./ann.modified -df tests/ann/small500k.pts -qf tests/ann/small5k.pts
+#mv c_inst.log demo/ann_small_count.log
+#./fpinst -i --detect-cancel -o ann.modified tests/ann/ann_sample
+#time ./ann.modified -df tests/ann/small500k.pts -qf tests/ann/small5k.pts
+#mv d_cancel.log demo/ann_small_cancel.log
+
+# QHULL (B. Barber) - randomized points within [-1,1] cube
+#   (orig: 1 sec; count: 31 sec; cancel: 41 sec)
+#./fpinst -i --count-inst -o qhull.modified tests/qhull/qhull
+#time ./qhull.modified d <tests/qhull/rand50k.pts
+#mv c_inst.log demo/qhull_rand_count.log
+#./fpinst -i --detect-cancel -o qhull.modified tests/qhull/qhull
+#time ./qhull.modified d <tests/qhull/rand50k.pts
+#mv d_cancel.log demo/qhull_rand_cancel.log
+
+# QHULL (B. Barber) - randomized smaller points
+#    (orig: 5 sec; count: 293 sec; cancel: 407 sec)
+#./fpinst -i --count-inst -o qhull.modified tests/qhull/qhull
+#time ./qhull.modified d <tests/qhull/small50k.pts
+#mv c_inst.log demo/qhull_small_count.log
+#./fpinst -i --detect-cancel -o qhull.modified tests/qhull/qhull
+#time ./qhull.modified d <tests/qhull/small50k.pts
+#mv d_cancel.log demo/qhull_small_cancel.log
+
+# LSV (D. Mount)
+#LSV_FILES="test01 test03 test05 test07 test09 test11 test02 test04 test06 test08 test10"
+#for fn in $LSV_FILES
+#do
+    #countName="lsv_"$fn"_count"
+    #cancelName="lsv_"$fn"_cancel"
+    #./fpinst -i --count-inst -o lsv.modified tests/lsv/lsvRun
+    #time ./lsv.modified -i tests/lsv/$fn.lsv -o tests/lsv/$fn.out
+    #mv c_inst.log demo/$countName.log
+    #./fpinst -i --detect-cancel -o lsv.modified tests/lsv/lsvRun
+    #time ./lsv.modified -i tests/lsv/$fn.lsv -o tests/lsv/$fn.out
+    #mv d_cancel.log demo/$cancelName.log
+#done
+#LSV_NGON_SIDES="4 8 16 32 64 128 256 512"
+#for n in $LSV_NGON_SIDES
+#do
+    #countName="lsv_ngon_"$n"_count"
+    #cancelName="lsv_ngon_"$n"_cancel"
+    #LSVPATH=tests/lsv
+    #ruby $LSVPATH/gen_ngon.rb $n $LSVPATH/data/ngon.pts $LSVPATH/data/ngon.segs
+    #./fpinst -i --count-inst -o lsv.modified $LSVPATH/lsvRun
+    #time ./lsv.modified -i $LSVPATH/ngon.lsv -o $LSVPATH/ngon_$n.out
+    #mv c_inst.log demo/$countName.log
+    #./fpinst -i --detect-cancel -o lsv.modified $LSVPATH/lsvRun
+    #time ./lsv.modified -i $LSVPATH/ngon.lsv -o $LSVPATH/ngon_$n.out
+    #mv d_cancel.log demo/$cancelName.log
+    #$LSVPATH/lsv2fig -vor $LSVPATH/ngon_$n
+#done
+

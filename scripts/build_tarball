@@ -1,0 +1,19 @@
+#!/bin/bash
+
+echo "Building tarball..."
+
+dfiles=`cd $DYNINST_ROOT/$PLATFORM/lib && ls lib*.so*`
+fpfiles=`cd $DYNINST_ROOT/fpanalysis/$PLATFORM && ls fpinst lib*.so*`
+
+make
+
+rm -f fpanalysis.tar*
+tar -cvf fpanalysis.tar fpview viewer/*.class 
+tar -rvf fpanalysis.tar -C $DYNINST_ROOT/$PLATFORM/lib $dfiles
+tar -rvf fpanalysis.tar -C $DYNINST_ROOT/fpanalysis/$PLATFORM $fpfiles
+tar -rvf fpanalysis.tar -h -C /fs/dyninst/utils/machines/maxfli/64/lib64 libdwarf.so libgcc_s.so.1 libstdc++.so.6
+gzip fpanalysis.tar
+
+ls -lh fpanalysis.tar.gz
+
+

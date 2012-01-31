@@ -1,0 +1,29 @@
+#!/bin/bash
+
+source $HOME/jobs/msub_func
+
+export APPNAME="gauss"
+export COPY_FILES="jun2_rand_*"
+
+for size in 10 100 500 1000; do
+
+    export MUTANT_PARAMS="jun2_rand_"$size"x"$size".txt"
+
+    export TAG="d_cancel-"$size
+    export INST_PARAMS="-i --count-inst --detect-cancel"
+    startjob
+
+    export CONFIG="report:*mat=$size $size"
+
+    export TAG="ptr_double-"$size
+    export INST_PARAMS="-i --pointer-double"
+    startjob
+
+    export TAG="ptr_single-"$size
+    export INST_PARAMS="-i --pointer-single"
+    startjob
+
+done
+
+
+

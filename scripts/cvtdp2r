@@ -1,0 +1,44 @@
+#!/bin/bash
+#
+# Converts Fortran programs from double precision to single precision ("real").
+#
+# Mike Lam, UMD, September 2011
+#
+
+for f in $@; do
+
+    # create backup
+    cp $f $f.old
+
+    # convert data types
+    sed -i -e 's/double precision/real/g' $f
+
+    # convert function calls
+    sed -i -e 's/dble\ *(/real(/g' $f
+    sed -i -e 's/dsqrt\ *(/sqrt(/g' $f
+    sed -i -e 's/dabs\ *(/abs(/g' $f
+    sed -i -e 's/dlog\ *(/log(/g' $f
+    sed -i -e 's/dexp\ *(/exp(/g' $f
+    sed -i -e 's/dabs\ *(/abs(/g' $f
+    sed -i -e 's/dsin\ *(/sin(/g' $f
+    sed -i -e 's/dcos\ *(/cos(/g' $f
+    sed -i -e 's/dtan\ *(/tan(/g' $f
+    sed -i -e 's/dsinh\ *(/sinh(/g' $f
+    sed -i -e 's/dcosh\ *(/cosh(/g' $f
+    sed -i -e 's/dtanh\ *(/tanh(/g' $f
+    sed -i -e 's/dasin\ *(/asin(/g' $f
+    sed -i -e 's/dacos\ *(/acos(/g' $f
+    sed -i -e 's/datan\ *(/atan(/g' $f
+    sed -i -e 's/dasinh\ *(/asinh(/g' $f
+    sed -i -e 's/dacosh\ *(/acosh(/g' $f
+    sed -i -e 's/datanh\ *(/atanh(/g' $f
+
+    # convert constants
+    sed -i -e 's/\([0-9]\{1,\}\.[0-9]*\)d/\1e/g' $f
+    sed -i -e 's/\([0-9]\{1,\}\.[0-9]*\)D/\1E/g' $f
+
+    # remove backups (currently disabled)
+    #rm -f $f.old
+
+done
+

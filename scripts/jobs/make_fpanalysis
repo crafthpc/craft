@@ -1,0 +1,14 @@
+#!/bin/bash
+#MSUB -N make_fpanalysis
+#MSUB -l nodes=1
+#MSUB -l partition=atlas
+#MSUB -l walltime=1:00:00
+#MSUB -q pbatch
+#MSUB -m abe
+#MSUB -V
+#MSUB -o $HOME/log/make_fpanalysis.out
+#MSUB -e $HOME/log/make_fpanalysis.err
+#MSUB -d $HOME/fpstable/fpanalysis
+
+make
+

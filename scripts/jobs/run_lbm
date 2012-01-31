@@ -1,0 +1,22 @@
+#!/bin/bash
+
+source $HOME/jobs/msub_func
+
+export APPNAME="lbm"
+export COPY_FILES="100_100_130_cf_a.of"
+
+export TAG="d_cancel_20iters"
+export INST_PARAMS="-i --count-inst --detect-cancel"
+export MUTANT_PARAMS="20 dummy 0 1 100_100_130_cf_a.of"
+startjob
+
+export TAG="ptr_double_20iters"
+export INST_PARAMS="-i --pointer-double -r"
+export MUTANT_PARAMS="20 dummy 0 1 100_100_130_cf_a.of"
+startjob
+
+export TAG="ptr_single_20iters"
+export INST_PARAMS="-i --pointer-single -r"
+export MUTANT_PARAMS="20 dummy 0 1 100_100_130_cf_a.of"
+startjob
+

@@ -1,0 +1,28 @@
+#!/usr/bin/ruby
+
+f = File.open(ARGV[0], "r");
+lines = Array.new
+f.each_line do |line|
+    if line =~ /^\s*(float|double|long double)/
+        lines << line
+    end
+    #line.scan(/(float|double|long double)\s+.*(\w+)\s*=\s*((\d|\.|e|E|\+|\-)+)(f|L)?(,|;)/) { |match|
+        #puts "#{$2} = #{$3} [#{$5}]"
+    #}
+end
+
+precision = 4;
+lines.each do |line|
+    if line =~ /^\s*float/
+        precision = 4
+    elsif line =~ /^\s*double/
+        precision = 8
+    elsif line =~ /^\s*long double/
+        precision = 10
+    end
+    line.scan(/(\w+)\s*=\s*((\d|\.|e|E|\+|\-)+)/) do |match|
+        #puts "init-#{precision}:#{$1}=#{$2}"
+        puts "init:#{$1}=#{$2}"
+    end
+end
+
