@@ -179,6 +179,7 @@ public class ViewerApp extends JFrame {
         setSize(1000,800);
         splitPanel.setDividerLocation(400);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
         setTitle(DEFAULT_TITLE);
 
         splitPanel.revalidate();

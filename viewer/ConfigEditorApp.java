@@ -85,6 +85,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         logMenu.setMnemonic(KeyEvent.VK_A);
         logMenu.add(new OpenConfigAction(this, "Open", null, new Integer(KeyEvent.VK_O)));
         logMenu.add(new SaveConfigAction(this, "Save", null, new Integer(KeyEvent.VK_M)));
+        logMenu.add(new JSeparator());
+        logMenu.add(new BatchConfigAction(this, "Batch Config", null, new Integer(KeyEvent.VK_M)));
         
         JMenuBar menuBar = new JMenuBar();
         menuBar.add(logMenu);
@@ -165,6 +167,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         getContentPane().add(mainPanel);
         setSize(1000,900);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
         setTitle(DEFAULT_TITLE);
 
         mainPanel.revalidate();
@@ -407,19 +410,44 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
     }
 
-    void expandAllRows() {
+    public void batchConfig(ConfigTreeNode.CNStatus orig, ConfigTreeNode.CNStatus dest) {
+        if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
+        ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+        ConfigTreeNode curFuncNode = null;
+        ConfigTreeNode curBlockNode = null;
+        ConfigTreeNode curNode = null;
+        Enumeration<ConfigTreeNode> funcs = appNode.children();
+        while (funcs.hasMoreElements()) {
+            curFuncNode = funcs.nextElement();
+            Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
+            while (blocks.hasMoreElements()) {
+                curBlockNode = blocks.nextElement();
+                Enumeration<ConfigTreeNode> insns = curBlockNode.children();
+                while (insns.hasMoreElements()) {
+                    curNode = insns.nextElement();
+                    if (curNode.status == orig) {
+                        curNode.status = dest;
+                    }
+                }
+            }
+        }
+        mainTree.repaint();
+        refreshKeyLabels();
+    }
+
+    public void expandAllRows() {
         for (int i = 0; i < mainTree.getRowCount(); i++) {
             mainTree.expandRow(i);
         }
     }
 
-    void collapseAllRows() {
+    public void collapseAllRows() {
         for (int i = mainTree.getRowCount() - 1; i > 0; i--) {
             mainTree.collapseRow(i);
         }
     }
 
-    void toggleSelection() {
+    public void toggleSelection() {
         TreePath[] paths = mainTree.getSelectionPaths();
         if (paths != null) {
             for (int i = 0; i < paths.length; i++) {
