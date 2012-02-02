@@ -516,8 +516,11 @@ size_t FPBinaryBlobInplace::buildOperandInitBlob(unsigned char *pos,
         }
    
     } else if (operand->getType() == SSE_Quad) {
-        pos += buildFlagTestBlob(pos, dest, 1);
-        pos += buildFlagTestBlob(pos, dest, 3);
+
+        if (mainPolicy->getSVType(entry.inst) == SVT_IEEE_Single) {
+            pos += buildFlagTestBlob(pos, dest, 1);
+            pos += buildFlagTestBlob(pos, dest, 3);
+        }
     }
 
     return size_t(pos-old_pos);
@@ -548,6 +551,7 @@ size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
     // copy all prefixes except for REX, and also
     // convert 0xf2 to 0xf3 (double->single arithmetic)
     for (i=0; i<loc.num_prefixes; i++) {
+        //printf("  prefix 0x%02x %s\n", orig_code[i], (i == loc.rex_position ? "[rex]" : ""));
         if (i != loc.rex_position) {
             if (orig_code[i] == 0xf2 && mainPolicy->getSVType(inst) == SVT_IEEE_Single) {
                 (*pos++) = 0xf3;
@@ -559,8 +563,9 @@ size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
 
     // skip the 0x66 byte if present (double->single cvt)
     // there are a couple of exceptions
-    if (orig_code[i] == 0x66 && mainPolicy->getSVType(inst) == SVT_IEEE_Single) {
-        if (opcode == 0xdb ||      // pand
+    if (orig_code[i] == 0x66) {
+        if (mainPolicy->getSVType(inst) != SVT_IEEE_Single ||
+            opcode == 0xdb ||      // pand
             opcode == 0xeb ||      // por
             opcode == 0xef) {      // pxor
             (*pos++) = 0x66;
@@ -571,6 +576,7 @@ size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
     // build/emit REX byte
     // NOTE: REX.X will always be zero (no memory operands)
     // TODO: handle REX.W bit for non-replaced instructions?
+    //printf("  rex_position=%d\n", loc.rex_position);
     if (loc.rex_position != -1) {
         rex = orig_code[loc.rex_position];
         if (replacementRM != REG_NONE) {
@@ -589,6 +595,7 @@ size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
     
     // copy/modify the opcode, 
     for ( ; i<loc.num_prefixes+(int)loc.opcode_size; i++) {
+        //printf("  opcode 0x%02x\n", orig_code[i]);
         if (orig_code[i] == 0x5a && mainPolicy->getSVType(inst) == SVT_IEEE_Single) {
             (*pos++) = 0x10;        // cvt ->  mov
         } else {
@@ -615,6 +622,16 @@ size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
     for (j=0; j<loc.imm_size[1]; j++) {
         (*pos++) = orig_code[loc.imm_position[1] + j];
     }
+
+    // debug output
+    /*
+     *unsigned char *tc;
+     *printf("  new instruction for %s: ", inst->getDisassembly().c_str());
+     *for (tc = old_pos; tc < pos; tc++) {
+     *   printf("%02x ", (unsigned)*tc);
+     *}
+     *printf("\n");
+     */
 
     return (size_t)(pos-old_pos);
 }
@@ -1150,7 +1167,8 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
             }
             pos += buildFakeStackPopGPR64(pos, temp_gpr3);
             pos += buildFakeStackPopGPR64(pos, temp_gpr1);
-        } else if (replaced && output->isRegisterSSE() && output->getType() == SSE_Quad) {
+        } else if (replaced && output->isRegisterSSE() && output->getType() == SSE_Quad &&
+                   mainPolicy->getSVType(inst) == SVT_IEEE_Single) {
             pos += buildFakeStackPushGPR64(pos, temp_gpr1);
             pos += buildFakeStackPushGPR64(pos, temp_gpr2);
             pos += buildFakeStackPushGPR64(pos, temp_gpr3);
