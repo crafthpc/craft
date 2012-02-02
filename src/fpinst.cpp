@@ -1908,7 +1908,7 @@ void usage()
     printf("  --svptr <policy>     pointer-replacement shadow value analysis\n");
     printf("                         valid policies: \"single\", \"double\"\n");
     printf("  --svinp <policy>     in-place replacement shadow value analysis\n");
-    printf("                         valid policies: \"whole\", \"config\"\n");
+    printf("                         valid policies: \"single\", \"double\", \"config\"\n");
     printf("\n");
     printf(" Options:\n");
     printf("\n");

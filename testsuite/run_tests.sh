@@ -9,9 +9,9 @@ opts="-O0 -O1 -O2 -O3"
 
 # change this to set which instrumentation modes are tested
 #modes="dcancel svinp_single svinp_double"
-modes="svinp"
+#modes="svinp"
 #modes="cinst dcancel dnan trange svinp"
-#modes="svinp_single svinp_double"
+modes="svinp svinp_double"
 
 # change this to set which tests are run
 #tests="pushpop"    # old x87-based test
@@ -94,8 +94,6 @@ do
             elif [ "$m" = "trange" ]
             then modeopt="--trange"
             elif [ "$m" = "svinp" ]
-            then modeopt="--svinp whole"
-            elif [ "$m" = "svinp_single" ]
             then modeopt="--svinp single"
             elif [ "$m" = "svinp_double" ]
             then modeopt="--svinp double"

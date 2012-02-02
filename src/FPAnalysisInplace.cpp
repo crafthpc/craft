@@ -87,10 +87,10 @@ void FPAnalysisInplace::configure(FPConfig *config, FPDecoder *decoder,
     FPAnalysis::configure(config, decoder, log, context);
     if (config->hasValue("sv_inp_type")) {
         string type = config->getValue("sv_inp_type");
-        if (type == "whole") {
+        if (type == "single") {
             mainPolicy = new FPSVPolicy(SVT_IEEE_Single);
-        //} else if (type == "double") {
-            //mainPolicy = new FPSVPolicy(SVT_IEEE_Double);
+        } else if (type == "double") {
+            mainPolicy = new FPSVPolicy(SVT_IEEE_Double);
         } else if (type == "config") {
             mainPolicy = new FPSVConfigPolicy(config);
         } else {
