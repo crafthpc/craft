@@ -1,4 +1,4 @@
 #!/bin/sh
 
-rm -f fpinst.log mutant libm.* libc.*
+rm -f *.log fpout mutant libm.* libc.*
 
