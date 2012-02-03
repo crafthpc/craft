@@ -977,11 +977,8 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
     temp_gpr3 = getUnusedGPR();
     debug_assembly = string("");
 
-    printf("    building binary blob for %p: %s\n",
-            inst->getAddress(), inst->getDisassembly().c_str());
-    //printf("building binary blob for %p: %s\n%s\n",
-            //inst->getAddress(), inst->getDisassembly().c_str(),
-            //inst->toString().c_str());
+    //printf("    building binary blob for %p: %s\n",
+            //inst->getAddress(), inst->getDisassembly().c_str());
 
     FPOperation *op;
     FPOperand *input, *output = NULL;
@@ -1198,22 +1195,24 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
 
     // TODO: clean up input data structure
     
+    // copy into PatchAPI buffer
     finalize();
     unsigned char *b = (unsigned char*)getBlobCode();
     for (b = (unsigned char*)getBlobCode(); b < pos; b++) {
         buf.push_back(*b);
     }
-    printf("    built binary blob at %p [size=%ld]: %-40s  tmp=%-4s  %12s  %12s\n", 
-            getBlobAddress(), (b-getBlobCode()), inst->getDisassembly().c_str(),
-            FPContext::FPReg2Str(replacementRM).c_str(),
-            (packed ? "[packed]" : ""),
-            (replaced ? "[replaced]" : ""));
-    printf("      original addr = %p  code (spec/pre/rep/post):  %6lu  %6lu  %6lu  %6lu\n",
-            inst->getAddress(), spec_code, pre_code, rep_code, post_code);
-    //printf("%s", debug_assembly.c_str());
-    //printf("%s  original addr = %p  code (spec/pre/rep/post):  %6lu  %6lu  %6lu  %6lu\n\n",
-            //debug_assembly.c_str(), inst->getAddress(),
-            //spec_code, pre_code, rep_code, post_code);
+
+    // debut output
+    /*
+     *printf("    built binary blob at %p [size=%ld]: %-40s  tmp=%-4s  %12s  %12s\n", 
+     *        getBlobAddress(), (b-getBlobCode()), inst->getDisassembly().c_str(),
+     *        FPContext::FPReg2Str(replacementRM).c_str(),
+     *        (packed ? "[packed]" : ""),
+     *        (replaced ? "[replaced]" : ""));
+     *printf("      original addr = %p  code (spec/pre/rep/post):  %6lu  %6lu  %6lu  %6lu\n",
+     *        inst->getAddress(), spec_code, pre_code, rep_code, post_code);
+     */
+
     return true;
 }
 

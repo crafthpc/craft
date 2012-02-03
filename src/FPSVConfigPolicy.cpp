@@ -22,8 +22,8 @@ FPSVType FPSVConfigPolicy::RETag2SVType(FPReplaceEntryTag tag)
 bool FPSVConfigPolicy::shouldInstrument(FPSemantics *inst)
 {
     FPReplaceEntryTag tag = config->getReplaceTag(inst->getAddress());
-    cout << " shouldInstrument(" << inst->getDisassembly() << ") = " 
-        << (tag == RETAG_SINGLE ? "single" : "not single") << endl;
+    //cout << " shouldInstrument(" << inst->getDisassembly() << ") = " 
+        //<< (tag == RETAG_SINGLE ? "single" : "not single") << endl;
     return (tag == RETAG_SINGLE || tag == RETAG_DOUBLE);
 }
 

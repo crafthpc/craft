@@ -1272,8 +1272,10 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
     bool replaced = false;
     bool success = false;
 
-    printf("Instrumenting instruction at %p: %s\n", addr, inst->getDisassembly().c_str());
-    printf("  in block %p-%p\n", (void*)block->start(), (void*)block->end());
+    if (listFuncs) {
+        printf("Instrumenting instruction at %p: %s\n", addr, inst->getDisassembly().c_str());
+        printf("  in block %p-%p\n", (void*)block->start(), (void*)block->end());
+    }
 
     // for each analysis
     vector<FPAnalysis*>::iterator a;
@@ -1303,8 +1305,8 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
 
             // split before instruction
             if ((unsigned long)preSplitAddr > (unsigned long)insnBlock->start()) {
-                printf("        splitting block [%p-%p] at %p\n",
-                        (void*)insnBlock->start(), (void*)insnBlock->end(), preSplitAddr);
+                //printf("        splitting block [%p-%p] at %p\n",
+                        //(void*)insnBlock->start(), (void*)insnBlock->end(), preSplitAddr);
                 insnBlock = PatchModifier::split(insnBlock, (Address)preSplitAddr);
                 if (!insnBlock) {
                     printf("ERROR: could not split block [%p-%p] at %p\n",
@@ -1314,15 +1316,15 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
             } else {
                 // instruction is at the beginning of a block; no need to split
                 // pre-block
-                printf("        insn is at beginning of block\n");
+                //printf("        insn is at beginning of block\n");
                 insnBlock = block;
             }
 
             // split after instruction
             PatchBlock *postBlock = NULL;
             if ((unsigned long)postSplitAddr < (unsigned long)insnBlock->end()) {
-                printf("        splitting block [%p-%p] at %p\n",
-                        (void*)insnBlock->start(), (void*)insnBlock->end(), postSplitAddr);
+                //printf("        splitting block [%p-%p] at %p\n",
+                        //(void*)insnBlock->start(), (void*)insnBlock->end(), postSplitAddr);
                 postBlock = PatchModifier::split(insnBlock, (Address)postSplitAddr);
                 if (!postBlock) {
                     printf("ERROR: could not split block [%p-%p] at %p\n",
@@ -1332,7 +1334,7 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
             } else {
                 // instruction is at the end of a block; no need to split
                 // post-block
-                printf("        insn is at end of block\n");
+                //printf("        insn is at end of block\n");
                 assert(block->getTargets().size() == 1);
                 PatchEdge *postEdge = *(insnBlock->getTargets().begin());
                 assert(postEdge->type() == ParseAPI::FALLTHROUGH);
@@ -1369,8 +1371,8 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
             if (keepInsnBlock) {
 
                 // overwrite insnBlock with nops
-                printf("        overwriting block [%p-%p]\n",
-                        (void*)insnBlock->start(), (void*)insnBlock->end());
+                //printf("        overwriting block [%p-%p]\n",
+                        //(void*)insnBlock->start(), (void*)insnBlock->end());
                 success = PatchModifier::overwrite(insnBlock, 0x90);    // nop
                 assert(success);
 
@@ -1380,10 +1382,10 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
                     edges.push_back(*i);
                 }
                 for (j = edges.begin(); j != edges.end(); j++) {
-                    printf("        redirecting insn outgoing edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
-                           (void*)((*j)->source()->start()), (void*)((*j)->source()->end()),
-                           (void*)((*j)->target()->start()), (void*)((*j)->target()->end()),
-                           (void*)(newBlock->start()), (void*)(newBlock->end()));
+                    //printf("        redirecting insn outgoing edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
+                           //(void*)((*j)->source()->start()), (void*)((*j)->source()->end()),
+                           //(void*)((*j)->target()->start()), (void*)((*j)->target()->end()),
+                           //(void*)(newBlock->start()), (void*)(newBlock->end()));
                     success = PatchModifier::redirect(*j, newBlock);
                     assert(success);
                 }
@@ -1391,10 +1393,10 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
 
                 // redirect from src/pre to newBlock (skip insnBlock)
                 for (j = edges.begin(); j != edges.end(); j++) {
-                    printf("        redirecting incoming edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
-                           (void*)((*j)->source()->start()), (void*)((*j)->source()->end()),
-                           (void*)((*j)->target()->start()), (void*)((*j)->target()->end()),
-                           (void*)(newBlock->start()), (void*)(newBlock->end()));
+                    //printf("        redirecting incoming edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
+                           //(void*)((*j)->source()->start()), (void*)((*j)->source()->end()),
+                           //(void*)((*j)->target()->start()), (void*)((*j)->target()->end()),
+                           //(void*)(newBlock->start()), (void*)(newBlock->end()));
                     success = PatchModifier::redirect(*j, newBlock);
                     assert(success);
                 }
@@ -1403,12 +1405,12 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
             // redirect icode's exit to postBlock
             // (should only be one of them)
             assert(icode->exits().size() == 1);
-            printf("        redirecting outgoing edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
-                   (void*)((*icode->exits().begin())->source()->start()),
-                   (void*)((*icode->exits().begin())->source()->end()),
-                   (void*)((*icode->exits().begin())->target()->start()),
-                   (void*)((*icode->exits().begin())->target()->end()),
-                   (void*)(postBlock->start()), (void*)(postBlock->end()));
+            //printf("        redirecting outgoing edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
+                   //(void*)((*icode->exits().begin())->source()->start()),
+                   //(void*)((*icode->exits().begin())->source()->end()),
+                   //(void*)((*icode->exits().begin())->target()->start()),
+                   //(void*)((*icode->exits().begin())->target()->end()),
+                   //(void*)(postBlock->start()), (void*)(postBlock->end()));
             success = PatchModifier::redirect(*icode->exits().begin(), postBlock);
             assert(success);
 
@@ -1416,20 +1418,22 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
             PatchBlock *newExit = (*icode->exits().begin())->source();
 
             // debug output
-            printf("    new sequence: => ");
-            if ((unsigned long)preSplitAddr > (unsigned long)block->start()) {
-                printf("[%p-%p] -> ", (void*)block->start(),
-                                      (void*)block->end());
-            } else if (keepInsnBlock) {
-                printf("[%p-%p] -> ", (void*)insnBlock->start(),
-                                      (void*)insnBlock->end());
-            }
-            printf("{ [%p-%p] ... [%p-%p] } ", 
-                   (void*)newEntry->start(), (void*)newEntry->end(),
-                   (void*)newExit->start(),  (void*)newExit->end());
-            printf(" -> [%p-%p] ", (void*)postBlock->start(),
-                                   (void*)postBlock->end());
-            printf("=> \n");
+            /*
+             *printf("    new sequence: => ");
+             *if ((unsigned long)preSplitAddr > (unsigned long)block->start()) {
+             *    printf("[%p-%p] -> ", (void*)block->start(),
+             *                          (void*)block->end());
+             *} else if (keepInsnBlock) {
+             *    printf("[%p-%p] -> ", (void*)insnBlock->start(),
+             *                          (void*)insnBlock->end());
+             *}
+             *printf("{ [%p-%p] ... [%p-%p] } ", 
+             *       (void*)newEntry->start(), (void*)newEntry->end(),
+             *       (void*)newExit->start(),  (void*)newExit->end());
+             *printf(" -> [%p-%p] ", (void*)postBlock->start(),
+             *                       (void*)postBlock->end());
+             *printf("=> \n");
+             */
 
             set<PatchBlock*>::iterator k;
             string disassembly("");
