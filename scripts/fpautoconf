@@ -1,0 +1,146 @@
+#!/usr/bin/ruby
+#
+# fpautoconf
+#
+# Generate floating-point precision configurations for a target binary, and test
+# them. Assemble a final recommended configuration.
+#
+# Mike Lam, UMD
+# February 2012
+#
+
+# needed for opening stderr as well as stdin/stdout
+# when spawning new system processes
+require 'open3.rb'
+
+# check command-line options
+if ARGV.size != 1 then
+    puts "Usage:  fpautoconf <binary>"
+    exit
+end
+
+# data structures
+fortran_mode = true
+binary_name = ARGV[0]
+orig_config_name = "#{binary_name}_orig.cfg"
+final_config_name = "#{binary_name}_final.cfg"
+all_func_regexps = Hash.new
+all_func_filenames = Hash.new
+all_func_files = Hash.new
+all_func_passes = Hash.new
+
+# output header
+puts "FPAutoConf"
+puts "Autoconfiguring #{binary_name} ..."
+
+# delete all existing .cfg files
+Dir.foreach(".") do |fn|
+    if fn =~ /\.cfg/ || fn =~ /lib(c|m)\.so\.6/ || fn =~ /\.log/ then
+        File.delete(fn)
+    end
+end
+
+# generate initial configuration by calling fpconf
+print "Generating initial configuration ... "
+$stdout.flush
+orig_cfg = File.open(orig_config_name, "w")
+IO.popen("fpconf #{binary_name}") do |io|
+    io.each_line do |line|
+        orig_cfg.puts line
+        if line =~ /FUNC.*\"(.*)\"/ then
+            func = $1
+            all_func_regexps[func] = Regexp.new("FUNC.*\"#{$1}\"")
+            all_func_filenames[func] = "#{binary_name}_#{func}.cfg"
+            all_func_files[func] = File.open(all_func_filenames[func], "w")
+            all_func_passes[func] = false
+        end
+    end
+end
+orig_cfg.close
+puts "done."
+
+# generate per-function config files
+print "Generating per-function configurations ... "
+$stdout.flush
+IO.foreach(orig_config_name) do |line|
+    all_func_regexps.each_pair do |func,reg|
+        if line =~ reg then
+            all_func_files[func].puts "^s#{line[2,line.size-1]}"
+        elsif line =~ /^\^s/ then
+            all_func_files[func].puts "^d#{line[2,line.size-1]}"
+        else
+            all_func_files[func].puts line
+        end
+    end
+end
+all_func_files.each_pair do |func,file|
+    file.close
+end
+puts "done."
+
+# for each configuration
+all_func_filenames.each_pair do |func, fn|
+
+    # build rewritten mutatee
+    puts "Testing configuration: #{fn} "
+    print "  Building ... "
+    $stdout.flush
+    Open3.popen3("fpinst -i #{fortran_mode ? "-N" : ""} -c #{fn} #{binary_name}") do |io_in, io_out, io_err, io_wait|
+        io_out.each_line do |line|
+            if line =~ /Inplace: (.*)$/ then
+                puts " #{$1}"
+            end
+        end
+    end
+
+    # execute rewritten mutatee and check for success
+    print "  Running ... "
+    $stdout.flush
+    Open3.popen3("./mutant") do |io_in, io_out, io_err, io_wait|
+        io_out.each_line do |line|
+            if line =~ /[^N]SUCCESS/ then
+                all_func_passes[func] = true
+            end
+        end
+    end
+    if all_func_passes[func] then
+        puts "success!"
+    else
+        puts "FAILED!"
+    end
+
+    # clean out old logs and rewritten library files
+    Dir.foreach(".") do |fn|
+        if fn =~ /lib(c|m)\.so\.6/ || fn =~ /\.log/ then
+            File.delete(fn)
+        end
+    end
+end
+
+# generate final config file
+print "Generating final configuration ... "
+$stdout.flush
+final_config = File.open(final_config_name, "w")
+IO.foreach(orig_config_name) do |line|
+    func_found = false
+    all_func_regexps.each_pair do |func,reg|
+        if line =~ reg then
+            if all_func_passes[func] then
+                final_config.puts "^s#{line[2,line.size-1]}"
+                func_found = true
+            else
+                final_config.puts "^d#{line[2,line.size-1]}"
+                func_found = true
+            end
+        end
+    end
+    if !func_found then
+        final_config.puts line
+    end
+end
+puts "done."
+
+# TODO: test final config?
+
+puts "Done."
+
