@@ -83,7 +83,6 @@ size_t instructions_in_curr_func = 0;
 size_t total_basicblocks = 0;
 size_t total_fp_instructions = 0;
 size_t total_instrumented_instructions = 0;
-size_t total_optimized_instructions = 0;
 
 // }}}
 
@@ -1823,8 +1822,10 @@ void instrumentApplication(BPatch_addressSpace *app)
     report << "Finished instrumentation:" << endl;
     report << "  " << total_replacements << " replaced library function(s)" << endl;
     report << "  " << total_fp_instructions << " floating-point instruction(s)" << endl;
-    report << "    " << total_instrumented_instructions << " instrumented";
-    report << "  (" << total_optimized_instructions << " optimized)" << endl;
+    report << "    Total: " << total_instrumented_instructions << " instrumented" << endl;
+    for (unsigned i=0; i<allAnalyses.size(); i++) {
+        report << "    " << allAnalyses[i]->finalInstReport() << endl;
+    }
     report << "    " << total_fp_instructions - total_instrumented_instructions << " ignored" << endl;
     report << "  " << total_basicblocks << " basic block(s)" << endl;
     report << "  " << total_functions << " function(s)" << endl;

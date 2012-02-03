@@ -123,6 +123,8 @@ class FPAnalysisInplace : public FPAnalysis
         bool shouldPostInstrument(FPSemantics *inst);
         bool shouldReplace(FPSemantics *inst);
 
+        string finalInstReport();
+
         void registerInstruction(FPSemantics *inst);
         void handlePreInstruction(FPSemantics *inst);
         void handlePostInstruction(FPSemantics *inst);
@@ -224,6 +226,9 @@ class FPAnalysisInplace : public FPAnalysis
 
         bool reportAllGlobals;
         vector<FPShadowEntry*> shadowEntries;
+
+        size_t insnsInstrumentedSingle;
+        size_t insnsInstrumentedDouble;
 
         // output helpers
         void printShadowLocation(FPOperandAddress addr);

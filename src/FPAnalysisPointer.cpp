@@ -182,6 +182,7 @@ FPAnalysisPointer::FPAnalysisPointer()
     detectCancellations = false;
     cancelAnalysis = NULL;
     reportAllGlobals = false;
+    insnsInstrumented = 0;
 #ifdef USE_LIVE_PTR_LIST
     unsigned long i;
     for (i = 0; i < LIVE_PTR_TBL_SIZE; i++) {
@@ -264,6 +265,7 @@ Snippet::Ptr FPAnalysisPointer::buildPostInstrumentation(FPSemantics * /*inst*/,
 Snippet::Ptr FPAnalysisPointer::buildReplacementCode(FPSemantics * /*inst*/,
         BPatch_addressSpace * /*app*/, bool &needsRegisters)
 {
+    insnsInstrumented++;
     needsRegisters = true;
     return Snippet::Ptr();
 }
@@ -322,6 +324,13 @@ void FPAnalysisPointer::getShadowEntries(vector<FPShadowEntry*> &entries)
     for (i=shadowEntries.begin(); i!=shadowEntries.end(); i++) {
         entries.push_back(*i);
     }
+}
+
+string FPAnalysisPointer::finalInstReport()
+{
+    stringstream ss;
+    ss << "Pointer: " << insnsInstrumented << " instrumented";
+    return ss.str();
 }
 
 void FPAnalysisPointer::registerInstruction(FPSemantics * /*inst*/)

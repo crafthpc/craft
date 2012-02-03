@@ -63,6 +63,8 @@ class FPAnalysisTRange : public FPAnalysis {
         Snippet::Ptr buildReplacementCode(FPSemantics *inst,
                 BPatch_addressSpace *app, bool &needsRegisters);
 
+        string finalInstReport();
+
         void registerInstruction(FPSemantics *inst);
         void handlePreInstruction(FPSemantics *inst);
         void handlePostInstruction(FPSemantics *inst);
@@ -82,6 +84,8 @@ class FPAnalysisTRange : public FPAnalysis {
 
         void* rangeAddresses[256];
         size_t numRangeAddresses;
+
+        size_t insnsInstrumented;
 };
 
 }

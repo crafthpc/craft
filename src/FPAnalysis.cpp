@@ -57,6 +57,11 @@ Snippet::Ptr FPAnalysis::buildReplacementCode(FPSemantics * /*inst*/,
     return Snippet::Ptr();
 }
 
+string FPAnalysis::finalInstReport()
+{
+    return "";
+}
+
 void FPAnalysis::registerInstruction(FPSemantics *)
 { }
 

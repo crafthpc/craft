@@ -60,6 +60,8 @@ class FPAnalysisDCancel : public FPAnalysis {
         Snippet::Ptr buildReplacementCode(FPSemantics *inst,
                 BPatch_addressSpace *app, bool &needsRegisters);
 
+        string finalInstReport();
+
         void registerInstruction(FPSemantics *inst);
         void handlePreInstruction(FPSemantics *inst);
         void handlePostInstruction(FPSemantics *inst);
@@ -84,6 +86,8 @@ class FPAnalysisDCancel : public FPAnalysis {
 
         void* cancelAddresses[256];
         size_t numCancelAddresses;
+
+        size_t insnsInstrumented;
 };
 
 }

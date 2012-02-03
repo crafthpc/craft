@@ -23,6 +23,7 @@ FPAnalysisDNan::FPAnalysisDNan()
     : FPAnalysis()
 {
     numRangeAddresses = 0;
+    insnsInstrumented = 0;
 }
 
 string FPAnalysisDNan::getTag()
@@ -133,6 +134,7 @@ bool FPAnalysisDNan::shouldReplace(FPSemantics * /*inst*/)
 Snippet::Ptr FPAnalysisDNan::buildPreInstrumentation(FPSemantics * /*inst*/,
         BPatch_addressSpace * /*app*/, bool &needsRegisters)
 {
+    insnsInstrumented++;
     needsRegisters = true;
     return Snippet::Ptr();
 }
@@ -147,6 +149,13 @@ Snippet::Ptr FPAnalysisDNan::buildReplacementCode(FPSemantics * /*inst*/,
         BPatch_addressSpace * /*app*/, bool & /*needsRegisters*/)
 {
     return Snippet::Ptr();
+}
+
+string FPAnalysisDNan::finalInstReport()
+{
+    stringstream ss;
+    ss << "DNan: " << insnsInstrumented << " instrumented";
+    return ss.str();
 }
 
 void FPAnalysisDNan::registerInstruction(FPSemantics * /*inst*/)

@@ -69,6 +69,8 @@ FPAnalysisInplace::FPAnalysisInplace()
     detectCancellations = false;
     cancelAnalysis = NULL;
     reportAllGlobals = false;
+    insnsInstrumentedSingle = 0;
+    insnsInstrumentedDouble = 0;
 }
 
 string FPAnalysisInplace::getTag()
@@ -188,6 +190,16 @@ bool FPAnalysisInplace::shouldReplace(FPSemantics *inst)
         decision = false;
     }
     return decision;
+}
+
+string FPAnalysisInplace::finalInstReport()
+{
+    stringstream ss;
+    ss << "Inplace: " << insnsInstrumentedSingle + insnsInstrumentedDouble 
+       << " instrumented  ("
+       << insnsInstrumentedSingle << " single, "
+       << insnsInstrumentedDouble << " double)";
+    return ss.str();
 }
 
 void FPAnalysisInplace::registerInstruction(FPSemantics * /*inst*/)
@@ -1260,6 +1272,11 @@ Snippet::Ptr FPAnalysisInplace::buildPostInstrumentation(FPSemantics * /*inst*/,
 Snippet::Ptr FPAnalysisInplace::buildReplacementCode(FPSemantics *inst,
         BPatch_addressSpace * /*app*/, bool &needsRegisters)
 {
+    if (mainPolicy->getSVType(inst) == SVT_IEEE_Single) {
+        insnsInstrumentedSingle++;
+    } else /* if (mainPolicy->getSVType(inst) == SVT_IEEE_Double)*/ {
+        insnsInstrumentedDouble++;
+    }
     if (canBuildBinaryBlob(inst)) {
         //printf("binary blob replacement: %s\n", inst->getDisassembly().c_str());
         return Snippet::Ptr(new FPBinaryBlobInplace(inst, mainPolicy));

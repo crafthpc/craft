@@ -88,6 +88,8 @@ class FPAnalysisPointer : public FPAnalysis
         void enableReportAllGlobals();
         void disableReportAllGlobals();
 
+        string finalInstReport();
+
         void registerInstruction(FPSemantics *inst);
         void handlePreInstruction(FPSemantics *inst);
         void handlePostInstruction(FPSemantics *inst);
@@ -166,6 +168,8 @@ class FPAnalysisPointer : public FPAnalysis
 
         bool reportAllGlobals;
         vector<FPShadowEntry*> shadowEntries;
+
+        size_t insnsInstrumented;
 
         // live pointer table
 #ifdef USE_LIVE_PTR_LIST

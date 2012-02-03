@@ -26,6 +26,7 @@ FPAnalysisCInst::FPAnalysisCInst()
     instCountSize = 0;
     instCount = NULL;
     expandInstCount(2000);
+    insnsInstrumented = 0;
 }
 
 string FPAnalysisCInst::getTag()
@@ -74,6 +75,7 @@ Snippet::Ptr FPAnalysisCInst::buildPreInstrumentation(FPSemantics *inst,
             *countExpr, BPatch_constExpr(1));
     BPatch_snippet *incExpr = new BPatch_arithExpr(BPatch_assign,
             *idxExpr, *valExpr);
+    insnsInstrumented++;
     return PatchAPI::convert(incExpr);
 }
 
@@ -118,6 +120,13 @@ void FPAnalysisCInst::expandInstCount(size_t newSize)
 size_t * FPAnalysisCInst::getCountArrayPtr()
 {
     return instCount;
+}
+
+string FPAnalysisCInst::finalInstReport()
+{
+    stringstream ss;
+    ss << "CInst: " << insnsInstrumented << " instrumented";
+    return ss.str();
 }
 
 void FPAnalysisCInst::registerInstruction(FPSemantics *inst)

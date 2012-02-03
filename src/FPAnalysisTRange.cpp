@@ -26,6 +26,7 @@ FPAnalysisTRange::FPAnalysisTRange()
     instCount = 0;
     instData = NULL;
     expandInstData(4096);
+    insnsInstrumented = 0;
 }
 
 string FPAnalysisTRange::getTag()
@@ -170,6 +171,7 @@ Snippet::Ptr FPAnalysisTRange::buildPreInstrumentation(FPSemantics * inst,
 
     BPatch_Vector<BPatch_snippet *> args;
     FPBinaryBlobTRange *tmp = new FPBinaryBlobTRange(inst, instData[idx], true);
+    insnsInstrumented++;
     return Snippet::Ptr(tmp);
 }
 
@@ -388,6 +390,13 @@ bool FPBinaryBlobTRange::generate(Point * /*pt*/, Buffer &buf)
      *        instData.max_addr);
      */
     return true;
+}
+
+string FPAnalysisTRange::finalInstReport()
+{
+    stringstream ss;
+    ss << "TRange: " << insnsInstrumented << " instrumented";
+    return ss.str();
 }
 
 void FPAnalysisTRange::registerInstruction(FPSemantics *inst)

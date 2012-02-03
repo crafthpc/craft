@@ -66,6 +66,12 @@ class FPAnalysis {
                 BPatch_addressSpace *app, bool &needsRegisters);
 
         /**
+         * INSTTIME: Called once at end of instrumentation; should return a
+         * short summary of instrumentation activity for the logfile.
+         */
+        virtual string finalInstReport();
+
+        /**
          * RUNTIME: Called once at initialization for every instrumented instruction.
          */
         virtual void registerInstruction(FPSemantics *inst);

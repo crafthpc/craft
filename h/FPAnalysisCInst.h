@@ -40,6 +40,8 @@ class FPAnalysisCInst : public FPAnalysis {
         void expandInstCount(size_t newSize);
         size_t *getCountArrayPtr();
 
+        string finalInstReport();
+
         void registerInstruction(FPSemantics *inst);
         void handlePreInstruction(FPSemantics *inst);
         void handlePostInstruction(FPSemantics *inst);
@@ -53,6 +55,8 @@ class FPAnalysisCInst : public FPAnalysis {
 
         size_t *instCount;
         size_t instCountSize;
+
+        size_t insnsInstrumented;
 
 };
 

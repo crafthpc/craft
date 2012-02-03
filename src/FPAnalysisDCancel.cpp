@@ -28,6 +28,7 @@ FPAnalysisDCancel::FPAnalysisDCancel()
     instCount = 0;
     instData = NULL;
     expandInstData(4096);
+    insnsInstrumented = 0;
 }
 
 string FPAnalysisDCancel::getTag()
@@ -169,6 +170,7 @@ bool FPAnalysisDCancel::shouldReplace(FPSemantics * /*inst*/)
 Snippet::Ptr FPAnalysisDCancel::buildPreInstrumentation(FPSemantics * /*inst*/,
         BPatch_addressSpace * /*app*/, bool &needsRegisters)
 {
+    insnsInstrumented++;
     needsRegisters = true;
     return Snippet::Ptr();
 }
@@ -183,6 +185,13 @@ Snippet::Ptr FPAnalysisDCancel::buildReplacementCode(FPSemantics * /*inst*/,
         BPatch_addressSpace * /*app*/, bool & /*needsRegisters*/)
 {
     return Snippet::Ptr();
+}
+
+string FPAnalysisDCancel::finalInstReport()
+{
+    stringstream ss;
+    ss << "DCancel: " << insnsInstrumented << " instrumented";
+    return ss.str();
 }
 
 void FPAnalysisDCancel::registerInstruction(FPSemantics * /*inst*/)
