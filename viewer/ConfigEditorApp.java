@@ -41,6 +41,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
     // main data structures
     public File mainConfigFile;
+    public java.util.List<ConfigTreeNode> mainConfigEntries;
     public java.util.List<String> mainConfigMiscEntries;
 
     // main interface elements
@@ -233,6 +234,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
     public void openConfigFile(File file) {
         mainConfigFile = file;
+        mainConfigEntries = new ArrayList<ConfigTreeNode>();
         mainConfigMiscEntries = new ArrayList<String>();
 
         ConfigTreeNode appNode = new ConfigTreeNode();
@@ -250,19 +252,29 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     curNode = new ConfigTreeNode(curLine);
                     if (curNode.type == ConfigTreeNode.CNType.APPLICATION) {
                         appNode = curNode;
+                        mainConfigEntries.add(curNode);
                     } else if (curNode.type == ConfigTreeNode.CNType.FUNCTION) {
                         appNode.add(curNode);
-                        curNode.parent = appNode;
                         curFuncNode = curNode;
+                        mainConfigEntries.add(curNode);
                     } else if (curNode.type == ConfigTreeNode.CNType.BASIC_BLOCK &&
                                curFuncNode != null) {
+                        if (curBlockNode != null) {
+                            // clean previous block (remove if it has no children)
+                            if (curBlockNode.getChildCount() == 0) {
+                                TreeNode parent = curBlockNode.getParent();
+                                if (parent instanceof ConfigTreeNode) {
+                                    ((ConfigTreeNode)parent).remove(curBlockNode);
+                                }
+                            }
+                        }
                         curFuncNode.add(curNode);
-                        curNode.parent = curFuncNode;
                         curBlockNode = curNode;
+                        mainConfigEntries.add(curNode);
                     } else if (curNode.type == ConfigTreeNode.CNType.INSTRUCTION &&
                                curBlockNode != null) {
                         curBlockNode.add(curNode);
-                        curNode.parent = curBlockNode;
+                        mainConfigEntries.add(curNode);
                     }
                 } else {
                     mainConfigMiscEntries.add(curLine);
@@ -284,11 +296,6 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public void saveConfigFile() {
         if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
 
-        ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
-        ConfigTreeNode curFuncNode = null;
-        ConfigTreeNode curBlockNode = null;
-        ConfigTreeNode curNode = null;
-        String curLine;
 
         try {
             PrintWriter wrt = new PrintWriter(mainConfigFile);
@@ -300,21 +307,32 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             }
 
             // walk the config tree and emit all settings
-            wrt.println(appNode.formatFileEntry());
-            Enumeration<ConfigTreeNode> funcs = appNode.children();
-            while (funcs.hasMoreElements()) {
-                curFuncNode = funcs.nextElement();
-                wrt.println(curFuncNode.formatFileEntry());
-                Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
-                while (blocks.hasMoreElements()) {
-                    curBlockNode = blocks.nextElement();
-                    wrt.println(curBlockNode.formatFileEntry());
-                    Enumeration<ConfigTreeNode> insns = curBlockNode.children();
-                    while (insns.hasMoreElements()) {
-                        curNode = insns.nextElement();
-                        wrt.println(curNode.formatFileEntry());
-                    }
-                }
+            /*
+             *ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+             *ConfigTreeNode curFuncNode = null;
+             *ConfigTreeNode curBlockNode = null;
+             *ConfigTreeNode curNode = null;
+             *wrt.println(appNode.formatFileEntry());
+             *Enumeration<ConfigTreeNode> funcs = appNode.children();
+             *while (funcs.hasMoreElements()) {
+             *   curFuncNode = funcs.nextElement();
+             *   wrt.println(curFuncNode.formatFileEntry());
+             *   Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
+             *   while (blocks.hasMoreElements()) {
+             *       curBlockNode = blocks.nextElement();
+             *       wrt.println(curBlockNode.formatFileEntry());
+             *       Enumeration<ConfigTreeNode> insns = curBlockNode.children();
+             *       while (insns.hasMoreElements()) {
+             *           curNode = insns.nextElement();
+             *           wrt.println(curNode.formatFileEntry());
+             *       }
+             *   }
+             *}
+             */
+
+            // emit all config entries
+            for (ConfigTreeNode node : mainConfigEntries) {
+                wrt.println(node.formatFileEntry());
             }
 
             wrt.close();

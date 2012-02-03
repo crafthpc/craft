@@ -5,6 +5,7 @@
  *
  */
 
+import java.util.*;
 import javax.swing.*;
 import javax.swing.tree.*;
 
@@ -21,17 +22,16 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     public CNType type;
     public CNStatus status;
     public int number;
+    public long insnCount;
     public String label;
-
-    public ConfigTreeNode parent;
 
     public ConfigTreeNode() {
         super();
         type = CNType.APPLICATION;
         status = CNStatus.NONE;
         number = 1;
+        insnCount = -1;
         label = "Default App";
-        parent = null;
     }
 
     public ConfigTreeNode(CNType t, CNStatus s, int num, String lbl) {
@@ -39,8 +39,8 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         type = t;
         status = s;
         number = num;
+        insnCount = -1;
         label = lbl;
-        parent = null;
     }
 
     public ConfigTreeNode(String configLine) {
@@ -93,17 +93,43 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             label = "(empty)";
         }
 
-        parent = null;
+        insnCount = -1;
     }
 
     public CNStatus getEffectiveStatus() {
-        if (parent != null) {
-            CNStatus parentStatus = parent.getEffectiveStatus();
-            if (parentStatus != CNStatus.NONE) {
-                return parentStatus;
+        if (getParent() != null) {
+            TreeNode parent = getParent();
+            if (parent instanceof ConfigTreeNode) {
+                CNStatus parentStatus = ((ConfigTreeNode)parent).getEffectiveStatus();
+                if (parentStatus != CNStatus.NONE) {
+                    return parentStatus;
+                }
             }
         }
         return status;
+    }
+
+    public long getInsnCount() {
+        long count = 0;
+        if (insnCount == -1) {
+            switch (type) {
+                case APPLICATION:
+                case FUNCTION:
+                case BASIC_BLOCK:
+                    Enumeration<ConfigTreeNode> children = children();
+                    while (children.hasMoreElements()) {
+                        count += children.nextElement().getInsnCount();
+                    }
+                    break;
+                case INSTRUCTION:
+                    count = 1;
+                    break;
+            }
+            insnCount = count;
+        } else {
+            count = insnCount;
+        }
+        return count;
     }
 
     public void toggleNoneSingle() {
@@ -174,6 +200,14 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         //str.append(number);
         str.append(": ");
         str.append(label);
+        while (str.length() < 50) {
+            str.append(' ');
+        }
+        if (type == CNType.FUNCTION) {
+            str.append(" [");
+            str.append(getInsnCount());
+            str.append(" instruction(s)]");
+        }
         return str.toString();
     }
 
