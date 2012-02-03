@@ -114,10 +114,11 @@ void configInstruction(void *addr, unsigned char *bytes, size_t nbytes)
     entry->address = addr;
     if (mainAnalysisInplace->shouldReplace(inst)) {
         entry->tag = RETAG_SINGLE;
+        mainConfig->addReplaceEntry(entry);
     } else {
         entry->tag = RETAG_NONE;
     }
-    mainConfig->addReplaceEntry(entry);
+    //mainConfig->addReplaceEntry(entry);
 }
 
 void configBasicBlock(BPatch_basicBlock *block)
