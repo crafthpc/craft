@@ -751,6 +751,17 @@ unsigned long _INST_fast_handle_pointer(long iidx,
 }
 #endif
 
+/*
+ * FORTRAN STUB FOR THIS ROUTINE:
+ *
+ * subroutine inst_fortran_report ( val, lbl )
+ * implicit none
+ * double precision val
+ * character*(*) lbl
+ * write(*,*) lbl, val
+ * end
+ */
+
 extern "C"
 void _INST_fortran_report(const double *val, const char *lbl, const int lbl_len) {
     static char buffer[1024];
