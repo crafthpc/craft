@@ -13,134 +13,488 @@
 # when spawning new system processes
 require 'open3.rb'
 
-# check command-line options
-if ARGV.size != 1 then
-    puts "Usage:  fpautoconf <binary>"
-    exit
-end
+# needed for object serialization
+require 'yaml.rb'
 
-# data structures
-fortran_mode = true
-binary_name = ARGV[0]
-orig_config_name = "#{binary_name}_orig.cfg"
-final_config_name = "#{binary_name}_final.cfg"
-all_func_regexps = Hash.new
-all_func_filenames = Hash.new
-all_func_files = Hash.new
-all_func_passes = Hash.new
+# needed for easier directory removal
+require 'fileutils.rb'
 
-# output header
-puts "FPAutoConf"
-puts "Autoconfiguring #{binary_name} ..."
+# {{{ main method
+def main
+    srand
 
-# delete all existing .cfg files
-Dir.foreach(".") do |fn|
-    if fn =~ /\.cfg/ || fn =~ /lib(c|m)\.so\.6/ || fn =~ /\.log/ then
-        File.delete(fn)
+    # global variables
+    $fortran_mode = true        # pass "-N" to fpinst
+    $max_queue_length = 0       # track largest queue size (approximate)
+    $is_worker = false          # is this the parent process or a worker?
+    $workers = Hash.new         # worker proc info (pid => dirname)
+    $status_buffer = ""         # buffer for output (keeps multiprocess output clean)
+    $all_cfgs = Hash.new        # collection of all configs (key => cfg)
+
+    # check command-line options
+    if ARGV.size == 0 then
+        puts "Usage:  fpautoconf [-j <n>] <binary>        (parent process)"
+        puts "          or"
+        puts "        fpautoconf [-w <dir>] <binary>      (worker process)"
+        exit
     end
-end
 
-# generate initial configuration by calling fpconf
-print "Generating initial configuration ... "
-$stdout.flush
-orig_cfg = File.open(orig_config_name, "w")
-IO.popen("fpconf #{binary_name}") do |io|
-    io.each_line do |line|
-        orig_cfg.puts line
-        if line =~ /FUNC.*\"(.*)\"/ then
-            func = $1
-            all_func_regexps[func] = Regexp.new("FUNC.*\"#{$1}\"")
-            all_func_filenames[func] = "#{binary_name}_#{func}.cfg"
-            all_func_files[func] = File.open(all_func_filenames[func], "w")
-            all_func_passes[func] = false
+    # parse command-line options
+    num_workers = 0
+    begin
+        opt = ARGV.shift
+        if opt == "-w" then
+            # worker process
+            $is_worker = true
+            $autoconf_path = ARGV.shift
+        elsif opt == "-j" then
+            # parallel: "-j 4" variant
+            num_workers = ARGV.shift.to_i-1
+        elsif opt.start_with?("-j") then
+            # parallel: "-j4" variant
+            num_workers = opt[2,opt.length-2].to_i-1
         end
+    end while ARGV.size > 0
+
+    # set up environment and filenames
+    $binary_name = File.basename(opt)
+    $binary_path = File.expand_path(opt)
+    if !$is_worker then
+        $autoconf_path = Dir.getwd + "/"
+    end
+    $allconfigs_fn = "#{$autoconf_path + $binary_name}.allconfigs"
+    $workqueue_fn = "#{$autoconf_path + $binary_name}.workqueue"
+    $finalregexps_fn = "#{$autoconf_path + $binary_name}.finalregexps"
+    $orig_config_name = "#{$autoconf_path + $binary_name}_orig.cfg"
+    $final_config_name = "#{$autoconf_path + $binary_name}_final.cfg"
+
+    if $is_worker then
+
+        # worker process
+        load_all_configs
+        run_main_autoconf_loop
+        puts "Worker finished.  [Empty queue]"
+
+    else
+
+        # parent initialization
+        start = Time.now
+        puts "FPAutoConf"
+        puts "Autoconfiguring #{$binary_name} ..."
+        puts "Working dir: #{$autoconf_path}"
+        initialize_autoconf
+
+        # spawn workers
+        num_workers.times do |i|
+            puts "Spawning worker #{i} ..."
+            worker_dir = "#{$autoconf_path + $binary_name}_worker#{i}"
+            Dir.mkdir(worker_dir)
+            job = fork do
+                exec "cd #{worker_dir} && fpautoconf -w #{$autoconf_path} #{$binary_path}"
+            end
+            $workers[job] = worker_dir
+        end
+
+        # main loop
+        run_main_autoconf_loop
+
+        # clean up workers
+        $workers.each_pair do |job, dir|
+            Process.wait(job.to_i)
+            FileUtils.rm_rf(dir)
+        end
+
+        # parent finalization
+        finalize_autoconf
+        finish = Time.now
+        elapsed = finish.to_f - start.to_f
+        mins, secs = elapsed.divmod 60.0
+        hrs, mins = mins.divmod 60.0
+        puts("  [Elapsed walltime: %d:%02d:%05.2f]"%[hrs.to_i, mins.to_i, secs])
+
     end
 end
-orig_cfg.close
-puts "done."
+# }}}
 
-# generate per-function config files
-print "Generating per-function configurations ... "
-$stdout.flush
-IO.foreach(orig_config_name) do |line|
-    all_func_regexps.each_pair do |func,reg|
-        if line =~ reg then
-            all_func_files[func].puts "^s#{line[2,line.size-1]}"
-        elsif line =~ /^\^s/ then
-            all_func_files[func].puts "^d#{line[2,line.size-1]}"
+# {{{ SingleReplacementConfig
+# stores single config info (mainly for serialization)
+class SingleReplacementConfig
+    attr_accessor :key              # unique config identifier
+    attr_accessor :filename         # .cfg filename
+    attr_accessor :type             # func, bblk, insn
+    attr_accessor :regexp           # config pattern for creating final config
+    attr_accessor :icount           # number of fp instructions replaced
+    attr_accessor :children         # proper subset configs
+    def initialize(id, type)
+        @key = "#{type}_#{id}"
+        @filename = "#{$binary_name}_#{key}.cfg"
+        @type = type
+        if @type == "func" then
+            @regexp = Regexp.new("FUNC.*\"#{id}\"")
+        elsif @type == "bblk" then
+            @regexp = Regexp.new("BBLK #\\d+: 0x#{id}")
+        elsif @type == "insn" then
+            @regexp = Regexp.new("INSN #\\d+: 0x#{id}")
         else
-            all_func_files[func].puts line
+            @regexp = //
         end
+        if @type == "insn" then
+            @icount = 1
+        else
+            @icount = 0
+        end
+        @children = Array.new
     end
 end
-all_func_files.each_pair do |func,file|
-    file.close
-end
-puts "done."
+# }}}
 
-# for each configuration
-all_func_filenames.each_pair do |func, fn|
+# {{{ initialize_autoconf
+def initialize_autoconf
+
+    # delete all existing .cfg files (and old mutant files)
+    Dir.foreach(".") do |fn|
+        if fn =~ /\.cfg/ || fn =~ /lib(c|m)\.so\.6/ || fn =~ /\.log/ || fn =~ /mutant/ then
+            File.delete(fn)
+        end
+    end
+
+    # create search config files
+    File.new($allconfigs_fn, "w").close
+    File.new($workqueue_fn, "w").close
+    File.new($finalregexps_fn, "w").close
+
+    # generate initial configuration by calling fpconf
+    # and initialize global data structures
+    print "Generating initial configuration ... "
+    $stdout.flush
+    orig_cfg = File.open($orig_config_name, "w")
+    func = nil
+    bblk = nil
+    IO.popen("fpconf #{$binary_path}") do |io|
+        io.each_line do |line|
+            orig_cfg.puts line
+            if line =~ /FUNC.*\"(.+)\"/ then
+                func = SingleReplacementConfig.new($1, "func")
+                $all_cfgs[func.key] = func
+            end
+            if line =~ /BBLK #\d+: 0x([0-9A-Fa-f]+)/ then
+                bblk = SingleReplacementConfig.new($1, "bblk")
+                $all_cfgs[bblk.key] = bblk
+                func.children << bblk.key if func != nil
+            end
+            if line =~ /INSN #\d+: 0x([0-9A-Fa-f]+)/ then
+                insn = SingleReplacementConfig.new($1, "insn")
+                $all_cfgs[insn.key] = insn
+                bblk.children << insn.key if bblk != nil
+                bblk.icount += 1
+                func.icount += 1
+            end
+        end
+    end
+    orig_cfg.close
+    puts "done."
+
+    # throw away empty configs
+    to_delete = Array.new
+    $all_cfgs.each_pair do |key, cfg|
+        to_delete << key if cfg.icount == 0
+    end
+    to_delete.each do |key|
+        $all_cfgs.delete(key)
+    end
+
+    # save project config to file (for workers to load)
+    save_all_configs
+
+    # initialize work queue
+    # start by trying all functions
+    count = 0
+    $all_cfgs.each_pair do |key, cfg|
+        # FOR TESTING: limit to five functions
+        #if cfg.type == "func" && cfg.icount > 0 && count < 5
+        if cfg.type == "func" && cfg.icount > 0
+            add_to_workqueue(cfg.key)
+            count += 1
+        end
+    end
+    $max_queue_length = get_workqueue_length
+
+end
+# }}}
+
+# {{{ run_main_autoconf_loop
+def run_main_autoconf_loop
+    key = get_next_workqueue_item
+
+    # main search loop
+    while !key.nil? && key != "" do
+
+        # grab configuration object
+        cfg = $all_cfgs[key]
+
+        # queue status output
+        queue_length = get_workqueue_length
+        $status_buffer += "[Queue length: #{"%3d" % (queue_length+1)}]  "
+        $max_queue_length = queue_length if queue_length > $max_queue_length
+
+        # parent process should restart any dead worker processes
+        if !$is_worker && queue_length > 1 then
+            $workers.each_pair do |job, dir|
+                cmd = "ps -o s= p #{job.to_i}"
+                stat = `#{cmd}`
+                stat.chomp!
+                if stat != "S" then
+                    $workers.delete(job)
+                    id = File.basename(dir)
+                    if id =~ /worker(\d+)/ then
+                        id = $1
+                    else
+                        id = id[$binary_name.length+1,id.length-$binary_name.length-1]
+                    end
+                    puts "Respawning worker #{id} ..."
+                    job = fork do
+                        exec "cd #{dir} && fpautoconf -w #{$autoconf_path} #{$binary_path}"
+                    end
+                    $workers[job] = dir
+                end
+            end
+        end
+
+        if run_config(cfg) then
+
+            # this config passed; add it to the final
+            add_final_regexp(cfg.regexp)
+
+        else
+
+            # add any children we need to test
+            if (cfg.type == "func" && cfg.icount >= 1) ||
+               (cfg.type == "bblk" && cfg.icount >= 2) then
+                cfg.children.each do |key|
+                    child = $all_cfgs[key]
+                    if child != nil then
+                        add_to_workqueue(key)
+                    end
+                end
+            end
+
+        end
+
+        key = get_next_workqueue_item
+    end
+
+end
+# }}}
+
+# {{{ finalize_autoconf
+def finalize_autoconf
+
+    # queue status output
+    puts "Candidate queue exhausted.  [Max queue length: ~#{$max_queue_length} item(s)]"
+
+    # generate final config file
+    final_config_regexps = load_final_regexps
+    print "Generating final configuration ... "
+    $stdout.flush
+    final_config = File.open($final_config_name, "w")
+    IO.foreach($orig_config_name) do |line|
+        line_found = false
+        final_config_regexps.each do |reg|
+            if !line_found && line =~ reg then
+                final_config.puts "^s#{line[2,line.size-1]}"
+                line_found = true
+            end
+        end
+        if !line_found then
+            if line =~ /^\^s/ then
+                final_config.puts "^d#{line[2,line.size-1]}"
+            else
+                final_config.puts line
+            end
+        end
+    end
+    final_config.close
+    puts "done."
+
+    # try the final config
+    run_config_file($final_config_name)
+
+    # clean all config and temporary files
+    $all_cfgs.each_pair do |key, cfg|
+        File.delete(cfg.filename) if File.exists?(cfg.filename)
+    end
+    File.delete($allconfigs_fn)
+    File.delete($workqueue_fn)
+    File.delete($finalregexps_fn)
+
+    print "Done."
+
+end
+# }}}
+
+# {{{ configuration test helpers
+
+# build and run a configuration (takes a configuration object)
+def run_config (cfg)
+
+    # write configuration file
+    cfg_path = $autoconf_path + cfg.filename
+    f = File.new(cfg_path, "w")
+    IO.foreach($orig_config_name) do |line|
+        if line =~ cfg.regexp
+            f.puts "^s#{line[2,line.size-1]}"
+        elsif line =~ /^\^s/ then
+            f.puts "^d#{line[2,line.size-1]}"
+        else
+            f.puts line
+        end
+    end
+    f.close
+
+    # pass off to filename version
+    return run_config_file(cfg_path)
+end
+
+# build and run a configuration (takes a .cfg filename)
+def run_config_file (fn)
+    success = false
+
+    # status updates
+    basename = File.basename(fn)
+    basename = basename[$binary_name.length, basename.length-$binary_name.length]
+    $status_buffer += "Testing #{basename} ..."
+    puts $status_buffer
+    $status_buffer = "      Finished #{basename}:  "
+    (30-basename.length).times do
+        $status_buffer += " "
+    end
+
+    # TODO: FOR TESTING; remove this!
+    #success = true
+    #if rand(6) == 0 then
+        #success = true
+    #else
+        #success = false
+    #end
+    #if success then
+        #$status_buffer += "success!"
+    #else
+        #$status_buffer += "FAILED!"
+    #end
+    #puts $status_buffer
+    #$status_buffer = ""
+    #return success
 
     # build rewritten mutatee
-    puts "Testing configuration: #{fn} "
-    print "  Building ... "
-    $stdout.flush
-    Open3.popen3("fpinst -i #{fortran_mode ? "-N" : ""} -c #{fn} #{binary_name}") do |io_in, io_out, io_err, io_wait|
+    cmd = "fpinst -i #{$fortran_mode ? "-N" : ""}"
+    cmd += " -c #{fn}"
+    cmd += " #{$binary_path}"
+    Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
         io_out.each_line do |line|
             if line =~ /Inplace: (.*)$/ then
-                puts " #{$1}"
+                $status_buffer += "#{$1}  "
             end
         end
     end
 
     # execute rewritten mutatee and check for success
-    print "  Running ... "
-    $stdout.flush
     Open3.popen3("./mutant") do |io_in, io_out, io_err, io_wait|
         io_out.each_line do |line|
-            if line =~ /[^N]SUCCESS/ then
-                all_func_passes[func] = true
+            if !success && line =~ /[^N]SUCCESS/ then
+                $status_buffer += "success!"
+                success = true
             end
         end
     end
-    if all_func_passes[func] then
-        puts "success!"
-    else
-        puts "FAILED!"
+    if !success then
+        $status_buffer += "FAILED!"
     end
+    puts $status_buffer
+    $status_buffer = ""
 
-    # clean out old logs and rewritten library files
+    # clean out mutant, logs, and rewritten library files
     Dir.foreach(".") do |fn|
-        if fn =~ /lib(c|m)\.so\.6/ || fn =~ /\.log/ then
+        if fn =~ /mutant/ || fn =~ /\.log/ || fn =~ /lib(c|m)\.so\.6/ then
             File.delete(fn)
         end
     end
+
+    return success
 end
 
-# generate final config file
-print "Generating final configuration ... "
-$stdout.flush
-final_config = File.open(final_config_name, "w")
-IO.foreach(orig_config_name) do |line|
-    func_found = false
-    all_func_regexps.each_pair do |func,reg|
-        if line =~ reg then
-            if all_func_passes[func] then
-                final_config.puts "^s#{line[2,line.size-1]}"
-                func_found = true
-            else
-                final_config.puts "^d#{line[2,line.size-1]}"
-                func_found = true
-            end
-        end
-    end
-    if !func_found then
-        final_config.puts line
-    end
+# }}}
+
+# {{{ file helpers
+
+def save_all_configs
+    f = File.new($allconfigs_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    YAML.dump($all_cfgs, f)
+    f.close
 end
-puts "done."
+def load_all_configs
+    # could probably be read-only
+    f = File.new($allconfigs_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    $all_cfgs = YAML.load(f)
+    f.close
+end
 
-# TODO: test final config?
 
-puts "Done."
+def add_to_workqueue(item)
+    f = File.new($workqueue_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    f.seek(0,IO::SEEK_END)
+    f.puts(item)
+    f.close
+end
+def get_next_workqueue_item
+    item = ""
+    workqueue = Array.new
+    f = File.new($workqueue_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    workqueue = f.readlines
+    item = workqueue.shift
+    f.pos = 0
+    f.print workqueue
+    f.truncate(f.pos)
+    f.close
+    if !item.nil? then
+        item.chomp!
+    end
+    return item
+end
+def get_workqueue_length
+    # could probably be read-only
+    f = File.new($workqueue_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    workqueue = f.readlines
+    f.close
+    return workqueue.size
+end
+
+
+def add_final_regexp(reg)
+    f = File.new($finalregexps_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    f.seek(0,IO::SEEK_END)
+    f.puts(reg.to_s)
+    f.close
+end
+def load_final_regexps
+    # could probably be read-only
+    f = File.new($finalregexps_fn,  File::RDWR)
+    f.flock File::LOCK_EX
+    lines = f.readlines
+    f.close
+    final_config_regexps = Array.new
+    lines.each do |line|
+        final_config_regexps << Regexp.new(line.chomp)
+    end
+    return final_config_regexps
+end
+
+# }}}
+
+main
 
