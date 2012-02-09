@@ -62,6 +62,7 @@ def main
     if !$is_worker then
         $autoconf_path = Dir.getwd + "/"
     end
+    $settings_fn = "#{$autoconf_path + $binary_name}.settings"
     $allconfigs_fn = "#{$autoconf_path + $binary_name}.allconfigs"
     $workqueue_fn = "#{$autoconf_path + $binary_name}.workqueue"
     $finalregexps_fn = "#{$autoconf_path + $binary_name}.finalregexps"
@@ -106,11 +107,8 @@ def main
 
         # parent finalization
         finalize_autoconf
-        finish = Time.now
-        elapsed = finish.to_f - start.to_f
-        mins, secs = elapsed.divmod 60.0
-        hrs, mins = mins.divmod 60.0
-        puts("  [Elapsed walltime: %d:%02d:%05.2f]"%[hrs.to_i, mins.to_i, secs])
+        elapsed = Time.now.to_f - start.to_f
+        puts("  [Elapsed walltime: #{format_time(elapsed)}]")
 
     end
 end
@@ -152,16 +150,30 @@ end
 def initialize_autoconf
 
     # delete all existing .cfg files (and old mutant files)
-    Dir.foreach(".") do |fn|
+    Dir.foreach($autoconf_path) do |fn|
         if fn =~ /\.cfg/ || fn =~ /lib(c|m)\.so\.6/ || fn =~ /\.log/ || fn =~ /mutant/ then
             File.delete(fn)
+        elsif fn =~ /worker\d+/ then
+            FileUtils.rm_rf(fn)
         end
     end
 
     # create search config files
+    File.new($settings_fn, "w").close
     File.new($allconfigs_fn, "w").close
     File.new($workqueue_fn, "w").close
     File.new($finalregexps_fn, "w").close
+
+    # initial performance run
+    print "Performing baseline performance test ... "
+    $stdout.flush
+    start = Time.now
+    Open3.popen3("#{$binary_path}") do |io_in, io_out, io_err, io_wait|
+        io_out.each_line do |line|
+        end
+    end
+    $baseline_runtime = Time.now.to_f - start.to_f
+    puts " [Base walltime: #{format_time($baseline_runtime)}]"
 
     # generate initial configuration by calling fpconf
     # and initialize global data structures
@@ -323,6 +335,7 @@ def finalize_autoconf
     $all_cfgs.each_pair do |key, cfg|
         File.delete(cfg.filename) if File.exists?(cfg.filename)
     end
+    File.delete($settings_fn)
     File.delete($allconfigs_fn)
     File.delete($workqueue_fn)
     File.delete($finalregexps_fn)
@@ -364,8 +377,8 @@ def run_config_file (fn)
     basename = basename[$binary_name.length, basename.length-$binary_name.length]
     $status_buffer += "Testing #{basename} ..."
     puts $status_buffer
-    $status_buffer = "      Finished #{basename}:  "
-    (30-basename.length).times do
+    $status_buffer = "    Finished #{basename}:  "
+    (20-basename.length).times do
         $status_buffer += " "
     end
 
@@ -397,7 +410,12 @@ def run_config_file (fn)
         end
     end
 
+    (80-$status_buffer.length).times do
+        $status_buffer += " "
+    end
+
     # execute rewritten mutatee and check for success
+    start = Time.now
     Open3.popen3("./mutant") do |io_in, io_out, io_err, io_wait|
         io_out.each_line do |line|
             if !success && line =~ /[^N]SUCCESS/ then
@@ -406,9 +424,12 @@ def run_config_file (fn)
             end
         end
     end
+    elapsed = Time.now.to_f - start.to_f
     if !success then
-        $status_buffer += "FAILED!"
+        $status_buffer += "FAILED! "
     end
+    $status_buffer += "  [Walltime: #{format_time(elapsed)}"
+    $status_buffer += " %.1fX]"%[elapsed / $baseline_runtime]
     puts $status_buffer
     $status_buffer = ""
 
@@ -427,12 +448,21 @@ end
 # {{{ file helpers
 
 def save_all_configs
+    f = File.new($settings_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    f.puts $baseline_runtime
+    f.close
     f = File.new($allconfigs_fn, File::RDWR)
     f.flock File::LOCK_EX
     YAML.dump($all_cfgs, f)
     f.close
 end
 def load_all_configs
+    # could probably be read-only
+    f = File.new($settings_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    $baseline_runtime = f.gets.chomp.to_f
+    f.close
     # could probably be read-only
     f = File.new($allconfigs_fn, File::RDWR)
     f.flock File::LOCK_EX
@@ -494,6 +524,14 @@ def load_final_regexps
     return final_config_regexps
 end
 
+# }}}
+
+# {{{ misc helpers
+def format_time (elapsed)
+    mins, secs = elapsed.divmod 60.0
+    hrs, mins = mins.divmod 60.0
+    return "%d:%02d:%05.2f"%[hrs.to_i, mins.to_i, secs]
+end
 # }}}
 
 main
