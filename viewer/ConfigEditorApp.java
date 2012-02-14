@@ -35,8 +35,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public static final Font DEFAULT_FONT_MONO_PLAIN = new Font("Monospaced", Font.PLAIN, 12);
     public static final Font DEFAULT_FONT_MONO_BOLD  = new Font("Monospaced", Font.BOLD,  12);
     public static final Color DEFAULT_COLOR_IGNORE = new Color(225, 225,   0);
-    public static final Color DEFAULT_COLOR_SINGLE = new Color(  0, 255,   0);
-    public static final Color DEFAULT_COLOR_DOUBLE = new Color(255,  80,  80);
+    public static final Color DEFAULT_COLOR_SINGLE = new Color(125, 255, 125);
+    public static final Color DEFAULT_COLOR_DOUBLE = new Color(255, 120, 120);
     public static final Color DEFAULT_COLOR_BORDER = new Color(  0,   0, 225);
 
     // main data structures
