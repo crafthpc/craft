@@ -19,6 +19,28 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         NONE, IGNORE, SINGLE, DOUBLE
     }
 
+    public static String Type2Str(CNType type) {
+        String str = "UNKNOWN";
+        switch (type) {
+            case APPLICATION:       str = "APPL";    break;
+            case FUNCTION:          str = "FUNC";    break;
+            case BASIC_BLOCK:       str = "BBLK";    break;
+            case INSTRUCTION:       str = "INSN";    break;
+        }
+        return str;
+    }
+
+    public static String Status2Str(CNStatus status) {
+        String str = "UNKNOWN";
+        switch (status) {
+            case NONE:      str = "NONE";    break;
+            case IGNORE:    str = "IGNR";    break;
+            case SINGLE:    str = "SING";    break;
+            case DOUBLE:    str = "DOUB";    break;
+        }
+        return str;
+    }
+
     public CNType type;
     public CNStatus status;
     public int number;
@@ -159,6 +181,19 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             case SINGLE:    status = CNStatus.DOUBLE;       break;
             case DOUBLE:    status = CNStatus.NONE;         break;
             default:        status = CNStatus.NONE;         break;
+        }
+    }
+
+    public void merge(ConfigTreeNode node) {
+        //System.out.println("Merging: " + Status2Str(status) + "  " + label);
+        //System.out.println("   with: " + Status2Str(node.status) + "  " + node.label);
+
+        if (status == CNStatus.NONE || node.status == CNStatus.NONE) {
+            status = CNStatus.NONE;
+        } else if (status == CNStatus.IGNORE || node.status == CNStatus.IGNORE) {
+            status = CNStatus.IGNORE;
+        } else if (status == CNStatus.DOUBLE || node.status == CNStatus.DOUBLE) {
+            status = CNStatus.DOUBLE;
         }
     }
 

@@ -299,6 +299,94 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         mainTree.setModel(model);
         refreshKeyLabels();
     }
+
+    public boolean mergeConfigFile(File file) {
+
+        if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return false;
+        ConfigTreeNode origAppNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+        ConfigTreeNode origFuncNode = null;
+        ConfigTreeNode origBlockNode = null;
+
+        ConfigTreeNode appNode = new ConfigTreeNode();
+        ConfigTreeNode curFuncNode = null;
+        ConfigTreeNode curBlockNode = null;
+        ConfigTreeNode curNode = null;
+        String curLine;
+
+        boolean success = true;
+
+        try {
+            BufferedReader rdr = new BufferedReader(new FileReader(file));
+
+            // scan the file and build the configuration structure
+            while (success && (curLine = rdr.readLine()) != null) {
+                if (curLine.startsWith("^")) {
+                    curNode = new ConfigTreeNode(curLine);
+                    if (curNode.type == ConfigTreeNode.CNType.APPLICATION) {
+                        appNode = curNode;
+                        if (!appNode.label.equals(origAppNode.label)) {
+                            success = false;
+                        } else {
+                            origAppNode.merge(appNode);
+                        }
+
+                    } else if (curNode.type == ConfigTreeNode.CNType.FUNCTION) {
+                        curFuncNode = curNode;
+                        Enumeration<ConfigTreeNode> origFuncs = origAppNode.children();
+                        boolean found = false;
+                        while (origFuncs.hasMoreElements()) {
+                            ConfigTreeNode func = origFuncs.nextElement();
+                            if (func.label.equals(curFuncNode.label)) {
+                                func.merge(curFuncNode);
+                                origFuncNode = func;
+                                found = true;
+                            }
+                        }
+                        if (!found) {
+                            success = false;
+                        }
+
+                    } else if (curNode.type == ConfigTreeNode.CNType.BASIC_BLOCK &&
+                               curFuncNode != null && origFuncNode != null) {
+                        curBlockNode = curNode;
+                        Enumeration<ConfigTreeNode> origBlocks = origFuncNode.children();
+                        boolean found = false;
+                        while (origBlocks.hasMoreElements()) {
+                            ConfigTreeNode block = origBlocks.nextElement();
+                            if (block.label.equals(curBlockNode.label)) {
+                                block.merge(curBlockNode);
+                                origBlockNode = block;
+                                found = true;
+                            }
+                        }
+
+                    } else if (curNode.type == ConfigTreeNode.CNType.INSTRUCTION &&
+                               curBlockNode != null && origBlockNode != null) {
+                        Enumeration<ConfigTreeNode> origInsns = origBlockNode.children();
+                        boolean found = false;
+                        while (origInsns.hasMoreElements()) {
+                            ConfigTreeNode insn = origInsns.nextElement();
+                            if (insn.label.equals(curNode.label)) {
+                                insn.merge(curNode);
+                                found = true;
+                            }
+                        }
+                    }
+                } else {
+                    // TODO: do something with misc config entries?
+                    //mainConfigMiscEntries.add(curLine);
+                }
+            }
+
+            rdr.close();
+        } catch (IOException e) {
+            System.err.println("ERROR: " + e.getMessage());
+        }
+
+        setTitle(DEFAULT_TITLE + " - (multiple files)");
+        filenameLabel.setText("(multiple files)");
+        return success;
+    }
     
     public void saveConfigFile() {
         if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
@@ -383,10 +471,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                 }
             }
         }
-        noneKeyLabel.setText("NONE (" + noneCount + ")");
-        ignoreKeyLabel.setText("IGNORE (" + ignoreCount + ")");
-        singleKeyLabel.setText("SINGLE (" + singleCount + ")");
-        doubleKeyLabel.setText("DOUBLE (" + doubleCount + ")");
+        noneKeyLabel.setText(" NONE (" + noneCount + ") ");
+        ignoreKeyLabel.setText(" IGNORE (" + ignoreCount + ") ");
+        singleKeyLabel.setText(" SINGLE (" + singleCount + ") ");
+        doubleKeyLabel.setText(" DOUBLE (" + doubleCount + ") ");
     }
 
     public void search(boolean findNext) {
@@ -638,6 +726,9 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         String tag;
         File instFile;
 
+        // main application object
+        ConfigEditorApp app = null;
+
         // parse command-line args
         for (i = 0; i < args.length; i++) {
             files.add(new File(args[i]));
@@ -645,16 +736,20 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
         // open all given log files
         for (File f : files) {
-            ConfigEditorApp app = new ConfigEditorApp();
-            app.openFile(f);
-            app.setVisible(true);
+            if (app == null) {
+                app = new ConfigEditorApp();
+                app.openFile(f);
+            } else {
+                app.mergeConfigFile(f);
+            }
         }
 
         // empty config if no file is given
-        if (files.size() == 0) {
-            ConfigEditorApp app = new ConfigEditorApp();
-            app.setVisible(true);
+        if (app == null) {
+            app = new ConfigEditorApp();
         }
+
+        app.setVisible(true);
 
     } // }}}
 
