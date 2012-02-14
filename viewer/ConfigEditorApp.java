@@ -51,6 +51,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public JLabel filenameLabel;
     public JTextField searchBox;
     public JButton expandAllButton;
+    public JButton expandDoubleButton;
     public JButton collapseAllButton;
     public JCheckBox showEffectiveBox;
     public JButton toggleButton;
@@ -112,17 +113,13 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         collapseAllButton = new JButton("Collapse all");
         collapseAllButton.addActionListener(this);
         topPanel.add(collapseAllButton);
+        expandDoubleButton = new JButton("View doubles");
+        expandDoubleButton.addActionListener(this);
+        topPanel.add(expandDoubleButton);
         topPanel.add(new JLabel("   "));
         showEffectiveBox = new JCheckBox("Show effective status");
         showEffectiveBox.addActionListener(this);
         topPanel.add(showEffectiveBox);
-        topPanel.add(new JLabel("   "));
-        toggleButton = new JButton("Toggle selection");
-        toggleButton.addActionListener(this);
-        topPanel.add(toggleButton);
-        saveButton = new JButton("Save");
-        saveButton.addActionListener(this);
-        topPanel.add(saveButton);
 
         mainTree = new JTree();
         mainRenderer = new ConfigTreeRenderer();
@@ -158,6 +155,14 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         doubleKeyLabel.setOpaque(true);
         bottomPanel.add(doubleKeyLabel);
         refreshKeyLabels();
+
+        bottomPanel.add(new JLabel("      "));
+        toggleButton = new JButton("Toggle selection");
+        toggleButton.addActionListener(this);
+        bottomPanel.add(toggleButton);
+        saveButton = new JButton("Save");
+        saveButton.addActionListener(this);
+        bottomPanel.add(saveButton);
 
         mainPanel = new JPanel();
         mainPanel.setLayout(new BorderLayout());
@@ -459,6 +464,37 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
     }
 
+    public void expandDoubleRows() {
+        for (int i = 0; i < mainTree.getRowCount(); i++) {
+            ConfigTreeNode curNode = (ConfigTreeNode)mainTree.getPathForRow(i).getLastPathComponent();
+            if (curNode.type == ConfigTreeNode.CNType.FUNCTION &&
+                curNode.status == ConfigTreeNode.CNStatus.NONE &&
+                    shouldExpandDoubleRow(curNode)) {
+                mainTree.expandRow(i);
+            } else if (curNode.type == ConfigTreeNode.CNType.BASIC_BLOCK &&
+                       curNode.status == ConfigTreeNode.CNStatus.NONE &&
+                    shouldExpandDoubleRow(curNode)) {
+                mainTree.expandRow(i);
+            } else if (curNode.type != ConfigTreeNode.CNType.APPLICATION) {
+                mainTree.collapseRow(i);
+            }
+        }
+    }
+
+    public boolean shouldExpandDoubleRow(TreeNode parent) {
+        if (parent == null || !(parent instanceof ConfigTreeNode)) return false;
+        ConfigTreeNode child = null;
+        Enumeration<ConfigTreeNode> children = parent.children();
+        while (children.hasMoreElements()) {
+            child = children.nextElement();
+            if (child.status == ConfigTreeNode.CNStatus.DOUBLE ||
+                    shouldExpandDoubleRow(child)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void collapseAllRows() {
         for (int i = mainTree.getRowCount() - 1; i > 0; i--) {
             mainTree.collapseRow(i);
@@ -501,6 +537,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             search(true);
         } else if (e.getSource() == expandAllButton) {
             expandAllRows();
+        } else if (e.getSource() == expandDoubleButton) {
+            expandDoubleRows();
         } else if (e.getSource() == collapseAllButton) {
             collapseAllRows();
         } else if (e.getSource() == showEffectiveBox) {
