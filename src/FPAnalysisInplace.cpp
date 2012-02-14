@@ -48,6 +48,7 @@ void FPAnalysisInplace::debugPrintCompare(double input1, double input2, bool ord
 
 extern "C" {
     FPAnalysisInplace *_INST_Main_InplaceAnalysis = NULL;
+    size_t **_INST_svinp_inst_count_ptr = NULL;
 }
 
 bool FPAnalysisInplace::existsInstance()
@@ -66,6 +67,8 @@ FPAnalysisInplace* FPAnalysisInplace::getInstance()
 
 FPAnalysisInplace::FPAnalysisInplace()
 {
+    instCountSize = 0;
+    instCount = NULL;
     detectCancellations = false;
     cancelAnalysis = NULL;
     reportAllGlobals = false;
@@ -108,6 +111,10 @@ void FPAnalysisInplace::configure(FPConfig *config, FPDecoder *decoder,
     }
     if (config->getValue("enable_debug_print") == "yes") {
         enableDebugPrint();
+    }
+    if (config->hasValue("svinp_icount_ptr")) {
+        const char *ptr = config->getValueC("svinp_icount_ptr");
+        _INST_svinp_inst_count_ptr = (size_t**)strtoul(ptr, NULL, 16);
     }
     vector<FPShadowEntry*> entries;
     config->getAllShadowEntries(entries);
@@ -202,8 +209,12 @@ string FPAnalysisInplace::finalInstReport()
     return ss.str();
 }
 
-void FPAnalysisInplace::registerInstruction(FPSemantics * /*inst*/)
-{ }
+void FPAnalysisInplace::registerInstruction(FPSemantics *inst)
+{
+    if (inst->getIndex() >= instCountSize) {
+        expandInstCount(inst->getIndex());
+    }
+}
 
 void FPAnalysisInplace::handlePreInstruction(FPSemantics * /*inst*/)
 { }
@@ -1119,6 +1130,19 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
                 pos += buildOperandInitBlob(pos, *it);
             }
 
+            // increment instruction counter
+            if (_INST_svinp_inst_count_ptr != NULL) {
+                // grab the array pointer
+                pos += mainGen->buildMovImm64ToGPR64(pos, (uint64_t)_INST_svinp_inst_count_ptr, temp_gpr1);
+                // dereference the pointer
+                pos += mainGen->buildInstruction(pos, 0, true, false,
+                        0x8b, temp_gpr2, temp_gpr1, true, 0);
+                // add 1 to appropriate count slot
+                pos += mainGen->buildMovImm64ToGPR64(pos, (uint64_t)1, temp_gpr1);
+                pos += mainGen->buildInstruction(pos, 0, true, false,
+                        0x01, temp_gpr1, temp_gpr2, true, (int32_t)inst->getIndex() * sizeof(size_t));
+            }
+
             // restore clobbered registers
             pos += buildFakeStackPopGPR64(pos, temp_gpr3);
             pos += buildFakeStackPopGPR64(pos, temp_gpr2);
@@ -1206,7 +1230,7 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
     }
 
     // TODO: clean up input data structure
-    
+
     // copy into PatchAPI buffer
     finalize();
     unsigned char *b = (unsigned char*)getBlobCode();
@@ -1270,7 +1294,7 @@ Snippet::Ptr FPAnalysisInplace::buildPostInstrumentation(FPSemantics * /*inst*/,
 }
 
 Snippet::Ptr FPAnalysisInplace::buildReplacementCode(FPSemantics *inst,
-        BPatch_addressSpace * /*app*/, bool &needsRegisters)
+        BPatch_addressSpace *app, bool &needsRegisters)
 {
     if (mainPolicy->getSVType(inst) == SVT_IEEE_Single) {
         insnsInstrumentedSingle++;
@@ -1278,6 +1302,16 @@ Snippet::Ptr FPAnalysisInplace::buildReplacementCode(FPSemantics *inst,
         insnsInstrumentedDouble++;
     }
     if (canBuildBinaryBlob(inst)) {
+
+        // add a setting for the instruction counter array
+        // comment this if-statement out to disable instruction counting
+        if (_INST_svinp_inst_count_ptr == NULL) {
+            _INST_svinp_inst_count_ptr = (size_t**)app->malloc(sizeof(unsigned long*))->getBaseAddr();
+            stringstream ss;    ss.clear();     ss.str("");
+            ss << "svinp_icount_ptr=" << hex << _INST_svinp_inst_count_ptr << dec;
+            configuration->addSetting(ss.str());
+        }
+
         //printf("binary blob replacement: %s\n", inst->getDisassembly().c_str());
         return Snippet::Ptr(new FPBinaryBlobInplace(inst, mainPolicy));
 
@@ -1286,6 +1320,34 @@ Snippet::Ptr FPAnalysisInplace::buildReplacementCode(FPSemantics *inst,
         //printf("default replacement: %s\n", inst->getDisassembly().c_str());
         needsRegisters = true;
         return Snippet::Ptr();
+    }
+}
+
+void FPAnalysisInplace::expandInstCount(size_t newSize)
+{
+    size_t *newInstCount;
+    size_t i = 0;
+    newSize = (newSize > instCountSize*2) ? (newSize + 10) : (instCountSize*2 + 10);
+    //printf("expand_inst_count - old size: %lu    new size: %lu\n", instCountSize, newSize);
+    newInstCount = (size_t*)malloc(newSize * sizeof(size_t));
+    if (!newInstCount) {
+        fprintf(stderr, "OUT OF MEMORY!\n");
+        exit(-1);
+    }
+    if (instCount != NULL) {
+        for (; i < instCountSize; i++) {
+            newInstCount[i] = instCount[i];
+        }
+        free(instCount);
+        instCount = NULL;
+    }
+    for (; i < newSize; i++) {
+        newInstCount[i] = 0;
+    }
+    instCount = newInstCount;
+    instCountSize = newSize;
+    if (_INST_svinp_inst_count_ptr != NULL) {
+        *_INST_svinp_inst_count_ptr = instCount;
     }
 }
 
@@ -2244,8 +2306,24 @@ void FPAnalysisInplace::finalOutput()
     vector<FPShadowEntry*>::iterator k;
     FPShadowEntry* entry;
     FPOperandAddress addr, maddr;
-    size_t j, n, r, c, size;
+    size_t i, j, n, r, c, size;
     stringstream outputString;
+
+    // instruction counts
+    FPSemantics *inst;
+    stringstream ss2;
+    if (_INST_svinp_inst_count_ptr != NULL) {
+        for (i=0; i<instCountSize; i++) {
+            inst = decoder->lookup(i);
+            if (inst != NULL) {
+                ss2.clear();
+                ss2.str("");
+                ss2 << "instruction #" << i << ": count=" << instCount[i];
+                logFile->addMessage(ICOUNT, instCount[i], inst->getDisassembly(), ss2.str(),
+                        "", inst);
+            }
+        }
+    }
 
     // shadow table output initialization
     outputString.clear();

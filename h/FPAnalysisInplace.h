@@ -147,6 +147,8 @@ class FPAnalysisInplace : public FPAnalysis
         Snippet::Ptr buildReplacementCode(FPSemantics *inst,
                 BPatch_addressSpace *app, bool &needsRegisters);
 
+        void expandInstCount(size_t newSize);
+
         void handleConvert(FPOperand *output, FPOperand *input);
         void handleZero(FPOperand *output);
         void handleUnaryOp(FPOperationType type, FPOperand *output, FPOperand *input);
@@ -226,6 +228,9 @@ class FPAnalysisInplace : public FPAnalysis
 
         bool reportAllGlobals;
         vector<FPShadowEntry*> shadowEntries;
+
+        size_t *instCount;
+        size_t instCountSize;
 
         size_t insnsInstrumentedSingle;
         size_t insnsInstrumentedDouble;
