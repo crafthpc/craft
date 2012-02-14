@@ -57,6 +57,7 @@ class FPLog
 
         string getStackTrace(unsigned skipFrames=5);
         string getFakeStackTrace(void *addr);
+        string getSourceLineInfo(void *addr);
 
         void getGlobalVars(vector<Variable *> &gvars);
         FPOperandAddress getGlobalVarAddr(string name);

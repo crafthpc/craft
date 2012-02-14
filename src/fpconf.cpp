@@ -17,6 +17,9 @@ BPatch *bpatch = NULL;
 BPatch_addressSpace *mainApp = NULL;
 BPatch_image *mainImg = NULL;
 
+// main log (used for debug info, not actual logging)
+FPLog *mainLog = NULL;
+
 // main configuration
 FPConfig *mainConfig = NULL;
 
@@ -110,7 +113,11 @@ void configInstruction(void *addr, unsigned char *bytes, size_t nbytes)
 
     // build config entry
     FPReplaceEntry *entry = new FPReplaceEntry(RETYPE_INSTRUCTION, iidx);
-    entry->name = inst->getDisassembly();
+    stringstream ss;
+    ss.clear(); ss.str("");
+    ss << inst->getDisassembly() << "  ["
+       << mainLog->getSourceLineInfo(inst->getAddress()) << "]";
+    entry->name = ss.str();
     entry->address = addr;
     if (mainAnalysisInplace->shouldReplace(inst)) {
         entry->tag = RETAG_SINGLE;
@@ -305,6 +312,8 @@ int main(int argc, char *argv[])
 		usage();
 		exit(EXIT_FAILURE);
 	}
+    mainLog = new FPLog("fpconf.log");
+    mainLog->setDebugFile(binary);
     mainConfig = new FPConfig();
 
 	// initalize DynInst library

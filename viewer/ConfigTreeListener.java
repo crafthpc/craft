@@ -32,6 +32,8 @@ public class ConfigTreeListener extends MouseAdapter implements TreeExpansionLis
                     ((ConfigTreeNode)obj).toggleNoneSingle();
                 } else if (e.getClickCount() == 1 && e.getButton() == MouseEvent.BUTTON3) {
                     ((ConfigTreeNode)obj).toggleIgnoreSingle();
+                } else if (e.getClickCount() == 2 && e.getButton() == MouseEvent.BUTTON1) {
+                    mainApp.openSourceWindow((ConfigTreeNode)obj);
                 }
             }
             mainTree.repaint();

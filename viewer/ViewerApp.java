@@ -44,7 +44,6 @@ public class ViewerApp extends JFrame {
     // main interface elements
     public JTabbedPane mainTabPanel;
     public JFileChooser fileChooser;
-    public java.util.List<File> searchDirs;
     public JPanel topPanel;
     public JTextArea sourceCode;
     public JScrollPane sourcePanel;
@@ -86,30 +85,12 @@ public class ViewerApp extends JFrame {
         fileChooser = new JFileChooser();
         fileChooser.setCurrentDirectory(new File("."));
 
-        initSearchDirs();
+        Util.initSearchDirs();
 
         mainLogFile = null;
 
         buildMenuBar();
         buildMainInterface();
-    }
-
-    public void initSearchDirs() {
-        searchDirs = new ArrayList<File>();
-
-        File dirList = new File("searchdirs.txt");
-        if (dirList.exists()) {
-            try {
-                BufferedReader rdr = new BufferedReader(new FileReader(dirList));
-                String dir;
-                while ((dir = rdr.readLine()) != null) {
-                    searchDirs.add(0, new File(dir));
-                }
-                rdr.close();
-            } catch (IOException ex) { }
-        }
-
-        searchDirs.add(new File("."));
     }
 
     // }}}
@@ -342,12 +323,6 @@ public class ViewerApp extends JFrame {
 
     // {{{ helper/utility functions
 
-    public void addSearchDir(File path) {
-        if (path != null) {
-            searchDirs.add(0,path);
-        }
-    }
-
     public void openLogFile(File file) {
         mainLogFile = null;
         mergeLogFile(file);
@@ -366,20 +341,6 @@ public class ViewerApp extends JFrame {
         messageLabel.setText("0 total message(s):");
         instructionLabel.setText("0 instruction(s):");
         variableLabel.setText("0 variable(s):");
-    }
-
-    public String findFile(File start, String name) {
-        File[] files = start.listFiles();
-        String ret = null;
-        int i;
-        for (i = 0; files != null && i < files.length && ret == null; i++) {
-            if (files[i].isDirectory()) {
-                ret = findFile(files[i], name);
-            } else if (files[i].getName().equals(name)) {
-                ret = files[i].getAbsolutePath();
-            }
-        }
-        return ret;
     }
 
     public void clearTopPanel() {
@@ -472,7 +433,7 @@ public class ViewerApp extends JFrame {
             messageFilter.revalidate();
             instructionList.revalidate();
             variableList.revalidate();
-            addSearchDir(file.getParentFile());
+            Util.addSearchDir(file.getParentFile());
             clearTopPanel();
 
         } catch (ParserConfigurationException ex) {
@@ -504,13 +465,13 @@ public class ViewerApp extends JFrame {
             topPanel.revalidate();
 
             String fullPath = null;
-            for (File path : searchDirs) {
+            for (File path : Util.getSearchDirs()) {
                 if (fullPath == null) {
-                    fullPath = findFile(path, filename);
+                    fullPath = Util.findFile(path, filename);
                     if (fullPath != null) {
                         File parent = (new File(fullPath)).getParentFile();
                         if (parent != null) {
-                            addSearchDir(parent);
+                            Util.addSearchDir(parent);
                         }
                         break;
                     }

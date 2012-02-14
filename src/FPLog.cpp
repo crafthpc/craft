@@ -192,6 +192,21 @@ string FPLog::getFakeStackTrace(void *addr)
     return ss.str();
 }
 
+string FPLog::getSourceLineInfo(void *addr)
+{
+    stringstream ss;
+    ss.clear();
+    ss.str("");
+    if (debug_symtab) {
+        stwalk_lines.clear();
+        debug_symtab->getSourceLines(stwalk_lines, (Offset)addr);
+        if (stwalk_lines.size() > 0) {
+            ss << stwalk_lines[0]->getFile() << ":" << stwalk_lines[0]->getLine();
+        }
+    }
+    return ss.str();
+}
+
 void FPLog::getGlobalVars(vector<Variable *> &gvars)
 {
     vector<Variable *> vars;
