@@ -170,7 +170,7 @@ size_t FPCodeGen::buildInstruction(unsigned char *pos,
     if (memory && disp) {
         *(int32_t*)pos = disp;
         pos += 4;
-    } else if (modrm == REG_E13) {
+    } else if (rm == REG_E13) {
         // one-byte zero displacement for (%r13)
         (*pos++) = 0x0;
     }

@@ -196,15 +196,6 @@ size_t FPBinaryBlob::buildOperandLoadGPR(unsigned char *pos,
         if (src->getRegister() != dest_gpr) {
             pos += mainGen->buildMovGPR64ToGPR64(pos, src->getRegister(), dest_gpr);
         }
-    } else if (src->getBase() == REG_EIP) {
-        // mov $disp(%rip), %gpr
-        pos += mainGen->buildInstruction(pos, prefix, wide_operands, false, 
-                opcode, dest_gpr, REG_EIP, true, src->getDisp());
-        adjustDisplacement(src->getDisp(), pos);
-    } else if (src->getBase() == REG_ESP) {
-        // mov $disp(%rsp), %xmm
-        pos += mainGen->buildInstruction(pos, prefix, false, false, 
-                opcode, dest_gpr, REG_ESP, true, src->getDisp());
     } else if (src->getBase() != REG_NONE && src->getIndex() == REG_NONE) {
         // mov $disp(%gpr), %gpr
         pos += mainGen->buildInstruction(pos, prefix, wide_operands, false, 
@@ -216,6 +207,10 @@ size_t FPBinaryBlob::buildOperandLoadGPR(unsigned char *pos,
                 src->getBase(), src->getDisp());
     } else {
         assert(!"unsupported operand");
+    }
+
+    if (src->getBase() == REG_EIP) {
+        adjustDisplacement(src->getDisp(), pos);
     }
 
     // put our own %rax value back
@@ -271,15 +266,6 @@ size_t FPBinaryBlob::buildOperandLoadXMM(unsigned char *pos,
     } else if (src->isRegisterGPR()) {
         // movxx %gpr, %xmm
         pos += mainGen->buildMovGPR64ToXmm(pos, src->getRegister(), dest_xmm);
-    } else if (src->getBase() == REG_EIP) {
-        // movxx $disp(%rip), %xmm
-        pos += mainGen->buildInstruction(pos, prefix, wide_operands, true, 
-                opcode, dest_xmm, REG_EIP, true, src->getDisp());
-        adjustDisplacement(src->getDisp(), pos);
-    } else if (src->getBase() == REG_ESP) {
-        // movxx $disp(%rsp), %xmm
-        pos += mainGen->buildInstruction(pos, prefix, wide_operands, true, 
-                opcode, dest_xmm, REG_ESP, true, src->getDisp());
     } else if (src->getBase() != REG_NONE && src->getIndex() == REG_NONE) {
         // movxx $disp(%gpr), %xmm
         pos += mainGen->buildInstruction(pos, prefix, wide_operands, true, 
@@ -291,6 +277,10 @@ size_t FPBinaryBlob::buildOperandLoadXMM(unsigned char *pos,
                 src->getBase(), src->getDisp());
     } else {
         assert(!"unsupported operand");
+    }
+
+    if (src->getBase() == REG_EIP) {
+        adjustDisplacement(src->getDisp(), pos);
     }
 
     // put our own %rax value back

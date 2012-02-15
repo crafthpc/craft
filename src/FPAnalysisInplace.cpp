@@ -1133,14 +1133,15 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
             // increment instruction counter
             if (_INST_svinp_inst_count_ptr != NULL) {
                 // grab the array pointer
-                pos += mainGen->buildMovImm64ToGPR64(pos, (uint64_t)_INST_svinp_inst_count_ptr, temp_gpr1);
+                pos += mainGen->buildMovImm64ToGPR64(pos, 
+                        (uint64_t)_INST_svinp_inst_count_ptr, temp_gpr1);
                 // dereference the pointer
                 pos += mainGen->buildInstruction(pos, 0, true, false,
                         0x8b, temp_gpr2, temp_gpr1, true, 0);
-                // add 1 to appropriate count slot
-                pos += mainGen->buildMovImm64ToGPR64(pos, (uint64_t)1, temp_gpr1);
+                // increment appropriate count slot
                 pos += mainGen->buildInstruction(pos, 0, true, false,
-                        0x01, temp_gpr1, temp_gpr2, true, (int32_t)inst->getIndex() * sizeof(size_t));
+                        0xff, REG_NONE, temp_gpr2, true,
+                        (uint32_t)(inst->getIndex() * sizeof(size_t)));
             }
 
             // restore clobbered registers
@@ -1348,6 +1349,8 @@ void FPAnalysisInplace::expandInstCount(size_t newSize)
     instCountSize = newSize;
     if (_INST_svinp_inst_count_ptr != NULL) {
         *_INST_svinp_inst_count_ptr = instCount;
+        //printf("_INST_svinp_inst_count_ptr: %p   instCount=%p\n",
+                //_INST_svinp_inst_count_ptr, instCount);
     }
 }
 
