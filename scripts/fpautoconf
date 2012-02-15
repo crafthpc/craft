@@ -24,18 +24,21 @@ def main
     srand
 
     # global variables
+    $stat_preferred = "s"       # preferred replacement status
+    $stat_alternate = "d"       # replacement status if cannot be preferred
     $fortran_mode = true        # pass "-N" to fpinst
     $max_queue_length = 0       # track largest queue size (approximate)
     $is_worker = false          # is this the parent process or a worker?
     $workers = Hash.new         # worker proc info (pid => dirname)
     $status_buffer = ""         # buffer for output (keeps multiprocess output clean)
     $all_cfgs = Hash.new        # collection of all configs (key => cfg)
+    $self_invoke = File.basename($0)
 
     # check command-line options
     if ARGV.size == 0 then
-        puts "Usage:  fpautoconf [-j <n>] <binary>        (parent process)"
+        puts "Usage:  #{$self_invoke} [-j <n>] <binary>        (parent process)"
         puts "          or"
-        puts "        fpautoconf [-w <dir>] <binary>      (worker process)"
+        puts "        #{$self_invoke} [-w <dir>] <binary>      (worker process)"
         exit
     end
 
@@ -91,7 +94,7 @@ def main
             worker_dir = "#{$autoconf_path + $binary_name}_worker#{i}"
             Dir.mkdir(worker_dir)
             job = fork do
-                exec "cd #{worker_dir} && fpautoconf -w #{$autoconf_path} #{$binary_path}"
+                exec "cd #{worker_dir} && #{$self_invoke} -w #{$autoconf_path} #{$binary_path}"
             end
             $workers[job] = worker_dir
         end
@@ -224,7 +227,7 @@ def initialize_autoconf
     $all_cfgs.each_pair do |key, cfg|
         # FOR TESTING: limit to five functions
         #if cfg.type == "func" && cfg.icount > 0 && count < 5
-        if cfg.type == "func" && cfg.icount > 0
+        if cfg.type == "func" && cfg.icount > 0 then
             add_to_workqueue(cfg.key)
             count += 1
         end
@@ -265,7 +268,7 @@ def run_main_autoconf_loop
                     end
                     puts "Respawning worker #{id} ..."
                     job = fork do
-                        exec "cd #{dir} && fpautoconf -w #{$autoconf_path} #{$binary_path}"
+                        exec "cd #{dir} && #{$self_invoke} -w #{$autoconf_path} #{$binary_path}"
                     end
                     $workers[job] = dir
                 end
@@ -313,13 +316,13 @@ def finalize_autoconf
         line_found = false
         final_config_regexps.each do |reg|
             if !line_found && line =~ reg then
-                final_config.puts "^s#{line[2,line.size-1]}"
+                final_config.puts "^#{$stat_preferred}#{line[2,line.size-1]}"
                 line_found = true
             end
         end
         if !line_found then
             if line =~ /^\^s/ then
-                final_config.puts "^d#{line[2,line.size-1]}"
+                final_config.puts "^#{$stat_alternate}#{line[2,line.size-1]}"
             else
                 final_config.puts line
             end
@@ -354,10 +357,10 @@ def run_config (cfg)
     cfg_path = $autoconf_path + cfg.filename
     f = File.new(cfg_path, "w")
     IO.foreach($orig_config_name) do |line|
-        if line =~ cfg.regexp
-            f.puts "^s#{line[2,line.size-1]}"
+        if line =~ cfg.regexp then
+            f.puts "^#{$stat_preferred}#{line[2,line.size-1]}"
         elsif line =~ /^\^s/ then
-            f.puts "^d#{line[2,line.size-1]}"
+            f.puts "^#{$stat_alternate}#{line[2,line.size-1]}"
         else
             f.puts line
         end
