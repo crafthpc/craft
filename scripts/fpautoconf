@@ -331,8 +331,8 @@ def finalize_autoconf
     final_config.close
     puts "done."
 
-    # try the final config
-    run_config_file($final_config_name)
+    # try the final config (and keep results)
+    run_config_file($final_config_name, true)
 
     # clean all config and temporary files
     $all_cfgs.each_pair do |key, cfg|
@@ -368,11 +368,11 @@ def run_config (cfg)
     f.close
 
     # pass off to filename version
-    return run_config_file(cfg_path)
+    return run_config_file(cfg_path, false)
 end
 
 # build and run a configuration (takes a .cfg filename)
-def run_config_file (fn)
+def run_config_file (fn, keep)
     success = false
 
     # status updates
@@ -437,9 +437,11 @@ def run_config_file (fn)
     $status_buffer = ""
 
     # clean out mutant, logs, and rewritten library files
-    Dir.foreach(".") do |fn|
-        if fn =~ /mutant/ || fn =~ /\.log/ || fn =~ /lib(c|m)\.so\.6/ then
-            File.delete(fn)
+    if !keep then
+        Dir.foreach(".") do |fn|
+            if fn =~ /mutant/ || fn =~ /\.log/ || fn =~ /lib(c|m)\.so\.6/ then
+                File.delete(fn)
+            end
         end
     end
 
