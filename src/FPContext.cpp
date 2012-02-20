@@ -47,6 +47,12 @@ string FPContext::FPReg2Str(FPRegister reg)
         case REG_XMM13: return "xmm13";
         case REG_XMM14: return "xmm14";
         case REG_XMM15: return "xmm15";
+        case REG_CS:  return "cs";
+        case REG_DS:  return "ds";
+        case REG_ES:  return "es";
+        case REG_FS:  return "fs";
+        case REG_GS:  return "gs";
+        case REG_SS:  return "ss";
         default: return "none";
     }
 }
@@ -450,6 +456,9 @@ void FPContext::setRegisterValueUInt32(FPRegister reg, long tag, uint32_t value,
                 idx = ((long)reg - (long)REG_XMM0)*4;
                 fxsave_state->xmm_space[idx+tag] = value;
                 break;
+            case REG_CS: case REG_DS: case REG_ES: case REG_FS: case REG_GS: case REG_SS:
+                assert(!"Cannot set segment registers!");
+                break;
         }
     }
 }
@@ -506,6 +515,9 @@ void FPContext::setRegisterValueUInt64(FPRegister reg, long tag, uint64_t value,
                 idx = ((long)reg - (long)REG_XMM0)*4;
                 fxsave_state->xmm_space[idx+tag] = (uint32_t)(value & 0xFFFFFFFF);
                 fxsave_state->xmm_space[idx+tag+1] = (uint32_t)(value >> 32);
+                break;
+            case REG_CS: case REG_DS: case REG_ES: case REG_FS: case REG_GS: case REG_SS:
+                assert(!"Cannot set segment registers!");
                 break;
         }
     }

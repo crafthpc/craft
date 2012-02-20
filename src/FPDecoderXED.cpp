@@ -109,6 +109,12 @@ FPRegister FPDecoderXED::xedReg2FPReg(xed_reg_enum_t reg)
         case XED_REG_R13: case XED_REG_R13D: case XED_REG_R13W: case XED_REG_R13B: return REG_E13;
         case XED_REG_R14: case XED_REG_R14D: case XED_REG_R14W: case XED_REG_R14B: return REG_E14;
         case XED_REG_R15: case XED_REG_R15D: case XED_REG_R15W: case XED_REG_R15B: return REG_E15;
+        case XED_REG_CS:   return REG_CS;
+        case XED_REG_DS:   return REG_DS;
+        case XED_REG_ES:   return REG_ES;
+        case XED_REG_FS:   return REG_FS;
+        case XED_REG_GS:   return REG_GS;
+        case XED_REG_SS:   return REG_SS;
         default:           return REG_NONE;
         // }}}
     }
@@ -350,7 +356,8 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
                        (xed_decoded_inst_get_memory_displacement_width(&xedd,mi) ? \
                           (long)xed_decoded_inst_get_memory_displacement(&xedd,mi) : 0), \
                        (xedReg2FPReg(xed_decoded_inst_get_index_reg(&xedd,mi)) != REG_NONE ? \
-                          (long)xed_decoded_inst_get_scale(&xedd,mi) : 1)
+                          (long)xed_decoded_inst_get_scale(&xedd,mi) : 1), \
+                       xedReg2FPReg(xed_decoded_inst_get_seg_reg(&xedd,mi))
 
     /*memops = xed_decoded_inst_number_of_memory_operands(&xedd);*/
     mi = 0;

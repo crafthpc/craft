@@ -199,12 +199,12 @@ size_t FPBinaryBlob::buildOperandLoadGPR(unsigned char *pos,
     } else if (src->getBase() != REG_NONE && src->getIndex() == REG_NONE) {
         // mov $disp(%gpr), %gpr
         pos += mainGen->buildInstruction(pos, prefix, wide_operands, false, 
-                opcode, dest_gpr, src->getBase(), true, src->getDisp());
+                opcode, dest_gpr, src->getBase(), true, src->getDisp(), src->getSegment());
     } else if (src->isMemory()) {
         // mov $disp(%base,%index,$scale), %gpr
         pos += mainGen->buildInstruction(pos, prefix, wide_operands, false, 
                 0x10, dest_gpr, src->getScale(), src->getIndex(),
-                src->getBase(), src->getDisp());
+                src->getBase(), src->getDisp(), src->getSegment());
     } else {
         assert(!"unsupported operand");
     }
@@ -269,12 +269,12 @@ size_t FPBinaryBlob::buildOperandLoadXMM(unsigned char *pos,
     } else if (src->getBase() != REG_NONE && src->getIndex() == REG_NONE) {
         // movxx $disp(%gpr), %xmm
         pos += mainGen->buildInstruction(pos, prefix, wide_operands, true, 
-                opcode, dest_xmm, src->getBase(), true, src->getDisp());
+                opcode, dest_xmm, src->getBase(), true, src->getDisp(), src->getSegment());
     } else if (src->isMemory()) {
         // movxx $disp(%base,%index,$scale), %xmm
         pos += mainGen->buildInstruction(pos, prefix, wide_operands, true, 
                 opcode, dest_xmm, src->getScale(), src->getIndex(),
-                src->getBase(), src->getDisp());
+                src->getBase(), src->getDisp(), src->getSegment());
     } else {
         assert(!"unsupported operand");
     }

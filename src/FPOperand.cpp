@@ -334,7 +334,7 @@ uint64_t FPOperand::FPOpValUInt64(FPOperandValue *val)
 
 FPOperand::FPOperand()
     : type(IEEE_Single), reg(REG_NONE), tag(0), base(REG_NONE), index(REG_NONE), 
-      disp(0), scale(1), immediate(true), inverted(false)
+      disp(0), scale(1), segment(REG_NONE), immediate(true), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = IEEE_Single;
@@ -345,7 +345,7 @@ FPOperand::FPOperand()
 FPOperand::FPOperand(FPOperand *baseOp, long tag)
     : type(baseOp->type), reg(baseOp->reg), tag(tag), base(baseOp->base), 
       index(baseOp->index), disp(baseOp->disp), scale(baseOp->scale), 
-      immediate(baseOp->immediate), inverted(baseOp->inverted)
+      segment(REG_NONE), immediate(baseOp->immediate), inverted(baseOp->inverted)
 {
     currentAddress = baseOp->currentAddress;
     currentValue = baseOp->currentValue;
@@ -354,7 +354,9 @@ FPOperand::FPOperand(FPOperand *baseOp, long tag)
 
 
 FPOperand::FPOperand(FPOperandValue value)
-    : type(value.type), reg(REG_NONE), tag(0), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(true), inverted(false)
+    : type(value.type), reg(REG_NONE), tag(0), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(true), inverted(false)
 {
     currentAddress = 0;
     switch (value.type) {
@@ -379,7 +381,9 @@ FPOperand::FPOperand(FPOperandValue value)
 }
 
 FPOperand::FPOperand(float value)
-    : type(IEEE_Single), reg(REG_NONE), tag(0), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(true), inverted(false)
+    : type(IEEE_Single), reg(REG_NONE), tag(0), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(true), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = type;
@@ -388,7 +392,9 @@ FPOperand::FPOperand(float value)
 }
 
 FPOperand::FPOperand(double value)
-    : type(IEEE_Double), reg(REG_NONE), tag(0), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(true), inverted(false)
+    : type(IEEE_Double), reg(REG_NONE), tag(0), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(true), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = type;
@@ -397,7 +403,9 @@ FPOperand::FPOperand(double value)
 }
 
 FPOperand::FPOperand(long double value)
-    : type(C99_LongDouble), reg(REG_NONE), tag(0), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(true), inverted(false)
+    : type(C99_LongDouble), reg(REG_NONE), tag(0), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(true), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = type;
@@ -406,7 +414,9 @@ FPOperand::FPOperand(long double value)
 }
 
 FPOperand::FPOperand(int8_t value)
-    : type(SignedInt32), reg(REG_NONE), tag(0), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(true), inverted(false)
+    : type(SignedInt32), reg(REG_NONE), tag(0), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(true), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = type;
@@ -415,7 +425,9 @@ FPOperand::FPOperand(int8_t value)
 }
 
 FPOperand::FPOperand(int16_t value)
-    : type(SignedInt32), reg(REG_NONE), tag(0), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(true), inverted(false)
+    : type(SignedInt32), reg(REG_NONE), tag(0), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(true), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = type;
@@ -424,7 +436,9 @@ FPOperand::FPOperand(int16_t value)
 }
 
 FPOperand::FPOperand(int32_t value)
-    : type(SignedInt32), reg(REG_NONE), tag(0), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(true), inverted(false)
+    : type(SignedInt32), reg(REG_NONE), tag(0), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(true), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = type;
@@ -433,7 +447,9 @@ FPOperand::FPOperand(int32_t value)
 }
 
 FPOperand::FPOperand(int64_t value)
-    : type(SignedInt64), reg(REG_NONE), tag(0), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(true), inverted(false)
+    : type(SignedInt64), reg(REG_NONE), tag(0), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(true), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = type;
@@ -442,7 +458,9 @@ FPOperand::FPOperand(int64_t value)
 }
 
 FPOperand::FPOperand(uint8_t value)
-    : type(UnsignedInt32), reg(REG_NONE), tag(0), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(true), inverted(false)
+    : type(UnsignedInt32), reg(REG_NONE), tag(0), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(true), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = type;
@@ -451,7 +469,9 @@ FPOperand::FPOperand(uint8_t value)
 }
 
 FPOperand::FPOperand(uint16_t value)
-    : type(UnsignedInt32), reg(REG_NONE), tag(0), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(true), inverted(false)
+    : type(UnsignedInt32), reg(REG_NONE), tag(0), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(true), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = type;
@@ -460,7 +480,9 @@ FPOperand::FPOperand(uint16_t value)
 }
 
 FPOperand::FPOperand(uint32_t value)
-    : type(UnsignedInt32), reg(REG_NONE), tag(0), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(true), inverted(false)
+    : type(UnsignedInt32), reg(REG_NONE), tag(0), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(true), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = type;
@@ -469,7 +491,9 @@ FPOperand::FPOperand(uint32_t value)
 }
 
 FPOperand::FPOperand(uint64_t value)
-    : type(UnsignedInt64), reg(REG_NONE), tag(0), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(true), inverted(false)
+    : type(UnsignedInt64), reg(REG_NONE), tag(0), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(true), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = type;
@@ -478,7 +502,9 @@ FPOperand::FPOperand(uint64_t value)
 }
 
 FPOperand::FPOperand(FPOperandType type)
-    : type(type), reg(REG_NONE), tag(0), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(false), inverted(false)
+    : type(type), reg(REG_NONE), tag(0), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(false), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = type;
@@ -486,7 +512,9 @@ FPOperand::FPOperand(FPOperandType type)
 }
 
 FPOperand::FPOperand(FPOperandType type, FPRegister reg)
-    : type(type), reg(reg), tag(0), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(false), inverted(false)
+    : type(type), reg(reg), tag(0), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(false), inverted(false)
 {
     currentAddress = FPRegTag2Addr(reg, 0);
     currentValue.type = type;
@@ -494,7 +522,9 @@ FPOperand::FPOperand(FPOperandType type, FPRegister reg)
 }
 
 FPOperand::FPOperand(FPOperandType type, FPRegister reg, long tag)
-    : type(type), reg(reg), tag(tag), base(REG_NONE), index(REG_NONE), disp(0), scale(1), immediate(false), inverted(false)
+    : type(type), reg(reg), tag(tag), base(REG_NONE), 
+      index(REG_NONE), disp(0), scale(1), 
+      segment(REG_NONE), immediate(false), inverted(false)
 {
     currentAddress = FPRegTag2Addr(reg, tag);
     currentValue.type = type;
@@ -502,7 +532,9 @@ FPOperand::FPOperand(FPOperandType type, FPRegister reg, long tag)
 }
 
 FPOperand::FPOperand(FPOperandType type, FPRegister base, FPRegister index, long disp, long scale)
-   : type(type), reg(REG_NONE), tag(0), base(base), index(index), disp(disp), scale(scale), immediate(false), inverted(false)
+   : type(type), reg(REG_NONE), tag(0), base(base), 
+     index(index), disp(disp), scale(scale), 
+     segment(REG_NONE), immediate(false), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = type;
@@ -510,7 +542,19 @@ FPOperand::FPOperand(FPOperandType type, FPRegister base, FPRegister index, long
 }
 
 FPOperand::FPOperand(FPOperandType type, FPRegister base, FPRegister index, long disp, long scale, long tag)
-   : type(type), reg(REG_NONE), tag(tag), base(base), index(index), disp(disp), scale(scale), immediate(false), inverted(false)
+   : type(type), reg(REG_NONE), tag(tag), base(base), 
+     index(index), disp(disp), scale(scale), 
+     segment(REG_NONE), immediate(false), inverted(false)
+{
+    currentAddress = 0;
+    currentValue.type = type;
+    updateAttributes();
+}
+
+FPOperand::FPOperand(FPOperandType type, FPRegister base, FPRegister index, long disp, long scale, FPRegister segment, long tag)
+   : type(type), reg(REG_NONE), tag(tag), base(base), 
+     index(index), disp(disp), scale(scale), 
+     segment(segment), immediate(false), inverted(false)
 {
     currentAddress = 0;
     currentValue.type = type;
@@ -581,6 +625,7 @@ void FPOperand::refresh(FPContext *context)
             case SSE_Quad:       context->getRegisterValue((void*)&currentValue.data, reg, tag, 16); break;
         }
     } else {
+        assert(segment == REG_NONE);
         switch (currentValue.type) {
             case IEEE_Single:    context->getMemoryValue((void*)&currentValue.data, &currentAddress, base, index, disp+tag*4, scale,  4); break;
             case IEEE_Double:    context->getMemoryValue((void*)&currentValue.data, &currentAddress, base, index, disp+tag*4, scale,  8); break;
@@ -621,6 +666,7 @@ void FPOperand::refreshAddress(FPContext *context)
     // register "addresses" are hard-coded, so this is only necessary if it's a
     // memory operand
     if (reg == REG_NONE) {
+        assert(segment == REG_NONE);
         switch (currentValue.type) {
             case IEEE_Single:    context->getMemoryAddress((void**)&currentAddress, base, index, disp+tag*4, scale,  4); break;
             case IEEE_Double:    context->getMemoryAddress((void**)&currentAddress, base, index, disp+tag*4, scale,  8); break;
@@ -658,6 +704,7 @@ void FPOperand::refreshValue(FPContext *context)
             case SSE_Quad:       context->getRegisterValue((void*)&currentValue.data, reg, tag, 16); break;
         }
     } else {
+        assert(segment == REG_NONE);
         switch (currentValue.type) {
             case IEEE_Single:    context->getMemoryValue((void*)&currentValue.data, currentAddress,  4); break;
             case IEEE_Double:    context->getMemoryValue((void*)&currentValue.data, currentAddress,  8); break;
@@ -725,6 +772,11 @@ long FPOperand::getDisp()
 long FPOperand::getScale()
 {
     return scale;
+}
+
+FPRegister FPOperand::getSegment()
+{
+    return segment;
 }
 
 long FPOperand::getTag()
@@ -823,6 +875,7 @@ void FPOperand::setCurrentValueZero(FPContext *context, bool writeBack, bool que
         case UnsignedInt64:  setCurrentValueUInt64(0L, context, writeBack, queue); break;
         case SSE_Quad:
             if (attrIsMemory) {
+                assert(segment == REG_NONE);
                 if (writeBack) {
                     context->setMemoryValueUInt32((void*)((unsigned long)currentAddress+0), 0, queue);
                     context->setMemoryValueUInt32((void*)((unsigned long)currentAddress+1), 0, queue);
@@ -904,6 +957,7 @@ void FPOperand::setCurrentValueSInt64(int64_t val, FPContext *context, bool writ
 void FPOperand::setCurrentValueUInt8(uint8_t val, FPContext *context, bool writeBack, bool queue)
 {
     if (attrIsMemory) {
+        assert(segment == REG_NONE);
 #if INCLUDE_DEBUG
         //printf("  setting operand value at 0x%p = %x %s %s\n", 
               //(void*)currentAddress, val,
@@ -942,6 +996,7 @@ void FPOperand::setCurrentValueUInt8(uint8_t val, FPContext *context, bool write
 void FPOperand::setCurrentValueUInt16(uint16_t val, FPContext *context, bool writeBack, bool queue)
 {
     if (attrIsMemory) {
+        assert(segment == REG_NONE);
 #if INCLUDE_DEBUG
         //printf("  setting operand value at 0x%p = 0x%lx %s %s\n", 
               //(void*)currentAddress, val,
@@ -980,6 +1035,7 @@ void FPOperand::setCurrentValueUInt16(uint16_t val, FPContext *context, bool wri
 void FPOperand::setCurrentValueUInt32(uint32_t val, FPContext *context, bool writeBack, bool queue)
 {
     if (attrIsMemory) {
+        assert(segment == REG_NONE);
 #if INCLUDE_DEBUG
         //printf("  setting operand value at 0x%p = %x %s %s\n", 
               //(void*)currentAddress, val,
@@ -1018,6 +1074,7 @@ void FPOperand::setCurrentValueUInt32(uint32_t val, FPContext *context, bool wri
 void FPOperand::setCurrentValueUInt64(uint64_t val, FPContext *context, bool writeBack, bool queue)
 {
     if (attrIsMemory) {
+        assert(segment == REG_NONE);
 #if INCLUDE_DEBUG
         //printf("  setting operand value at 0x%p = 0x%lx %s %s\n", 
               //(void*)currentAddress, val,
@@ -1235,6 +1292,9 @@ string FPOperand::toString()
             ss << "  addr=0x" << hex << disp << dec;
         else
             ss << "  disp=0x" << hex << disp << dec;
+    }
+    if (segment != REG_NONE) {
+        ss << "  segment=" << FPContext::FPReg2Str(segment);
     }
     if (immediate) {
         switch (currentValue.type) {

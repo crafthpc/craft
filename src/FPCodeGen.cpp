@@ -36,6 +36,21 @@ unsigned char FPCodeGen::getRegModRMId(FPRegister reg)
     return tmp;
 }
 
+unsigned char FPCodeGen::getSegRegByte(FPRegister reg)
+{
+    unsigned char tmp = 0x0;
+    switch (reg) {
+        case REG_CS:  tmp = 0x2e;  break;
+        case REG_DS:  tmp = 0x3e;  break;
+        case REG_ES:  tmp = 0x26;  break;
+        case REG_FS:  tmp = 0x64;  break;
+        case REG_GS:  tmp = 0x65;  break;
+        case REG_SS:  tmp = 0x36;  break;
+        default: assert(!"unsupported segment register");   break;
+    }
+    return tmp;
+}
+
 size_t FPCodeGen::buildREX(unsigned char *pos,
         bool wide, FPRegister reg, FPRegister index, FPRegister base_rm)
 {
@@ -117,7 +132,7 @@ size_t FPCodeGen::buildInstruction(unsigned char *pos,
 size_t FPCodeGen::buildInstruction(unsigned char *pos,
         unsigned char prefix, bool wide_operands, bool two_byte_opcode,
         unsigned char opcode, FPRegister reg, FPRegister rm,
-        bool memory, int32_t disp)
+        bool memory, int32_t disp, FPRegister seg)
 {
     unsigned char *old_pos = pos;
     unsigned char modrm;
@@ -151,6 +166,9 @@ size_t FPCodeGen::buildInstruction(unsigned char *pos,
     modrm |= (reg_enc << 3);
 
     // emit instruction
+    if (seg != REG_NONE) {
+        (*pos++) = getSegRegByte(seg);
+    }
     if (prefix) {
         (*pos++) = prefix;
     }
@@ -181,7 +199,8 @@ size_t FPCodeGen::buildInstruction(unsigned char *pos,
 size_t FPCodeGen::buildInstruction(unsigned char *pos,
         unsigned char prefix, bool wide_operands, bool two_byte_opcode,
         unsigned char opcode, FPRegister reg, 
-        long scale, FPRegister index, FPRegister base, int32_t disp)
+        long scale, FPRegister index, FPRegister base, int32_t disp,
+        FPRegister seg)
 {
     unsigned char *old_pos = pos;
     unsigned char modrm, sib;
@@ -214,6 +233,9 @@ size_t FPCodeGen::buildInstruction(unsigned char *pos,
     sib |= base_enc;
 
     // emit instruction
+    if (seg != REG_NONE) {
+        (*pos++) = getSegRegByte(seg);
+    }
     if (prefix) {
         (*pos++) = prefix;
     }

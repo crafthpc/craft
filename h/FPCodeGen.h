@@ -19,6 +19,7 @@ class FPCodeGen {
         FPCodeGen();
 
         unsigned char getRegModRMId(FPRegister reg);
+        unsigned char getSegRegByte(FPRegister reg);
 
         size_t buildREX(unsigned char *pos,
                 bool wide, FPRegister reg, FPRegister index, FPRegister base_rm);
@@ -36,12 +37,13 @@ class FPCodeGen {
         size_t buildInstruction(unsigned char *pos,
                 unsigned char prefix, bool wide_operands, bool two_byte_opcode,
                 unsigned char opcode, FPRegister reg, FPRegister rm,
-                bool memory, int32_t disp);
+                bool memory, int32_t disp, FPRegister seg = REG_NONE);
 
         size_t buildInstruction(unsigned char *pos,
                 unsigned char prefix, bool wide_operands, bool two_byte_opcode,
                 unsigned char opcode, FPRegister reg, 
-                long scale, FPRegister index, FPRegister base, int32_t disp);
+                long scale, FPRegister index, FPRegister base, int32_t disp, 
+                FPRegister seg = REG_NONE);
 
         size_t buildPushReg(unsigned char *pos,
                 FPRegister reg);

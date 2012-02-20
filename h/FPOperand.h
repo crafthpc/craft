@@ -105,6 +105,7 @@ class FPOperand {
         FPOperand(FPOperandType type, FPRegister reg, long tag);
         FPOperand(FPOperandType type, FPRegister base, FPRegister index, long disp, long scale);
         FPOperand(FPOperandType type, FPRegister base, FPRegister index, long disp, long scale, long tag);
+        FPOperand(FPOperandType type, FPRegister base, FPRegister index, long disp, long scale, FPRegister segment, long tag);
 
         void refresh(FPContext *context);
         void refreshAddress(FPContext *context);
@@ -119,6 +120,7 @@ class FPOperand {
         FPRegister getIndex();
         long getDisp();
         long getScale();
+        FPRegister getSegment();
         long getTag();
 
         FPOperandAddress getCurrentAddress();
@@ -190,6 +192,7 @@ class FPOperand {
         long tag;
         FPRegister base, index;
         long disp, scale;
+        FPRegister segment;
         bool immediate, inverted;
 
         void updateAttributes();
