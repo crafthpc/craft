@@ -549,11 +549,20 @@ size_t FPBinaryBlobInplace::buildOperandInitBlob(unsigned char *pos,
     return size_t(pos-old_pos);
 }
 
+inline bool isSegmentRegister(unsigned char prefix) {
+    return (prefix == 0x2e ||
+            prefix == 0x3e ||
+            prefix == 0x26 ||
+            prefix == 0x64 ||
+            prefix == 0x65 ||
+            prefix == 0x36);
+}
+
 size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
         FPSemantics *inst, unsigned char *orig_code, FPRegister replacementRM)
 {
     unsigned char *old_pos = pos;
-    unsigned char rex, modrm, opcode;
+    unsigned char prefix, rex, modrm, opcode;
     int i;
     unsigned j;
 
@@ -566,6 +575,12 @@ size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
         orig_code, orig_instr);
     opcode = orig_code[loc.num_prefixes+(int)loc.opcode_size-1];
 
+    // cannot have non-segment prefixes
+    for (j=0; (j < 4) && (j < orig_instr.getPrefix()->getCount()); j++) {
+        prefix = orig_instr.getPrefix()->getPrefix(j);
+        assert(prefix == 0 || isSegmentRegister(prefix));
+    }
+
     assert(loc.modrm_position != -1);   // must have a ModRM byte
     assert(loc.address_size != 1);      // can't be a 16-bit instruction
 
@@ -576,13 +591,7 @@ size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
         if (i != loc.rex_position) {
             if (orig_code[i] == 0xf2 && mainPolicy->getSVType(inst) == SVT_IEEE_Single) {
                 (*pos++) = 0xf3;
-            } else if (orig_code[i] != 0x2e &&  // segment registers
-                       orig_code[i] != 0x3e &&
-                       orig_code[i] != 0x26 &&
-                       orig_code[i] != 0x64 &&
-                       orig_code[i] != 0x65 &&
-                       orig_code[i] != 0x36
-                      ) {
+            } else if (!isSegmentRegister(orig_code[i])) {
                 (*pos++) = orig_code[i];
             }
         }
