@@ -28,6 +28,7 @@ class FPSVPolicy {
     public:
 
         FPSVPolicy(FPSVType defaultType);
+        virtual ~FPSVPolicy();
 
         virtual bool shouldInstrument(FPSemantics *inst);
 

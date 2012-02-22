@@ -119,5 +119,8 @@ bool FPSVPolicy::shouldReplaceWithPtr(FPOperand *op, FPSemantics * /*inst*/)
     return savePtr;
 }
 
+FPSVPolicy::~FPSVPolicy()
+{ }
+
 }
 
