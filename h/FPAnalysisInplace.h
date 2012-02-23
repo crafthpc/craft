@@ -202,11 +202,6 @@ class FPAnalysisInplace : public FPAnalysis
         void saveDoubleToContext(FPOperand *output, double value);
         void saveReplacedDoubleToContext(FPOperand *output, float value);
 
-        long getNumAllocations();
-        long getNumGCAllocations();
-        long getNumValueWriteBacks();
-        long getNumPtrWriteBacks();
-
         void finalOutput();
 
     private:
@@ -217,11 +212,6 @@ class FPAnalysisInplace : public FPAnalysis
 
         FPSemantics *currInst;
         FPOperandValue *currFlag;
-        unsigned long num_allocations;
-        unsigned long num_gcAllocations;
-
-        unsigned long num_valWriteBacks;
-        unsigned long num_ptrWriteBacks;
 
         bool detectCancellations;
         FPAnalysisDCancel *cancelAnalysis;

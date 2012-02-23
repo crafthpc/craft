@@ -2170,23 +2170,6 @@ void FPAnalysisInplace::saveReplacedDoubleToContext(FPOperand *output, float val
     output->setCurrentValueUInt64(*(uint64_t*)(&buffer), context, true, true);
 }
 
-
-long FPAnalysisInplace::getNumAllocations() {
-    return num_allocations;
-}
-
-long FPAnalysisInplace::getNumGCAllocations() {
-    return num_gcAllocations;
-}
-
-long FPAnalysisInplace::getNumValueWriteBacks() {
-    return num_valWriteBacks;
-}
-
-long FPAnalysisInplace::getNumPtrWriteBacks() {
-    return num_ptrWriteBacks;
-}
-
 // print shadow entries by location; tries to use debug info to provide better output
 void FPAnalysisInplace::printShadowLocation(FPOperandAddress addr)
 {
@@ -2352,7 +2335,6 @@ void FPAnalysisInplace::finalOutput()
     
     // summary output
     //cout << "finalizing pointer analysis" << endl;
-    outputString << num_allocations << " unique shadow values" << endl;
     outputString << shadowEntries.size() << " config-requested shadow values" << endl;
 
     // config-requested shadow values
