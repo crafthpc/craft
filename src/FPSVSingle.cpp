@@ -99,6 +99,7 @@ void FPSVSingle::doUnaryOp(FPOperationType type, FPSV *op)
     switch (type) {
         case OP_NEG:    value = -(opd->value);       break;
         case OP_ABS:    value = fabsf(opd->value);   break;
+        case OP_RCP:    value = 1.0f / opd->value;   break;
         case OP_SQRT:   value = sqrtf(opd->value);   break;
         case OP_ZERO:   value = 0.0f;                break;
         case OP_SIN:    value = sinf(opd->value);    break;

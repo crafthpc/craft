@@ -295,7 +295,7 @@ void FPAnalysisInplace::handleReplacement(FPSemantics *inst)
                     handleZero(outputs[0]); break;
 
                 // unary operations
-                case OP_SQRT: case OP_NEG: case OP_ABS:
+                case OP_SQRT: case OP_NEG: case OP_ABS: case OP_RCP:
                     // "normal" operations
                     handleUnaryOp(opt, outputs[0], inputs[0]); break;
 
@@ -1440,6 +1440,8 @@ void FPAnalysisInplace::handleUnaryOp(FPOperationType type, FPOperand *output, F
             if (singlePrec) { fans = -fval; } else { dans = -dval; } break;
         case OP_ABS:
             if (singlePrec) { fans = fabsf(fval); } else { dans = fabs(dval); } break;
+        case OP_RCP:
+            if (singlePrec) { fans = 1.0f / fval; } else { dans = 1.0 / dval; } break;
         case OP_SQRT:
             if (singlePrec) { fans = sqrtf(fval); } else { dans = sqrt(dval); } break;
         case OP_NOT:

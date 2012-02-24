@@ -18,7 +18,7 @@ string FPOperation::FPOpType2Str(FPOperationType type)
         case OP_MIN:  return " min"; case OP_MAX:  return " max";
         case OP_ZERO: return " zero";
         case OP_SQRT: return " sqrt"; case OP_CBRT: return " cbrt";
-        case OP_NEG:  return " neg"; case OP_ABS:  return " abs";
+        case OP_NEG:  return " neg"; case OP_ABS:  return " abs"; case OP_RCP:  return " rcp";
         case OP_AM:   return " am";
         case OP_SIN:   return   " sin";  case OP_COS:   return   " cos";  case OP_TAN:   return   " tan";
         case OP_ASIN:  return  " asin";  case OP_ACOS:  return  " acos";  case OP_ATAN:  return  " atan";

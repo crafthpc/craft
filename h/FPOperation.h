@@ -29,7 +29,7 @@ enum FPOperationType {
     OP_MIN, OP_MAX,
     OP_ZERO,
     OP_SQRT, OP_CBRT,
-    OP_NEG, OP_ABS, OP_AM,
+    OP_NEG, OP_ABS, OP_RCP, OP_AM,
     OP_SIN,   OP_COS,   OP_TAN,
     OP_ASIN,  OP_ACOS,  OP_ATAN,
     OP_SINH,  OP_COSH,  OP_TANH,

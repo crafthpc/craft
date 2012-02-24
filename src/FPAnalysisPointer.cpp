@@ -411,7 +411,7 @@ void FPAnalysisPointer::handleReplacement(FPSemantics *inst)
                     handleZero(outputs[0]); break;
 
                 // unary operations
-                case OP_SQRT: case OP_NEG: case OP_ABS:
+                case OP_SQRT: case OP_NEG: case OP_ABS: case OP_RCP:
                     // "normal" operations
                     handleUnaryOp(opt, outputs[0], inputs[0]); break;
 
