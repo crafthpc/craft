@@ -1334,10 +1334,10 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
                 // instruction is at the end of a block; no need to split
                 // post-block
                 //printf("        insn is at end of block\n");
-                assert(block->getTargets().size() == 1);
-                PatchEdge *postEdge = *(insnBlock->getTargets().begin());
+                assert(block->targets().size() == 1);
+                PatchEdge *postEdge = *(insnBlock->targets().begin());
                 assert(postEdge->type() == ParseAPI::FALLTHROUGH);
-                postBlock = postEdge->target();
+                postBlock = postEdge->trg();
             }
 
             // insert new code
@@ -1356,7 +1356,7 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
 
             // grab all incoming edges to insnBlock
             edges.clear();
-            for (i = insnBlock->getSources().begin(); i != insnBlock->getSources().end(); i++) {
+            for (i = insnBlock->sources().begin(); i != insnBlock->sources().end(); i++) {
                 edges.push_back(*i);
 
                 // we can't redirect these types of edges
@@ -1377,13 +1377,13 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
 
                 // redirect from insnBlock to newBlock
                 edges.clear();
-                for (i = insnBlock->getTargets().begin(); i != insnBlock->getTargets().end(); i++) {
+                for (i = insnBlock->targets().begin(); i != insnBlock->targets().end(); i++) {
                     edges.push_back(*i);
                 }
                 for (j = edges.begin(); j != edges.end(); j++) {
                     //printf("        redirecting insn outgoing edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
-                           //(void*)((*j)->source()->start()), (void*)((*j)->source()->end()),
-                           //(void*)((*j)->target()->start()), (void*)((*j)->target()->end()),
+                           //(void*)((*j)->src()->start()), (void*)((*j)->src()->end()),
+                           //(void*)((*j)->trg()->start()), (void*)((*j)->trg()->end()),
                            //(void*)(newBlock->start()), (void*)(newBlock->end()));
                     success = PatchModifier::redirect(*j, newBlock);
                     assert(success);
@@ -1393,8 +1393,8 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
                 // redirect from src/pre to newBlock (skip insnBlock)
                 for (j = edges.begin(); j != edges.end(); j++) {
                     //printf("        redirecting incoming edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
-                           //(void*)((*j)->source()->start()), (void*)((*j)->source()->end()),
-                           //(void*)((*j)->target()->start()), (void*)((*j)->target()->end()),
+                           //(void*)((*j)->src()->start()), (void*)((*j)->src()->end()),
+                           //(void*)((*j)->trg()->start()), (void*)((*j)->trg()->end()),
                            //(void*)(newBlock->start()), (void*)(newBlock->end()));
                     success = PatchModifier::redirect(*j, newBlock);
                     assert(success);
@@ -1405,16 +1405,16 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
             // (should only be one of them)
             assert(icode->exits().size() == 1);
             //printf("        redirecting outgoing edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
-                   //(void*)((*icode->exits().begin())->source()->start()),
-                   //(void*)((*icode->exits().begin())->source()->end()),
-                   //(void*)((*icode->exits().begin())->target()->start()),
-                   //(void*)((*icode->exits().begin())->target()->end()),
+                   //(void*)((*icode->exits().begin())->src()->start()),
+                   //(void*)((*icode->exits().begin())->src()->end()),
+                   //(void*)((*icode->exits().begin())->trg()->start()),
+                   //(void*)((*icode->exits().begin())->trg()->end()),
                    //(void*)(postBlock->start()), (void*)(postBlock->end()));
             success = PatchModifier::redirect(*icode->exits().begin(), postBlock);
             assert(success);
 
             PatchBlock *newEntry = icode->entry();
-            PatchBlock *newExit = (*icode->exits().begin())->source();
+            PatchBlock *newExit = (*icode->exits().begin())->src();
 
             // debug output
             /*
