@@ -237,54 +237,22 @@ const char* FPConfig::getValueC(string key)
         return i->second.c_str();
 }
 
-//map<string, string>::iterator FPConfig::begin() {
-    //return settings.begin();
-//}
-
-//map<string, string>::iterator FPConfig::end() {
-    //return settings.end();
-//}
-
-void FPConfig::getAllValues(map<string, string> &vals)
+void FPConfig::getAllSettings(vector<string> &vals)
 {
-    //map<string,string>::iterator i;
-    //for (i=settings.begin(); i!=settings.end(); i++)
-        //vals[i->first] = i->second;
-    map<string,string>::iterator i;
-    for (i=settings.begin(); i!=settings.end(); i++)
-        vals[i->first] = i->second;
-    vector<FPShadowEntry*>::iterator j;
-    vector<string>::iterator k;
-    FPShadowEntry *entry;
     stringstream ss;
-    string key, value;
+    map<string,string>::iterator i;
+    for (i=settings.begin(); i!=settings.end(); i++) {
+        ss.clear(); ss.str("");
+        ss << i->first << "=" << i->second;
+        vals.push_back(ss.str());
+    }
+    vector<FPShadowEntry*>::iterator j;
     for (j=shadowEntries.begin(); j!=shadowEntries.end(); j++) {
-        ss.clear();
-        ss.str("");
-        entry = *j;
-        switch (entry->type) {
-            case INIT:     ss << "init";     break;
-            case REPORT:   ss << "report";   break;
-            case NOREPORT: ss << "noreport"; break;
-        }
-        if (entry->isize != 0) {
-            ss << "-" << entry->isize;
-        }
-        ss << ":" << (entry->indirect ? "*" : "") << entry->name;
-        key = ss.str();
-        ss.clear();
-        ss.str("");
-        if (entry->type == INIT) {
-            for (k=entry->vals.begin(); k!=entry->vals.end(); k++) {
-                if (k != entry->vals.begin())
-                    ss << " ";
-                ss << *k;
-            }
-        } else {
-            ss << entry->size[0] << " " << entry->size[1];
-        }
-        value = ss.str();
-        vals[key] = value;
+        vals.push_back(getShadowEntryLine(*j));
+    }
+    vector<FPReplaceEntry*>::iterator jj;
+    for (jj=replaceEntries.begin(); jj!=replaceEntries.end(); jj++) {
+        vals.push_back(getReplaceEntryLine(*jj));
     }
 }
 
@@ -321,6 +289,61 @@ int FPConfig::getAddressList(void* addresses[], string key)
     return count;
 }
 
+string FPConfig::getShadowEntryLine(FPShadowEntry *entry)
+{
+    stringstream ss;
+    ss.clear(); ss.str("");
+    ss << "  ";
+    switch (entry->type) {
+        case INIT:     ss << "init";     break;
+        case REPORT:   ss << "report";   break;
+        case NOREPORT: ss << "noreport"; break;
+    }
+    if (entry->isize != 0) {
+        ss << "-" << entry->isize;
+    }
+    ss << ":" << (entry->indirect ? "*" : "") << entry->name << "=";
+    if (entry->type == INIT) {
+        vector<string>::iterator k;
+        for (k=entry->vals.begin(); k!=entry->vals.end(); k++) {
+            if (k != entry->vals.begin())
+                ss << " ";
+            ss << *k;
+        }
+    } else {
+        ss << entry->size[0] << " " << entry->size[1];
+    }
+    return ss.str();
+}
+
+string FPConfig::getReplaceEntryLine(FPReplaceEntry *rentry)
+{
+    stringstream ss;
+    ss.clear(); ss.str("");
+    ss << RE_FLAG;
+    switch (rentry->tag) {
+        case RETAG_IGNORE:      ss << RE_IGNORE;      break;
+        case RETAG_DOUBLE:      ss << RE_DOUBLE;      break;
+        case RETAG_SINGLE:      ss << RE_SINGLE;      break;
+        default:                ss << RE_NONE;      break;
+    }
+    ss << " ";
+    switch (rentry->type) {
+        case RETYPE_APP:        ss << RE_APP;
+                                currentApp = rentry;        break;
+        case RETYPE_FUNCTION:   ss << "  " << RE_FUNCTION;
+                                currentFunction = rentry;   break;
+        case RETYPE_BASICBLOCK: ss << "    " << RE_BASICBLOCK;
+                                currentBasicBlock = rentry; break;
+        case RETYPE_INSTRUCTION:ss << "      " << RE_INSTRUCTION; break;
+    }
+    ss << " #" << rentry->idx << ": " << hex << rentry->address << dec;
+    if (rentry->name != "") {
+        ss << " \"" << rentry->name << "\"";
+    }
+    return ss.str();
+}
+
 void FPConfig::buildSummary(ostream &out, bool includeReplace)
 {
     map<string,string>::iterator i;
@@ -332,58 +355,13 @@ void FPConfig::buildSummary(ostream &out, bool includeReplace)
         }
     }
     vector<FPShadowEntry*>::iterator j;
-    vector<string>::iterator k;
-    FPShadowEntry *entry;
     for (j=shadowEntries.begin(); j!=shadowEntries.end(); j++) {
-        entry = *j;
-        out << "  ";
-        switch (entry->type) {
-            case INIT:     out << "init";     break;
-            case REPORT:   out << "report";   break;
-            case NOREPORT: out << "noreport"; break;
-        }
-        if (entry->isize != 0) {
-            out << "-" << entry->isize;
-        }
-        out << ":" << (entry->indirect ? "*" : "") << entry->name << "=";
-        if (entry->type == INIT) {
-            for (k=entry->vals.begin(); k!=entry->vals.end(); k++) {
-                if (k != entry->vals.begin())
-                    out << " ";
-                out << *k;
-            }
-        } else {
-            out << entry->size[0] << " " << entry->size[1];
-        }
-        out << endl;
+        out << getShadowEntryLine(*j) << endl;
     }
     if (includeReplace) {
         vector<FPReplaceEntry*>::iterator jj;
-        FPReplaceEntry *rentry;
         for (jj=replaceEntries.begin(); jj!=replaceEntries.end(); jj++) {
-            rentry = *jj;
-            out << RE_FLAG;
-            switch (rentry->tag) {
-                case RETAG_IGNORE:      out << RE_IGNORE;      break;
-                case RETAG_DOUBLE:      out << RE_DOUBLE;      break;
-                case RETAG_SINGLE:      out << RE_SINGLE;      break;
-                default:                out << RE_NONE;      break;
-            }
-            out << " ";
-            switch (rentry->type) {
-                case RETYPE_APP:        out << RE_APP;
-                                        currentApp = rentry;        break;
-                case RETYPE_FUNCTION:   out << "  " << RE_FUNCTION;
-                                        currentFunction = rentry;   break;
-                case RETYPE_BASICBLOCK: out << "    " << RE_BASICBLOCK;
-                                        currentBasicBlock = rentry; break;
-                case RETYPE_INSTRUCTION:out << "      " << RE_INSTRUCTION; break;
-            }
-            out << " #" << rentry->idx << ": " << hex << rentry->address << dec;
-            if (rentry->name != "") {
-                out << " \"" << rentry->name << "\"";
-            }
-            out << endl;
+            out << getReplaceEntryLine(*jj) << endl;
         }
     }
 }

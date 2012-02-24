@@ -346,7 +346,7 @@ int main(int argc, char *argv[])
 
     cout << "sv_inp=yes" << endl;
     cout << "sv_inp_type=config" << endl;
-    cout << mainConfig->getSummary();
+    cout << mainConfig->getSummary(true);
 
 	return(EXIT_SUCCESS);
 }

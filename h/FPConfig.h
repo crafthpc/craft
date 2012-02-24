@@ -30,13 +30,14 @@ class FPConfig
         bool hasValue(string key);
         string getValue(string key);
         const char* getValueC(string key);
-        //map<string, string>::iterator begin();
-        //map<string, string>::iterator end();
-        void getAllValues(map<string, string> &vals);
+
+        void getAllSettings(vector<string> &vals);
+
         FPReplaceEntryTag getReplaceTag(void *address);
+
         void getAllShadowEntries(vector<FPShadowEntry*> &entries);
         int getAddressList(void* addresses[], string key);
-        string getSummary(bool includeReplace=true);
+        string getSummary(bool includeReplace=false);
 
         void addSetting(char* line);
         void addSetting(string line);
@@ -63,6 +64,8 @@ class FPConfig
         FPReplaceEntry *currentFunction;
         FPReplaceEntry *currentBasicBlock;
 
+        string getShadowEntryLine(FPShadowEntry *entry);
+        string getReplaceEntryLine(FPReplaceEntry *rentry);
         void buildSummary(ostream &out, bool includeReplace=true);
 
         map<string, string> settings;

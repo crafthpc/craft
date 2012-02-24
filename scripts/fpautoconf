@@ -373,17 +373,13 @@ end
 
 # build and run a configuration (takes a .cfg filename)
 def run_config_file (fn, keep)
-    success = false
 
     # status updates
     basename = File.basename(fn)
     basename = basename[$binary_name.length, basename.length-$binary_name.length]
     $status_buffer += "Testing #{basename} ..."
     puts $status_buffer
-    $status_buffer = "    Finished #{basename}:  "
-    (20-basename.length).times do
-        $status_buffer += " "
-    end
+    $status_buffer = "    Finished #{basename}:\n"
 
     # TODO: FOR TESTING; remove this!
     #success = true
@@ -408,28 +404,29 @@ def run_config_file (fn, keep)
     Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
         io_out.each_line do |line|
             if line =~ /Inplace: (.*)$/ then
-                $status_buffer += "#{$1}  "
+                $status_buffer += "        #{$1}\n"
             end
         end
     end
 
-    (80-$status_buffer.length).times do
-        $status_buffer += " "
-    end
-
     # execute rewritten mutatee and check for success
+    success = false
     start = Time.now
     Open3.popen3("./mutant") do |io_in, io_out, io_err, io_wait|
         io_out.each_line do |line|
+            if line =~ /Inplace: (.*)$/ then
+                $status_buffer += "        #{$1}\n"
+            end
             if !success && line =~ /[^N]SUCCESS/ then
-                $status_buffer += "success!"
                 success = true
             end
         end
     end
     elapsed = Time.now.to_f - start.to_f
-    if !success then
-        $status_buffer += "FAILED! "
+    if success then
+        $status_buffer += "        Success!"
+    else
+        $status_buffer += "        FAILED!"
     end
     $status_buffer += "  [Walltime: #{format_time(elapsed)}"
     $status_buffer += " %.1fX]"%[elapsed / $baseline_runtime]

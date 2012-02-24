@@ -44,6 +44,7 @@ FPVIEW_CLASSES=CancellationReport.class \
 	RunProgramAction.class \
 	ShadowValueComparator.class \
 	ShadowValueModel.class \
+	SummaryReport.class \
 	TableHeaderListener.class \
 	TabListener.class \
 	TraceFrameListener.class \

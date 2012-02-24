@@ -557,6 +557,7 @@ public class ViewerApp extends JFrame {
         app.reset();
         boolean cancelOnly = false;
         boolean instTypeOnly = false;
+        boolean summaryOnly = false;
 
         // parse command-line args
         for (i = 0; i < args.length; i++) {
@@ -564,6 +565,8 @@ public class ViewerApp extends JFrame {
                 cancelOnly = true;
             } else if (args[i].equals("-i")) {
                 instTypeOnly = true;
+            } else if (args[i].equals("-s")) {
+                summaryOnly = true;
             } else {
                 files.add(new File(args[i]));
             }
@@ -597,6 +600,14 @@ public class ViewerApp extends JFrame {
                 report = new InstructionAssemblyReport();
                 report.runReport(app.mainLogFile);
                 System.out.println("\nEXECUTION ASSEMBLY REPORT:\n");
+                System.out.println(report.getText());
+            }
+        } else if (summaryOnly) {
+            for (File f : files) {
+                app.openLogFile(f);
+                Report report = new SummaryReport();
+                report.runReport(app.mainLogFile);
+                System.out.println("SUMMARY REPORT:\n");
                 System.out.println(report.getText());
             }
         } else {

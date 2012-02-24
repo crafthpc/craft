@@ -9,6 +9,9 @@ for p in $@; do
     if [ "$p" = "-i" ]; then
         BACKGROUND="n"
     fi
+    if [ "$p" = "-s" ]; then
+        BACKGROUND="n"
+    fi
 done
 
 if [ "$BACKGROUND" = "y" ]; then

@@ -1705,7 +1705,6 @@ void instrumentApplication(BPatch_addressSpace *app)
 	// string/char buffers
 	char name[BUFFER_STRING_LEN];
 	char modname[BUFFER_STRING_LEN];
-    stringstream ss;
 
     // print pertinent warnings
     if (nullInst) {
@@ -1804,13 +1803,12 @@ void instrumentApplication(BPatch_addressSpace *app)
 	}
 
     // embed configuration entries and add an initialization call for each
-    map<string, string> config;
-    configuration->getAllValues(config);
-    map<string, string>::iterator cfgi;
+    vector<string> config;
+    configuration->getAllSettings(config);
+    vector<string>::iterator cfgi;
     for (cfgi = config.begin(); cfgi != config.end(); cfgi++) {
         BPatch_Vector<BPatch_snippet*> *initNumInstsArgs = new BPatch_Vector<BPatch_snippet*>();
-        ss.clear(); ss.str(""); ss << cfgi->first << "=" << cfgi->second;
-        BPatch_constExpr *initNumInstsStr = saveStringToBinary(ss.str().c_str(), 0);
+        BPatch_constExpr *initNumInstsStr = saveStringToBinary((*cfgi).c_str(), 0);
         initNumInstsArgs->push_back(initNumInstsStr);
         BPatch_funcCallExpr *initNumInsts = new BPatch_funcCallExpr(*setFuncs[0], *initNumInstsArgs);
         initSnippets.insert(initSnippets.begin(), initNumInsts);
@@ -1834,7 +1832,8 @@ void instrumentApplication(BPatch_addressSpace *app)
 
     // add config value for number of instructions
     BPatch_Vector<BPatch_snippet*> initNumInstsArgs;
-    ss.clear(); ss.str(""); ss << "num_instructions=" << iidx;
+    stringstream ss; ss.clear(); ss.str("");
+    ss << "num_instructions=" << iidx;
     BPatch_constExpr *initNumInstsStr = saveStringToBinary(ss.str().c_str(), 0);
     initNumInstsArgs.push_back(initNumInstsStr);
     BPatch_funcCallExpr initNumInsts(*setFuncs[0], initNumInstsArgs);
@@ -2135,7 +2134,7 @@ int main(int argc, char *argv[])
     }
 
     // perform instrumentation (agnostic to process/rewrite status)
-    printf("Configuration:\n%s", configuration->getSummary(false).c_str());
+    printf("Configuration:\n%s", configuration->getSummary().c_str());
     printf("Instrumenting application ...\n");
     instrumentApplication(app);
     printf("Instrumentation complete!\n");

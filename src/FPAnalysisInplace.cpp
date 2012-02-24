@@ -201,11 +201,20 @@ bool FPAnalysisInplace::shouldReplace(FPSemantics *inst)
 
 string FPAnalysisInplace::finalInstReport()
 {
+    size_t insnsInstrumentedTotal = insnsInstrumentedSingle + insnsInstrumentedDouble;
     stringstream ss;
-    ss << "Inplace: " << insnsInstrumentedSingle + insnsInstrumentedDouble 
-       << " instrumented  ("
-       << insnsInstrumentedSingle << " single, "
-       << insnsInstrumentedDouble << " double)";
+    ss << "Inplace: " << insnsInstrumentedTotal << " instrumented";
+    ss << setiosflags(ios::fixed) << setprecision(1);
+    ss << "  (" << insnsInstrumentedSingle
+       << " [" << (insnsInstrumentedSingle == 0 ? 0 :
+                    (double)insnsInstrumentedSingle/
+                    (double)insnsInstrumentedTotal*100.0) << "%]"
+       << " single";
+    ss << ", " << insnsInstrumentedDouble
+       << " [" << (insnsInstrumentedDouble == 0 ? 0 :
+                    (double)insnsInstrumentedDouble/
+                    (double)insnsInstrumentedTotal*100.0) << "%]"
+       << " double)";
     return ss.str();
 }
 
@@ -2304,12 +2313,44 @@ void FPAnalysisInplace::printShadowEntry(string name, FPOperandAddress addr, uns
     //doneAlready.push_back(addr);
 }
 
+inline string formatLargeCount(size_t val)
+{
+    stringstream ss;
+    ss.clear(); ss.str("");
+    int divs = 0, dec = 0;
+    while (val > 10000) {
+        val /= 1000;
+        divs++;
+    }
+    if (val > 1000) {
+        val = val / 100;
+        dec = val % 10;
+        val = val / 10;
+        divs++;
+    }
+    ss << val << "." << dec;
+    switch (divs) {
+        case 0:  break;
+        case 1:  ss << "K"; break;
+        case 2:  ss << "M"; break;
+        case 3:  ss << "G"; break;
+        case 4:  ss << "T"; break;
+        case 5:  ss << "P"; break;
+        case 6:  ss << "E"; break;
+        default: ss << "e" << divs*3; break;
+    }
+    return ss.str();
+}
+
 void FPAnalysisInplace::finalOutput()
 {
     vector<FPShadowEntry*>::iterator k;
     FPShadowEntry* entry;
     FPOperandAddress addr, maddr;
     size_t i, j, n, r, c, size;
+    size_t exec_single = 0;
+    size_t exec_double = 0;
+    size_t exec_total = 0;
     stringstream outputString;
 
     // instruction counts
@@ -2319,14 +2360,38 @@ void FPAnalysisInplace::finalOutput()
         for (i=0; i<instCountSize; i++) {
             inst = decoder->lookup(i);
             if (inst != NULL) {
+
+                // output individual count
                 ss2.clear();
                 ss2.str("");
                 ss2 << "instruction #" << i << ": count=" << instCount[i];
                 logFile->addMessage(ICOUNT, instCount[i], inst->getDisassembly(), ss2.str(),
                         "", inst);
+
+                // add to aggregate counts
+                if (mainPolicy->getSVType(inst) == SVT_IEEE_Single) {
+                    exec_single += instCount[i];
+                } else /*if (mainPolicy->getSVType(inst) == SVT_IEEE_Double)*/ {
+                    exec_double += instCount[i];
+                }
+                exec_total += instCount[i];
             }
         }
     }
+    stringstream ss;
+    ss << "Finished execution:" << endl;
+    ss << "  Inplace: " << formatLargeCount(exec_total) << " executed";
+    ss << setiosflags(ios::fixed) << setprecision(1);
+    ss << "  (" << formatLargeCount(exec_single)
+       << " [" << (exec_single == 0 ? 0 : 
+               (double)exec_single/(double)exec_total*100.0) << "%]"
+       << " single";
+    ss << ", " << formatLargeCount(exec_double)
+       << " [" << (exec_double == 0 ? 0 :
+               (double)exec_double/(double)exec_total*100.0) << "%]"
+       << " double)";
+    logFile->addMessage(SUMMARY, 0, getDescription(), ss.str(), "");
+    cout << ss.str() << endl;
 
     // shadow table output initialization
     outputString.clear();
