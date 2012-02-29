@@ -21,6 +21,29 @@ COMMON_INCLUDES = -I./h -Iextern -Iextern/xed/include -Iextern/mpfr/include -Iex
 DYNINST_CFLAGS = -I$(DYNINST_ROOT)/include \
 				 -I$(DYNINST_ROOT)/dyninst
 
+# this mess enables me to use Dyninst internals;
+# hopefully I'll never have to use it for real
+#DYNINST_CFLAGS += -I$(DYNINST_ROOT)/dyninst/dynutil/h \
+				  #-I$(DYNINST_ROOT)/dyninst/symtabAPI/h \
+				  #-I$(DYNINST_ROOT)/dyninst/instructionAPI/h \
+				  #-I$(DYNINST_ROOT)/dyninst/parseAPI/h \
+				  #-I$(DYNINST_ROOT)/dyninst/dataflowAPI/h \
+				  #-I$(DYNINST_ROOT)/dyninst/patchAPI/h \
+				  #-I$(DYNINST_ROOT)/dyninst/external \
+				  #-Darch_x86_64 -Darch_64bit -Dos_linux  -Dcap_ptrace -Dcap_stripped_binaries \
+				  #-Dcap_async_events -Dcap_threads -Dcap_dynamic_heap -Dcap_relocation -Dcap_dwarf \
+				  #-Dcap_32_64 -Dcap_liveness -Dcap_fixpoint_gen -Dcap_noaddr_gen \
+				  #-Dcap_mutatee_traps -Dcap_binary_rewriter -Dcap_registers -Dcap_instruction_api \
+				  #-Dcap_serialization -Dcap_instruction_replacement -Dcap_tramp_liveness \
+				  #-Dcap_gnu_demangler -Ddwarf_has_setframe -Dbug_syscall_changepc_rewind \
+				  #-Dx86_64_unknown_linux2_4 \
+				  #-D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS  -D_REENTRANT=1 \
+				  #-DUSES_DWARF_DEBUG -DBPATCH_LIBRARY  -DBPATCH_SET_MUTATIONS_ACTIVE \
+				  #-DBPATCH_LIBRARY_F  -DNEW_TIME_TYPES -DSTDC_HEADERS=1 -DHAVE_SYS_TYPES_H=1 \
+				  #-DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1 -DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 \
+				  #-DHAVE_STRINGS_H=1 -DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1 \
+				  #-DHAVE_LIBELF=1 -DHAVE_LIBDWARF=1 -Dcap_have_libxml=1 -DHAVE_LIBXML2=1
+
 DYNINST_LDFLAGS = -L$(DYNINST_ROOT)/$(PLATFORM)/lib -L$(ULIBDIR) \
                   -lcommon -ldyninstAPI -lsymtabAPI -linstructionAPI -lstackwalk
 

@@ -76,7 +76,17 @@ string FPAnalysisTRange::listAddresses() {
     return ss.str();
 }
 
-bool FPAnalysisTRange::shouldPreInstrument(FPSemantics *inst)
+bool FPAnalysisTRange::shouldPreInstrument(FPSemantics * /*inst*/)
+{
+    return false;
+}
+
+bool FPAnalysisTRange::shouldPostInstrument(FPSemantics * /*inst*/)
+{
+    return false;
+}
+
+bool FPAnalysisTRange::shouldReplace(FPSemantics *inst)
 {
     bool isOperation = false, handle = false;
     FPOperation *op;
@@ -122,21 +132,21 @@ bool FPAnalysisTRange::shouldPreInstrument(FPSemantics *inst)
     return handle;
 }
 
-bool FPAnalysisTRange::shouldPostInstrument(FPSemantics * /*inst*/)
+Snippet::Ptr FPAnalysisTRange::buildPreInstrumentation(FPSemantics * /*inst*/,
+        BPatch_addressSpace * /*app*/, bool & /*needsRegisters*/)
 {
-    return false;
+    return Snippet::Ptr();
 }
 
-bool FPAnalysisTRange::shouldReplace(FPSemantics * /*inst*/)
+Snippet::Ptr FPAnalysisTRange::buildPostInstrumentation(FPSemantics * /*inst*/,
+        BPatch_addressSpace * /*app*/, bool & /*needsRegisters*/)
 {
-    return false;
+    return Snippet::Ptr();
 }
 
-Snippet::Ptr FPAnalysisTRange::buildPreInstrumentation(FPSemantics * inst,
+Snippet::Ptr FPAnalysisTRange::buildReplacementCode(FPSemantics *inst,
         BPatch_addressSpace *app, bool & /*needsRegisters*/)
 {
-    printf("binary blob replacement (pre) @ %p: %s\n", 
-            inst->getAddress(), inst->getDisassembly().c_str());
     size_t idx = inst->getIndex();
     if (idx >= instCount) {
         expandInstData(idx+1);
@@ -169,37 +179,22 @@ Snippet::Ptr FPAnalysisTRange::buildPreInstrumentation(FPSemantics * inst,
     value = ss.str(); ss.str("");
     configuration->setValue(key, value);
 
-    BPatch_Vector<BPatch_snippet *> args;
-    FPBinaryBlobTRange *tmp = new FPBinaryBlobTRange(inst, instData[idx], true);
     insnsInstrumented++;
-    return Snippet::Ptr(tmp);
-}
 
-Snippet::Ptr FPAnalysisTRange::buildPostInstrumentation(FPSemantics *inst,
-        BPatch_addressSpace * /*app*/, bool & /*needsRegisters*/)
-{
-    printf("binary blob replacement (post): %s\n", inst->getDisassembly().c_str());
-    return dyn_detail::boost::shared_ptr<Snippet>(new FPBinaryBlobTRange(inst, instData[inst->getIndex()], false));
-}
-
-Snippet::Ptr FPAnalysisTRange::buildReplacementCode(FPSemantics * /*inst*/,
-        BPatch_addressSpace * /*app*/, bool & /*needsRegisters*/)
-{
-    return Snippet::Ptr();
+    return Snippet::Ptr(new FPBinaryBlobTRange(inst, instData[idx]));
 }
 
 FPBinaryBlobTRange::FPBinaryBlobTRange(FPSemantics *inst, 
-        FPAnalysisTRangeInstData instData, bool preInsn)
+        FPAnalysisTRangeInstData instData)
     : FPBinaryBlob(inst)
 {
     this->instData = instData;
-    this->preInsn = preInsn;
 }
 
 bool FPBinaryBlobTRange::generate(Point * /*pt*/, Buffer &buf)
 {
     size_t origNumBytes = inst->getNumBytes();
-    unsigned char *orig_code, *pos, *last_pos;
+    unsigned char *orig_code, *pos, *last_pos, *opos;
     FPRegister temp_gpr1, temp_xmm1, temp_xmm2;
 
     initialize();
@@ -218,8 +213,7 @@ bool FPBinaryBlobTRange::generate(Point * /*pt*/, Buffer &buf)
     temp_xmm2 = getUnusedSSE();
 
     /*
-     *printf("building %s binary blob at 0%p: %s\n%s\n",
-     *        (preInsn ? "pre" : "post"),
+     *printf("building binary blob at 0%p: %s\n%s\n",
      *        inst->getAddress(), inst->getDisassembly().c_str(),
      *        inst->toString().c_str());
      *printf("  comparing against min [%p] and max [%p]\n",
@@ -227,129 +221,154 @@ bool FPBinaryBlobTRange::generate(Point * /*pt*/, Buffer &buf)
      *        instData.max_addr);
      */
     
-    // this is instrumentation; dyninst will add the header/footer
     pos += buildHeader(pos);
-
     if (temp_gpr1 != REG_EAX) {
-        adjustFakeStackOffset(-8);
-        pos += mainGen->buildInstruction(pos, 0x0, true, false,
-                0x89, temp_gpr1, REG_ESP, true, getFakeStackOffset());
+        pos += buildFakeStackPushGPR64(pos, temp_gpr1);
     }
-
-    adjustFakeStackOffset(-16);
-    pos += mainGen->buildInstruction(pos, 0x66, false, true,
-            0x11, temp_xmm1, REG_ESP, true, getFakeStackOffset());
-
-    adjustFakeStackOffset(-16);
-    pos += mainGen->buildInstruction(pos, 0x66, false, true,
-            0x11, temp_xmm2, REG_ESP, true, getFakeStackOffset());
+    pos += buildFakeStackPushXMM(pos, temp_xmm1);
+    pos += buildFakeStackPushXMM(pos, temp_xmm2);
 
     FPOperation *op;
     FPOperand *input, *output;
     size_t i, j, k;
     unsigned char *skip_jmp_pos = 0;
     int32_t *skip_offset_pos = 0;
+    FPOperand *eip_operand = NULL;
+
+    // for each operation
+    for (i=0; i<inst->numOps; i++) {
+        op = (*inst)[i];
+        // for each operand set
+        for (j=0; j<1; j++) {
+
+            for (k=0; k<op->opSets[j].nIn; k++) {
+                input = op->opSets[j].in[k];
+
+                if (input->getBase() == REG_EIP) {
+                    eip_operand = input;
+                }
+                
+                if (input->getType() != IEEE_Single &&
+                    input->getType() != IEEE_Double) {
+                    continue;
+                }
+
+                // load operand value
+                pos += buildOperandLoadXMM(pos, input, temp_xmm1, false);
+                if (input->getType() == IEEE_Single) {
+                    pos += mainGen->buildCvtss2sd(pos, temp_xmm1, temp_xmm1);
+                }
+
+                // load reference minimum value into temp_xmm2
+                pos += mainGen->buildMovImm64ToGPR64(pos,
+                        (uint64_t)instData.min_addr, temp_gpr1);
+                pos += mainGen->buildInstruction(pos, 0xf2, false, true,
+                        0x10, temp_xmm2, temp_gpr1, true, 0);
+
+                // compare and store if new minimum
+                pos += mainGen->buildInstruction(pos, 0x66, false, true,
+                        0x2e, temp_xmm1, temp_xmm2, false, 0);
+                pos += mainGen->buildJumpGreaterEqualNear32(pos, 0, skip_offset_pos);
+                skip_jmp_pos = pos;
+                pos += mainGen->buildInstruction(pos, 0xf2, false, true,
+                        0x11, temp_xmm1, temp_gpr1, true, 0);
+                *skip_offset_pos = (int32_t)(pos-skip_jmp_pos);
+
+                // load reference maximum value into temp_xmm2
+                pos += mainGen->buildMovImm64ToGPR64(pos,
+                        (uint64_t)instData.max_addr, temp_gpr1);
+                pos += mainGen->buildInstruction(pos, 0xf2, false, true,
+                        0x10, temp_xmm2, temp_gpr1, true, 0);
+
+                // compare and store if new maximum
+                pos += mainGen->buildInstruction(pos, 0x66, false, true,
+                        0x2e, temp_xmm1, temp_xmm2, false, 0);
+                pos += mainGen->buildJumpLessEqualNear32(pos, 0, skip_offset_pos);
+                skip_jmp_pos = pos;
+                pos += mainGen->buildInstruction(pos, 0xf2, false, true,
+                        0x11, temp_xmm1, temp_gpr1, true, 0);
+                *skip_offset_pos = (int32_t)(pos-skip_jmp_pos);
+            }
+
+        }
+    }
+
+    pos += buildFakeStackPopXMM(pos, temp_xmm2);
+    pos += buildFakeStackPopXMM(pos, temp_xmm1);
+    if (temp_gpr1 != REG_EAX) {
+        pos += buildFakeStackPopGPR64(pos, temp_gpr1);
+    }
+    pos += buildFooter(pos);
+
+    // emit original instruction
+    opos = orig_code;
+    for (i=0; i < origNumBytes; i++) {
+        *pos++ = *opos++;
+    }
+    if (eip_operand) {
+        adjustDisplacement(eip_operand->getDisp(), pos);
+    }
+
+    pos += buildHeader(pos);
+    if (temp_gpr1 != REG_EAX) {
+        pos += buildFakeStackPushGPR64(pos, temp_gpr1);
+    }
+    pos += buildFakeStackPushXMM(pos, temp_xmm1);
+    pos += buildFakeStackPushXMM(pos, temp_xmm2);
 
     // for each operation
     for (i=0; i<inst->numOps; i++) {
         op = (*inst)[i];
 
+        // don't test comparison operands again
+        if (op->getType() == OP_CMP  || op->getType() == OP_COMI  ||
+            op->getType() == OP_UCOM || op->getType() == OP_UCOMI) continue;
+
         // for each operand set
         for (j=0; j<1; j++) {
+            for (k=0; k<op->opSets[j].nOut; k++) {
+                output = op->opSets[j].out[k];
 
-            if (preInsn) {
-
-                for (k=0; k<op->opSets[j].nIn; k++) {
-                    input = op->opSets[j].in[k];
-                    
-                    if (input->getType() != IEEE_Single &&
-                        input->getType() != IEEE_Double) {
-                        continue;
-                    }
-
-                    // load operand value
-                    pos += buildOperandLoadXMM(pos, input, temp_xmm1, false);
-                    if (input->getType() == IEEE_Single) {
-                        pos += mainGen->buildCvtss2sd(pos, temp_xmm1, temp_xmm1);
-                    }
-
-                    // load reference minimum value into temp_xmm2
-                    pos += mainGen->buildMovImm64ToGPR64(pos,
-                            (uint64_t)instData.min_addr, temp_gpr1);
-                    pos += mainGen->buildInstruction(pos, 0xf2, false, true,
-                            0x10, temp_xmm2, temp_gpr1, true, 0);
-
-                    // compare and store if new minimum
-                    pos += mainGen->buildInstruction(pos, 0x66, false, true,
-                            0x2e, temp_xmm1, temp_xmm2, false, 0);
-                    pos += mainGen->buildJumpGreaterEqualNear32(pos, 0, skip_offset_pos);
-                    skip_jmp_pos = pos;
-                    pos += mainGen->buildInstruction(pos, 0xf2, false, true,
-                            0x11, temp_xmm1, temp_gpr1, true, 0);
-                    *skip_offset_pos = (int32_t)(pos-skip_jmp_pos);
-
-                    // load reference maximum value into temp_xmm2
-                    pos += mainGen->buildMovImm64ToGPR64(pos,
-                            (uint64_t)instData.max_addr, temp_gpr1);
-                    pos += mainGen->buildInstruction(pos, 0xf2, false, true,
-                            0x10, temp_xmm2, temp_gpr1, true, 0);
-
-                    // compare and store if new maximum
-                    pos += mainGen->buildInstruction(pos, 0x66, false, true,
-                            0x2e, temp_xmm1, temp_xmm2, false, 0);
-                    pos += mainGen->buildJumpLessEqualNear32(pos, 0, skip_offset_pos);
-                    skip_jmp_pos = pos;
-                    pos += mainGen->buildInstruction(pos, 0xf2, false, true,
-                            0x11, temp_xmm1, temp_gpr1, true, 0);
-                    *skip_offset_pos = (int32_t)(pos-skip_jmp_pos);
+                if (output->getType() != IEEE_Single &&
+                    output->getType() != IEEE_Double) {
+                    continue;
                 }
 
-            } else { // postInsn
-
-                for (k=0; k<op->opSets[j].nOut; k++) {
-                    output = op->opSets[j].out[k];
-
-                    if (output->getType() != IEEE_Single &&
-                        output->getType() != IEEE_Double) {
-                        continue;
-                    }
-
-                    // load operand value
-                    pos += buildOperandLoadXMM(pos, output, temp_xmm1, false);
-                    if (output->getType() == IEEE_Single) {
-                        pos += mainGen->buildCvtss2sd(pos, temp_xmm1, temp_xmm1);
-                    }
-
-                    // load reference minimum value into temp_xmm2
-                    pos += mainGen->buildMovImm64ToGPR64(pos,
-                            (uint64_t)instData.min_addr, temp_gpr1);
-                    pos += mainGen->buildInstruction(pos, 0xf2, false, true,
-                            0x10, temp_xmm2, temp_gpr1, true, 0);
-
-                    // compare and store if new minimum
-                    pos += mainGen->buildInstruction(pos, 0x66, false, true,
-                            0x2e, temp_xmm1, temp_xmm2, false, 0);
-                    pos += mainGen->buildJumpGreaterEqualNear32(pos, 0, skip_offset_pos);
-                    skip_jmp_pos = pos;
-                    pos += mainGen->buildInstruction(pos, 0xf2, false, true,
-                            0x11, temp_xmm1, temp_gpr1, true, 0);
-                    *skip_offset_pos = (int32_t)(pos-skip_jmp_pos);
-
-                    // load reference maximum value into temp_xmm2
-                    pos += mainGen->buildMovImm64ToGPR64(pos,
-                            (uint64_t)instData.max_addr, temp_gpr1);
-                    pos += mainGen->buildInstruction(pos, 0xf2, false, true,
-                            0x10, temp_xmm2, temp_gpr1, true, 0);
-
-                    // compare and store if new maximum
-                    pos += mainGen->buildInstruction(pos, 0x66, false, true,
-                            0x2e, temp_xmm1, temp_xmm2, false, 0);
-                    pos += mainGen->buildJumpLessEqualNear32(pos, 0, skip_offset_pos);
-                    skip_jmp_pos = pos;
-                    pos += mainGen->buildInstruction(pos, 0xf2, false, true,
-                            0x11, temp_xmm1, temp_gpr1, true, 0);
-                    *skip_offset_pos = (int32_t)(pos-skip_jmp_pos);
+                // load operand value
+                pos += buildOperandLoadXMM(pos, output, temp_xmm1, false);
+                if (output->getType() == IEEE_Single) {
+                    pos += mainGen->buildCvtss2sd(pos, temp_xmm1, temp_xmm1);
                 }
+
+                // load reference minimum value into temp_xmm2
+                pos += mainGen->buildMovImm64ToGPR64(pos,
+                        (uint64_t)instData.min_addr, temp_gpr1);
+                pos += mainGen->buildInstruction(pos, 0xf2, false, true,
+                        0x10, temp_xmm2, temp_gpr1, true, 0);
+
+                // compare and store if new minimum
+                pos += mainGen->buildInstruction(pos, 0x66, false, true,
+                        0x2e, temp_xmm1, temp_xmm2, false, 0);
+                pos += mainGen->buildJumpGreaterEqualNear32(pos, 0, skip_offset_pos);
+                skip_jmp_pos = pos;
+                pos += mainGen->buildInstruction(pos, 0xf2, false, true,
+                        0x11, temp_xmm1, temp_gpr1, true, 0);
+                *skip_offset_pos = (int32_t)(pos-skip_jmp_pos);
+
+                // load reference maximum value into temp_xmm2
+                pos += mainGen->buildMovImm64ToGPR64(pos,
+                        (uint64_t)instData.max_addr, temp_gpr1);
+                pos += mainGen->buildInstruction(pos, 0xf2, false, true,
+                        0x10, temp_xmm2, temp_gpr1, true, 0);
+
+                // compare and store if new maximum
+                pos += mainGen->buildInstruction(pos, 0x66, false, true,
+                        0x2e, temp_xmm1, temp_xmm2, false, 0);
+                pos += mainGen->buildJumpLessEqualNear32(pos, 0, skip_offset_pos);
+                skip_jmp_pos = pos;
+                pos += mainGen->buildInstruction(pos, 0xf2, false, true,
+                        0x11, temp_xmm1, temp_gpr1, true, 0);
+                *skip_offset_pos = (int32_t)(pos-skip_jmp_pos);
             }
         }
     }
@@ -357,18 +376,10 @@ bool FPBinaryBlobTRange::generate(Point * /*pt*/, Buffer &buf)
     // TODO: increment count
     pos += mainGen->buildIncMem64(pos, (int32_t)(unsigned long)instData.count_addr);
 
-    pos += mainGen->buildInstruction(pos, 0x66, false, true,
-            0x10, temp_xmm2, REG_ESP, true, getFakeStackOffset());
-    adjustFakeStackOffset(16);
-
-    pos += mainGen->buildInstruction(pos, 0x66, false, true,
-            0x10, temp_xmm1, REG_ESP, true, getFakeStackOffset());
-    adjustFakeStackOffset(16);
-
+    pos += buildFakeStackPopXMM(pos, temp_xmm2);
+    pos += buildFakeStackPopXMM(pos, temp_xmm1);
     if (temp_gpr1 != REG_EAX) {
-        pos += mainGen->buildInstruction(pos, 0x0, true, false,
-                0x8b, temp_gpr1, REG_ESP, true, getFakeStackOffset());
-        adjustFakeStackOffset(8);
+        pos += buildFakeStackPopGPR64(pos, temp_gpr1);
     }
 
     pos += buildFooter(pos);

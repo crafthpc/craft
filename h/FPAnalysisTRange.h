@@ -22,14 +22,13 @@ class FPBinaryBlobTRange : public FPBinaryBlob, public Snippet {
 
     public:
 
-        FPBinaryBlobTRange(FPSemantics *inst, FPAnalysisTRangeInstData instData, bool preInsn);
+        FPBinaryBlobTRange(FPSemantics *inst, FPAnalysisTRangeInstData instData);
 
         bool generate(Point *pt, Buffer &buf);
 
     private:
 
         FPAnalysisTRangeInstData instData;
-        bool preInsn;
 };
 
 /**

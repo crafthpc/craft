@@ -76,6 +76,14 @@ void FPBinaryBlob::adjustDisplacement(long oldDisp, unsigned char *pos)
             //oldDisp, actual_loc, blobAddress, blobCode, new_insn_loc, new_disp);
 }
 
+size_t FPBinaryBlob::buildDyninstHeader(unsigned char *pos)
+{
+    unsigned char *old_pos = pos;
+    pos += mainGen->buildPushReg(pos, REG_EAX);
+    pos += mainGen->buildPushFlagsFast(pos);
+    return (size_t)(pos - old_pos);
+}
+
 size_t FPBinaryBlob::buildHeader(unsigned char *pos)
 {
     unsigned char *old_pos = pos;
@@ -90,6 +98,14 @@ size_t FPBinaryBlob::buildHeader(unsigned char *pos)
     saved_flags_offset = getFakeStackOffset();
     adjustFakeStackOffset(-8);
     blob_comm_offset = getFakeStackOffset();
+    return (size_t)(pos - old_pos);
+}
+
+size_t FPBinaryBlob::buildDyninstFooter(unsigned char *pos)
+{
+    unsigned char *old_pos = pos;
+    pos += mainGen->buildPopFlagsFast(pos);
+    pos += mainGen->buildPopReg(pos, REG_EAX);
     return (size_t)(pos - old_pos);
 }
 

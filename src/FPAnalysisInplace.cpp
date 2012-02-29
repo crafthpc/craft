@@ -1146,6 +1146,7 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
             }
 
             // save clobbered scratch registers
+            // TODO: don't push/pop scratch registers if they are RAX
             pos += buildFakeStackPushGPR64(pos, temp_gpr1);
             pos += buildFakeStackPushGPR64(pos, temp_gpr2);
             pos += buildFakeStackPushGPR64(pos, temp_gpr3);
