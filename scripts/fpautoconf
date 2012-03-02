@@ -27,6 +27,8 @@ def main
     $stat_preferred = "s"       # preferred replacement status
     $stat_alternate = "d"       # replacement status if cannot be preferred
     $fortran_mode = true        # pass "-N" to fpinst
+    $mpi_enabled = false        # use mpirun?
+    $mpi_procs = 0              # number of MPI processes
     $max_queue_length = 0       # track largest queue size (approximate)
     $is_worker = false          # is this the parent process or a worker?
     $workers = Hash.new         # worker proc info (pid => dirname)
@@ -50,10 +52,14 @@ def main
             # worker process
             $is_worker = true
             $autoconf_path = ARGV.shift
+        elsif opt == "-np" then
+            # enable MPI
+            $mpi_enabled = true
+            $mpi_procs = ARGV.shift.to_i
         elsif opt == "-j" then
             # parallel: "-j 4" variant
             num_workers = ARGV.shift.to_i-1
-        elsif opt.start_with?("-j") then
+        elsif opt =~ /^-j/ then
             # parallel: "-j4" variant
             num_workers = opt[2,opt.length-2].to_i-1
         end
@@ -412,7 +418,12 @@ def run_config_file (fn, keep)
     # execute rewritten mutatee and check for success
     success = false
     start = Time.now
-    Open3.popen3("./mutant") do |io_in, io_out, io_err, io_wait|
+    if $mpi_enabled then
+        cmd = "mpirun -np #{$mpi_procs} mutant"
+    else
+        cmd = "./mutant"
+    end
+    Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
         io_out.each_line do |line|
             if line =~ /Inplace: (.*)$/ then
                 $status_buffer += "        #{$1}\n"
