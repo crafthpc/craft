@@ -75,6 +75,7 @@ def main
     $allconfigs_fn = "#{$autoconf_path + $binary_name}.allconfigs"
     $workqueue_fn = "#{$autoconf_path + $binary_name}.workqueue"
     $finalregexps_fn = "#{$autoconf_path + $binary_name}.finalregexps"
+    $mainlog_fn = "#{$autoconf_path + $binary_name}.mainlog"
     $orig_config_name = "#{$autoconf_path + $binary_name}_orig.cfg"
     $final_config_name = "#{$autoconf_path + $binary_name}_final.cfg"
 
@@ -172,6 +173,7 @@ def initialize_autoconf
     File.new($allconfigs_fn, "w").close
     File.new($workqueue_fn, "w").close
     File.new($finalregexps_fn, "w").close
+    File.new($mainlog_fn, "w").close
 
     # initial performance run
     print "Performing baseline performance test ... "
@@ -337,12 +339,49 @@ def finalize_autoconf
     final_config.close
     puts "done."
 
+    # find best individual configs
+    kept_configs = Array.new
+    mainlog = load_mainlog
+    cur_cfg = ""
+    inst_hash = Array.new
+    exec_hash = Array.new
+    mainlog.each do |line|
+        if line =~ /Finished (.*\.cfg):/ then
+            cur_cfg = $1
+        end
+        if line =~ /instrumented .* \[([\d.]*)%\] single/ then
+            inst_hash << [cur_cfg, $1.to_f]
+        end
+        if line =~ /executed .* \[([\d.]*)%\] single/ then
+            exec_hash << [cur_cfg, $1.to_f]
+        end
+    end
+    inst_hash = inst_hash.sort_by { |cfg,pct| -pct }
+    exec_hash = exec_hash.sort_by { |cfg,pct| -pct }
+    report = Array.new
+    report << " "
+    report << "Top %-15s%15s  %s"%["instrumented:","CONFIG","% REPLACED"]
+    10.times do
+        entry = inst_hash.shift
+        report << "    %30s  %4.1f"%[entry[0],entry[1]]
+        kept_configs << "#{$binary_name}#{entry[0]}"
+    end
+    report << " "
+    report << "Top %-15s%15s  %s"%["executed:","CONFIG","% REPLACED"]
+    10.times do
+        entry = exec_hash.shift
+        report << "    %30s  %4.1f"%[entry[0],entry[1]]
+        kept_configs << "#{$binary_name}#{entry[0]}"
+    end
+    report << " "
+    add_to_mainlog(report.join("\n"))
+
     # try the final config (and keep results)
     run_config_file($final_config_name, true)
 
     # clean all config and temporary files
     $all_cfgs.each_pair do |key, cfg|
-        File.delete(cfg.filename) if File.exists?(cfg.filename)
+        File.delete(cfg.filename) if File.exists?(cfg.filename) and not kept_configs.include?(cfg.filename)
     end
     File.delete($settings_fn)
     File.delete($allconfigs_fn)
@@ -441,7 +480,8 @@ def run_config_file (fn, keep)
     end
     $status_buffer += "  [Walltime: #{format_time(elapsed)}"
     $status_buffer += " %.1fX]"%[elapsed / $baseline_runtime]
-    puts $status_buffer
+    #puts $status_buffer
+    add_to_mainlog($status_buffer)
     $status_buffer = ""
 
     # clean out mutant, logs, and rewritten library files
@@ -535,6 +575,23 @@ def load_final_regexps
         final_config_regexps << Regexp.new(line.chomp)
     end
     return final_config_regexps
+end
+
+
+def add_to_mainlog(reg)
+    f = File.new($mainlog_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    f.seek(0,IO::SEEK_END)
+    f.puts(reg.to_s)
+    f.close
+end
+def load_mainlog
+    # could probably be read-only
+    f = File.new($mainlog_fn,  File::RDWR)
+    f.flock File::LOCK_EX
+    lines = f.readlines
+    f.close
+    return lines
 end
 
 # }}}
