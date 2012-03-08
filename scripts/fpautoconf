@@ -179,7 +179,12 @@ def initialize_autoconf
     print "Performing baseline performance test ... "
     $stdout.flush
     start = Time.now
-    Open3.popen3("#{$binary_path}") do |io_in, io_out, io_err, io_wait|
+    if $mpi_enabled then
+        cmd = "mpirun -np #{$mpi_procs} #{$binary_path}"
+    else
+        cmd = "#{$binary_path}"
+    end
+    Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
         io_out.each_line do |line|
         end
     end
@@ -343,17 +348,26 @@ def finalize_autoconf
     kept_configs = Array.new
     mainlog = load_mainlog
     cur_cfg = ""
+    inst_item = ["",0.0]
+    exec_item = ["",0.0]
     inst_hash = Array.new
     exec_hash = Array.new
     mainlog.each do |line|
         if line =~ /Finished (.*\.cfg):/ then
             cur_cfg = $1
+            inst_item = ["",0.0]
+            exec_item = ["",0.0]
+            has_exec = false
         end
         if line =~ /instrumented .* \[([\d.]*)%\] single/ then
-            inst_hash << [cur_cfg, $1.to_f]
+            inst_item = [cur_cfg, $1.to_f]
         end
         if line =~ /executed .* \[([\d.]*)%\] single/ then
-            exec_hash << [cur_cfg, $1.to_f]
+            exec_item = [cur_cfg, $1.to_f]
+        end
+        if line =~ /Success!/ then
+            inst_hash << inst_item
+            exec_hash << exec_item
         end
     end
     inst_hash = inst_hash.sort_by { |cfg,pct| -pct }
