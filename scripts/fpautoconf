@@ -45,7 +45,7 @@ def main
     end
 
     # parse command-line options
-    num_workers = 0
+    num_workers = 1
     begin
         opt = ARGV.shift
         if opt == "-w" then
@@ -58,10 +58,10 @@ def main
             $mpi_procs = ARGV.shift.to_i
         elsif opt == "-j" then
             # parallel: "-j 4" variant
-            num_workers = ARGV.shift.to_i-1
+            num_workers = ARGV.shift.to_i
         elsif opt =~ /^-j/ then
             # parallel: "-j4" variant
-            num_workers = opt[2,opt.length-2].to_i-1
+            num_workers = opt[2,opt.length-2].to_i
         end
     end while ARGV.size > 0
 
@@ -70,10 +70,12 @@ def main
     $binary_path = File.expand_path(opt)
     if !$is_worker then
         $autoconf_path = Dir.getwd + "/"
+        $final_path = $autoconf_path + "final/"
     end
     $settings_fn = "#{$autoconf_path + $binary_name}.settings"
     $allconfigs_fn = "#{$autoconf_path + $binary_name}.allconfigs"
     $workqueue_fn = "#{$autoconf_path + $binary_name}.workqueue"
+    $inproc_fn = "#{$autoconf_path + $binary_name}.inproc"
     $finalregexps_fn = "#{$autoconf_path + $binary_name}.finalregexps"
     $mainlog_fn = "#{$autoconf_path + $binary_name}.mainlog"
     $orig_config_name = "#{$autoconf_path + $binary_name}_orig.cfg"
@@ -93,12 +95,23 @@ def main
         puts "FPAutoConf"
         puts "Autoconfiguring #{$binary_name} ..."
         puts "Working dir: #{$autoconf_path}"
-        initialize_autoconf
+
+        if !File.exist?($workqueue_fn) then
+            # first invocation of this analysis; initialize everything
+            initialize_autoconf
+        else
+            puts "Resuming previous analysis ..."
+            load_all_configs
+            #move_all_inproc_to_workqueue
+        end
 
         # spawn workers
         num_workers.times do |i|
             puts "Spawning worker #{i} ..."
-            worker_dir = "#{$autoconf_path + $binary_name}_worker#{i}"
+            worker_dir = "#{$autoconf_path + $binary_name}_#{Process.pid}_worker#{i}"
+            if File.exist?(worker_dir) then
+                FileUtils.rm_rf(worker_dir)
+            end
             Dir.mkdir(worker_dir)
             job = fork do
                 exec "cd #{worker_dir} && #{$self_invoke} -w #{$autoconf_path} #{$binary_path}"
@@ -107,18 +120,12 @@ def main
         end
 
         # main loop
-        run_main_autoconf_loop
-
-        # clean up workers
-        $workers.each_pair do |job, dir|
-            Process.wait(job.to_i)
-            FileUtils.rm_rf(dir)
-        end
+        run_main_supervisor_loop
 
         # parent finalization
         finalize_autoconf
         elapsed = Time.now.to_f - start.to_f
-        puts("  [Elapsed walltime: #{format_time(elapsed)}]")
+        puts "Done.  [Elapsed walltime: #{format_time(elapsed)}]"
 
     end
 end
@@ -172,6 +179,7 @@ def initialize_autoconf
     File.new($settings_fn, "w").close
     File.new($allconfigs_fn, "w").close
     File.new($workqueue_fn, "w").close
+    File.new($inproc_fn, "w").close
     File.new($finalregexps_fn, "w").close
     File.new($mainlog_fn, "w").close
 
@@ -257,6 +265,8 @@ def run_main_autoconf_loop
     # main search loop
     while !key.nil? && key != "" do
 
+        add_to_inproc(key)
+
         # grab configuration object
         cfg = $all_cfgs[key]
 
@@ -264,29 +274,6 @@ def run_main_autoconf_loop
         queue_length = get_workqueue_length
         $status_buffer += "[Queue length: #{"%3d" % (queue_length+1)}]  "
         $max_queue_length = queue_length if queue_length > $max_queue_length
-
-        # parent process should restart any dead worker processes
-        if !$is_worker && queue_length > 1 then
-            $workers.each_pair do |job, dir|
-                cmd = "ps -o s= p #{job.to_i}"
-                stat = `#{cmd}`
-                stat.chomp!
-                if stat != "S" then
-                    $workers.delete(job)
-                    id = File.basename(dir)
-                    if id =~ /worker(\d+)/ then
-                        id = $1
-                    else
-                        id = id[$binary_name.length+1,id.length-$binary_name.length-1]
-                    end
-                    puts "Respawning worker #{id} ..."
-                    job = fork do
-                        exec "cd #{dir} && #{$self_invoke} -w #{$autoconf_path} #{$binary_path}"
-                    end
-                    $workers[job] = dir
-                end
-            end
-        end
 
         if run_config(cfg) then
 
@@ -298,24 +285,87 @@ def run_main_autoconf_loop
             # add any children we need to test
             if (cfg.type == "func" && cfg.icount >= 1) ||
                (cfg.type == "bblk" && cfg.icount >= 2) then
-                cfg.children.each do |key|
-                    child = $all_cfgs[key]
+                cfg.children.each do |ckey|
+                    child = $all_cfgs[ckey]
                     if child != nil then
-                        add_to_workqueue(key)
+                        add_to_workqueue(ckey)
                     end
                 end
             end
 
         end
 
+        remove_from_inproc(key)
         key = get_next_workqueue_item
     end
 
 end
 # }}}
 
+# {{{ run_main_supervisor_loop
+def run_main_supervisor_loop
+    while get_workqueue_length > 0 or get_inproc_length > 0 do
+        while get_workqueue_length > 0 do
+
+            # restart any dead worker processes
+            if !$is_worker && get_workqueue_length > 0 then
+                $workers.each_pair do |job, dir|
+                    cmd = "ps -o s= p #{job.to_i}"
+                    stat = `#{cmd}`
+                    stat.chomp!
+                    if stat != "S" then
+                        $workers.delete(job)
+                        id = File.basename(dir)
+                        if id =~ /worker(\d+)/ then
+                            id = $1
+                        else
+                            id = id[$binary_name.length+1,id.length-$binary_name.length-1]
+                        end
+                        puts "Respawning worker #{id} ..."
+                        FileUtils.rm_rf(dir)
+                        Dir.mkdir(dir)
+                        job = fork do
+                            exec "cd #{dir} && #{$self_invoke} -w #{$autoconf_path} #{$binary_path}"
+                        end
+                        $workers[job] = dir
+                    end
+                end
+            end
+
+            # wait a while
+            sleep 5
+        end
+
+        # clean up any workers and directories
+        $workers.each_pair do |job, dir|
+            Process.wait(job.to_i)
+            FileUtils.rm_rf(dir)
+        end
+        Dir.foreach(".") do |fn|
+            if fn =~ Regexp.new("^#{$binary_name}_\\d+_worker\\d+$") then
+                FileUtils.rm_rf(fn)
+            end
+        end
+
+        # move any unfinished configs back to the workqueue
+        if get_inproc_length > 0 then
+            puts "Unfinished jobs; restarting workers ..."
+            move_all_inproc_to_workqueue
+        end
+    end
+end
+# }}}
+
 # {{{ finalize_autoconf
 def finalize_autoconf
+
+    if File.exist?($final_path) then
+        # another process is already finalizing
+        puts "Finalization already underway."
+        return
+    else
+        Dir.mkdir($final_path)
+    end
 
     # queue status output
     puts "Candidate queue exhausted.  [Max queue length: ~#{$max_queue_length} item(s)]"
@@ -391,7 +441,9 @@ def finalize_autoconf
     add_to_mainlog(report.join("\n"))
 
     # try the final config (and keep results)
+    Dir.chdir($final_path)
     run_config_file($final_config_name, true)
+    Dir.chdir($autoconf_path)
 
     # clean all config and temporary files
     $all_cfgs.each_pair do |key, cfg|
@@ -400,9 +452,8 @@ def finalize_autoconf
     File.delete($settings_fn)
     File.delete($allconfigs_fn)
     File.delete($workqueue_fn)
+    File.delete($inproc_fn)
     File.delete($finalregexps_fn)
-
-    print "Done."
 
 end
 # }}}
@@ -568,6 +619,49 @@ def get_workqueue_length
     workqueue = f.readlines
     f.close
     return workqueue.size
+end
+
+
+def add_to_inproc(item)
+    f = File.new($inproc_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    f.seek(0,IO::SEEK_END)
+    f.puts(item)
+    f.close
+end
+def remove_from_inproc(item)
+    inproc = Array.new
+    f = File.new($inproc_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    inproc = f.readlines
+    inproc.each do |ipitem|
+        if ipitem.chomp == item then
+            inproc.delete(ipitem)
+        end
+    end
+    f.pos = 0
+    f.print inproc
+    f.truncate(f.pos)
+    f.close
+end
+def get_inproc_length
+    # could probably be read-only
+    f = File.new($inproc_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    inproc = f.readlines
+    f.close
+    return inproc.size
+end
+def move_all_inproc_to_workqueue
+    inproc = Array.new
+    f = File.new($inproc_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    inproc = f.readlines
+    f.close
+    inproc.each do |item|
+        remove_from_inproc(item.chomp)
+        add_to_workqueue(item.chomp)
+    end
 end
 
 
