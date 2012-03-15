@@ -219,7 +219,7 @@ size_t FPBinaryBlob::buildOperandLoadGPR(unsigned char *pos,
     } else if (src->isMemory()) {
         // mov $disp(%base,%index,$scale), %gpr
         pos += mainGen->buildInstruction(pos, prefix, wide_operands, false, 
-                0x10, dest_gpr, src->getScale(), src->getIndex(),
+                opcode, dest_gpr, src->getScale(), src->getIndex(),
                 src->getBase(), src->getDisp(), src->getSegment());
     } else {
         assert(!"unsupported operand");

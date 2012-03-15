@@ -146,7 +146,7 @@ size_t FPCodeGen::buildInstruction(unsigned char *pos,
         rm == REG_EBP ||
         rm == REG_E13)) {
         return buildInstruction(pos, prefix, wide_operands, two_byte_opcode,
-                opcode, reg, 1, REG_NONE, rm, disp);
+                opcode, reg, 1, REG_NONE, rm, disp, seg);
     }
 
     // assemble Mod/RM byte
@@ -210,6 +210,18 @@ size_t FPCodeGen::buildInstruction(unsigned char *pos,
     unsigned char base_enc = 
         (base  == REG_NONE ? 0x5 : (getRegModRMId(base) & 0x7));
 
+    /* DEBUG OUTPUT
+     *printf("buildInstruction: prefix=%02x opcode=%02x disp=%d scale=%ld reg=%s index=%s base=%s seg=%s %s %s\n",
+     *        prefix, opcode, disp, scale,
+     *        FPContext::FPReg2Str(reg).c_str(),
+     *        FPContext::FPReg2Str(index).c_str(),
+     *        FPContext::FPReg2Str(base).c_str(),
+     *        FPContext::FPReg2Str(seg).c_str(),
+     *        (wide_operands ? "[wide] " : ""),
+     *        (two_byte_opcode ? "[2-byte] " : "")
+     *        );
+     */
+
     // assemble Mod/RM byte
     if (disp && base != REG_NONE) {
         modrm = 0x84;   // mod=10
@@ -243,6 +255,12 @@ size_t FPCodeGen::buildInstruction(unsigned char *pos,
     if (two_byte_opcode) {
         (*pos++) = 0x0f;
     }
+    /* DEBUG OUTPUT
+     *unsigned char tmp[8];
+     *buildREX(tmp, wide_operands, reg, index, base),
+     *printf("  rex=%02x modrm=%02x sib=%02x\n",
+     *        tmp[0], modrm, sib);
+     */
     (*pos++) = opcode;
     (*pos++) = modrm;
     (*pos++) = sib;
