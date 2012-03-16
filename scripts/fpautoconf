@@ -26,7 +26,9 @@ def main
     # global variables
     $stat_preferred = "s"       # preferred replacement status
     $stat_alternate = "d"       # replacement status if cannot be preferred
-    $fortran_mode = true        # pass "-N" to fpinst
+    $fortran_mode = false       # pass "-N" to fpinst
+    $data_files = Array.new     # required data files
+    $cmdline_options = ""       # mutatee command line options
     $mpi_enabled = false        # use mpirun?
     $mpi_procs = 0              # number of MPI processes
     $max_queue_length = 0       # track largest queue size (approximate)
@@ -37,10 +39,19 @@ def main
     $self_invoke = File.basename($0)
 
     # check command-line options
-    if ARGV.size == 0 then
-        puts "Usage:  #{$self_invoke} [-j <n>] <binary>        (parent process)"
+    if ARGV.size == 0 or ARGV.include?("-h") then
+        puts "Usage:  #{$self_invoke} [options] <binary>        (parent process)"
         puts "          or"
-        puts "        #{$self_invoke} [-w <dir>] <binary>      (worker process)"
+        puts "        #{$self_invoke} -r                       (resume parent process)"
+        puts "          or"
+        puts "        #{$self_invoke} -w <dir>                 (worker process)"
+        puts "Valid options:"
+        puts "   -c \"opts\"    pass command-line options to mutatee"
+        puts "   -d             debug mode (ignore->double)"
+        puts "   -D <file>      copy in a data file"
+        puts "   -j <np>        spawn <np> worker threads"
+        puts "   -np <np>       use MPI with <np> processes"
+        puts "   -N             enable Fortran mode"
         exit
     end
 
@@ -48,7 +59,8 @@ def main
     num_workers = 1
     begin
         opt = ARGV.shift
-        if opt == "-w" then
+        if opt == "-r" then
+        elsif opt == "-w" then
             # worker process
             $is_worker = true
             $autoconf_path = ARGV.shift
@@ -62,24 +74,35 @@ def main
         elsif opt =~ /^-j/ then
             # parallel: "-j4" variant
             num_workers = opt[2,opt.length-2].to_i
+        elsif opt == "-d" then
+            # debug mode
+            $stat_preferred = "d"
+            $stat_alternate = "i"
+        elsif opt == "-D" then
+            # data file
+            $data_files << ARGV.shift
+        elsif opt == "-c" then
+            # command-line option
+            $cmdline_options = ARGV.shift
+        elsif opt == '-N' then
+            # fortran mode
+            $fortran_mode = true
         end
     end while ARGV.size > 0
 
     # set up environment and filenames
-    $binary_name = File.basename(opt)
-    $binary_path = File.expand_path(opt)
     if !$is_worker then
         $autoconf_path = Dir.getwd + "/"
-        $final_path = $autoconf_path + "final/"
     end
-    $settings_fn = "#{$autoconf_path + $binary_name}.settings"
-    $allconfigs_fn = "#{$autoconf_path + $binary_name}.allconfigs"
-    $workqueue_fn = "#{$autoconf_path + $binary_name}.workqueue"
-    $inproc_fn = "#{$autoconf_path + $binary_name}.inproc"
-    $finalregexps_fn = "#{$autoconf_path + $binary_name}.finalregexps"
-    $mainlog_fn = "#{$autoconf_path + $binary_name}.mainlog"
-    $orig_config_name = "#{$autoconf_path + $binary_name}_orig.cfg"
-    $final_config_name = "#{$autoconf_path + $binary_name}_final.cfg"
+    $settings_fn = "#{$autoconf_path}fpautoconf.settings"
+    $allconfigs_fn = "#{$autoconf_path}fpautoconf.allconfigs"
+    $workqueue_fn = "#{$autoconf_path}fpautoconf.workqueue"
+    $inproc_fn = "#{$autoconf_path}fpautoconf.inproc"
+    $finalregexps_fn = "#{$autoconf_path}fpautoconf.finalregexps"
+    $mainlog_fn = "#{$autoconf_path}fpautoconf.mainlog"
+    $orig_config_name = "#{$autoconf_path}fpautoconf_orig.cfg"
+    $final_config_name = "#{$autoconf_path}fpautoconf_final.cfg"
+    $final_path = "#{$autoconf_path}final/"
 
     if $is_worker then
 
@@ -90,8 +113,8 @@ def main
 
     else
 
-        # parent initialization
-        start = Time.now
+        $binary_name = File.basename(opt)
+        $binary_path = File.expand_path(opt)
         puts "FPAutoConf"
         puts "Autoconfiguring #{$binary_name} ..."
         puts "Working dir: #{$autoconf_path}"
@@ -114,7 +137,7 @@ def main
             end
             Dir.mkdir(worker_dir)
             job = fork do
-                exec "cd #{worker_dir} && #{$self_invoke} -w #{$autoconf_path} #{$binary_path}"
+                exec "cd #{worker_dir} && #{$self_invoke} -w #{$autoconf_path} &>output.txt"
             end
             $workers[job] = worker_dir
         end
@@ -124,8 +147,6 @@ def main
 
         # parent finalization
         finalize_autoconf
-        elapsed = Time.now.to_f - start.to_f
-        puts "Done.  [Elapsed walltime: #{format_time(elapsed)}]"
 
     end
 end
@@ -166,6 +187,9 @@ end
 # {{{ initialize_autoconf
 def initialize_autoconf
 
+    # parent initialization
+    $start_time = Time.now
+
     # delete all existing .cfg files (and old mutant files)
     Dir.foreach($autoconf_path) do |fn|
         if fn =~ /\.cfg/ || fn =~ /lib(c|m)\.so\.6/ || fn =~ /\.log/ || fn =~ /mutant/ then
@@ -183,14 +207,25 @@ def initialize_autoconf
     File.new($finalregexps_fn, "w").close
     File.new($mainlog_fn, "w").close
 
+    # copy in data files
+    tmp = Array.new
+    $data_files.each do |fname|
+        FileUtils.cp(fname, $autoconf_path)
+        tmp << File.basename(fname)
+    end
+    $data_files = Array.new
+    tmp.each do |fname|
+        $data_files << tmp
+    end
+
     # initial performance run
     print "Performing baseline performance test ... "
     $stdout.flush
     start = Time.now
     if $mpi_enabled then
-        cmd = "mpirun -np #{$mpi_procs} #{$binary_path}"
+        cmd = "mpirun -np #{$mpi_procs} #{$binary_path} #{$cmdline_options}"
     else
-        cmd = "#{$binary_path}"
+        cmd = "#{$binary_path} #{$cmdline_options}"
     end
     Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
         io_out.each_line do |line|
@@ -325,7 +360,7 @@ def run_main_supervisor_loop
                         FileUtils.rm_rf(dir)
                         Dir.mkdir(dir)
                         job = fork do
-                            exec "cd #{dir} && #{$self_invoke} -w #{$autoconf_path} #{$binary_path}"
+                            exec "cd #{dir} && #{$self_invoke} -w #{$autoconf_path} &>output.txt"
                         end
                         $workers[job] = dir
                     end
@@ -427,15 +462,19 @@ def finalize_autoconf
     report << "Top %-15s%15s  %s"%["instrumented:","CONFIG","% REPLACED"]
     10.times do
         entry = inst_hash.shift
-        report << "    %30s  %4.1f"%[entry[0],entry[1]]
-        kept_configs << "#{$binary_name}#{entry[0]}"
+        if !entry.nil? then
+            report << "    %30s  %4.1f"%[entry[0],entry[1]]
+            kept_configs << "#{$binary_name}#{entry[0]}"
+        end
     end
     report << " "
     report << "Top %-15s%15s  %s"%["executed:","CONFIG","% REPLACED"]
     10.times do
         entry = exec_hash.shift
-        report << "    %30s  %4.1f"%[entry[0],entry[1]]
-        kept_configs << "#{$binary_name}#{entry[0]}"
+        if !entry.nil? then
+            report << "    %30s  %4.1f"%[entry[0],entry[1]]
+            kept_configs << "#{$binary_name}#{entry[0]}"
+        end
     end
     report << " "
     add_to_mainlog(report.join("\n"))
@@ -454,6 +493,9 @@ def finalize_autoconf
     File.delete($workqueue_fn)
     File.delete($inproc_fn)
     File.delete($finalregexps_fn)
+
+    elapsed = Time.now.to_f - $start_time.to_f
+    puts "Done.  [Elapsed walltime: #{format_time(elapsed)}]"
 
 end
 # }}}
@@ -487,8 +529,7 @@ def run_config_file (fn, keep)
     # status updates
     basename = File.basename(fn)
     basename = basename[$binary_name.length, basename.length-$binary_name.length]
-    $status_buffer += "Testing #{basename} ..."
-    puts $status_buffer
+    puts "Testing #{basename} ..."
     $status_buffer = "    Finished #{basename}:\n"
 
     # TODO: FOR TESTING; remove this!
@@ -511,6 +552,7 @@ def run_config_file (fn, keep)
     cmd = "fpinst -i #{$fortran_mode ? "-N" : ""}"
     cmd += " -c #{fn}"
     cmd += " #{$binary_path}"
+    add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
     Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
         io_out.each_line do |line|
             if line =~ /Inplace: (.*)$/ then
@@ -519,14 +561,20 @@ def run_config_file (fn, keep)
         end
     end
 
+    # copy in any data files
+    $data_files.each do |fname|
+        FileUtils.cp("#{$autoconf_path}#{fname}", Dir.getwd)
+    end
+
     # execute rewritten mutatee and check for success
     success = false
     start = Time.now
     if $mpi_enabled then
-        cmd = "mpirun -np #{$mpi_procs} mutant"
+        cmd = "mpirun -np #{$mpi_procs} mutant #{$cmdline_options}"
     else
-        cmd = "./mutant"
+        cmd = "./mutant #{$cmdline_options}"
     end
+    add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
     Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
         io_out.each_line do |line|
             if line =~ /Inplace: (.*)$/ then
@@ -568,7 +616,19 @@ end
 def save_all_configs
     f = File.new($settings_fn, File::RDWR)
     f.flock File::LOCK_EX
+    f.puts $start_time.to_i
+    f.puts $binary_name
+    f.puts $binary_path
+    f.puts $stat_preferred
+    f.puts $stat_alternate
     f.puts $baseline_runtime
+    f.puts $mpi_procs
+    f.puts $cmdline_options
+    f.puts($fortran_mode ? "fortran" : "other")
+    f.puts($data_files.size)
+    $data_files.each do |fname|
+        f.puts(fname)
+    end
     f.close
     f = File.new($allconfigs_fn, File::RDWR)
     f.flock File::LOCK_EX
@@ -579,7 +639,30 @@ def load_all_configs
     # could probably be read-only
     f = File.new($settings_fn, File::RDWR)
     f.flock File::LOCK_EX
+    $start_time = Time.at(f.gets.to_i)
+    $binary_name = f.gets.chomp
+    $binary_path = f.gets.chomp
+    $stat_preferred = f.gets.chomp
+    $stat_alternate = f.gets.chomp
     $baseline_runtime = f.gets.chomp.to_f
+    $mpi_procs = f.gets.chomp.to_i
+    $cmdline_options = f.gets.chomp
+    if $mpi_procs > 0 then
+        $mpi_enabled = true
+    else
+        $mpi_enabled = false
+    end
+    lang = f.gets.chomp
+    if lang == "fortran" then
+        $fortran_mode = true
+    else
+        $fortran_mode = false
+    end
+    $data_files = Array.new
+    num = f.gets.chomp.to_i
+    num.times do |i|
+        $data_files << f.gets.chomp
+    end
     f.close
     # could probably be read-only
     f = File.new($allconfigs_fn, File::RDWR)
