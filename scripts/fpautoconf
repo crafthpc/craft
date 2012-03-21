@@ -137,7 +137,7 @@ def main
             end
             Dir.mkdir(worker_dir)
             job = fork do
-                exec "cd #{worker_dir} && #{$self_invoke} -w #{$autoconf_path} &>output.txt"
+                exec "cd #{worker_dir} && #{$self_invoke} -w #{$autoconf_path}"
             end
             $workers[job] = worker_dir
         end
@@ -360,7 +360,7 @@ def run_main_supervisor_loop
                         FileUtils.rm_rf(dir)
                         Dir.mkdir(dir)
                         job = fork do
-                            exec "cd #{dir} && #{$self_invoke} -w #{$autoconf_path} &>output.txt"
+                            exec "cd #{dir} && #{$self_invoke} -w #{$autoconf_path}"
                         end
                         $workers[job] = dir
                     end
@@ -448,7 +448,6 @@ def finalize_autoconf
             inst_item = [cur_cfg, inst_item[1]+$1.to_f]
         end
         if line =~ /executed .* \[([\d.]*)%\] single/ then
-            puts line
             exec_item = [cur_cfg, exec_item[1]+$1.to_f]
         end
         if line =~ /Success!/ then
@@ -557,7 +556,7 @@ def run_config_file (fn, keep)
     cmd = "fpinst -i #{$fortran_mode ? "-N" : ""}"
     cmd += " -c #{fn}"
     cmd += " #{$binary_path}"
-    add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
+    #add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
     Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
         io_out.each_line do |line|
             if line =~ /Inplace: (.*)$/ then
@@ -579,7 +578,7 @@ def run_config_file (fn, keep)
     else
         cmd = "./mutant #{$cmdline_options}"
     end
-    add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
+    #add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
     Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
         io_out.each_line do |line|
             if line =~ /Inplace: (.*)$/ then
@@ -598,7 +597,7 @@ def run_config_file (fn, keep)
     end
     $status_buffer += "  [Walltime: #{format_time(elapsed)}"
     $status_buffer += " %.1fX]"%[elapsed / $baseline_runtime]
-    #puts $status_buffer
+    puts $status_buffer
     add_to_mainlog($status_buffer)
     $status_buffer = ""
 
