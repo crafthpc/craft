@@ -33,6 +33,16 @@ FPSVType FPSVConfigPolicy::getSVType()
 }
 FPSVType FPSVConfigPolicy::getSVType(FPSemantics *inst)
 {
+    /*
+     *printf("getSVType(%p) = ", inst->getAddress());
+     *if (config->getReplaceTag(inst->getAddress()) == RETAG_SINGLE) {
+     *    printf("single\n");
+     *} else if (config->getReplaceTag(inst->getAddress()) == RETAG_DOUBLE) {
+     *    printf("double\n");
+     *} else {
+     *    printf("none\n");
+     *}
+     */
     return RETag2SVType(config->getReplaceTag(inst->getAddress()));
 }
 FPSVType FPSVConfigPolicy::getSVType(FPOperand * /*op*/, FPSemantics *inst)

@@ -34,5 +34,28 @@ FPReplaceEntryTag FPReplaceEntry::getEffectiveTag()
     return rtag;
 }
 
+string FPReplaceEntry::toString()
+{
+    stringstream ss;
+    ss.clear(); ss.str("");
+    ss << "  RE: " << name << " addr=" << address;
+    switch (type) {
+        case RETYPE_APP:         ss << " [app]";       break;
+        case RETYPE_FUNCTION:    ss << " [func]";      break;
+        case RETYPE_BASICBLOCK:  ss << " [bblk]";      break;
+        case RETYPE_INSTRUCTION: ss << " [insn]";      break;
+    }
+    switch (tag) {
+        case RETAG_SINGLE:  ss << " [single]";      break;
+        case RETAG_DOUBLE:  ss << " [double]";      break;
+        case RETAG_IGNORE:  ss << " [ignore]";      break;
+        case RETAG_NONE:    break;
+    }
+    if (parent) {
+       ss << " parent=" << parent->name;
+    }
+    return ss.str();
+}
+
 }
 

@@ -135,6 +135,7 @@ void FPConfig::addSetting(string line) {
 
 void FPConfig::addReplaceEntry(string line)
 {
+    //printf("adding setting %s\n", line.c_str());
     FPReplaceEntry *entry = new FPReplaceEntry();
     size_t pos, len;
 
@@ -203,6 +204,7 @@ void FPConfig::addReplaceEntry(string line)
         entry->name = line.substr(pos,len);
     }
 
+    //cout << entry->toString() << endl;
     addReplaceEntry(entry);
 }
 

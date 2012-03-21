@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <string>
+#include <sstream>
 
 using namespace std;
 
@@ -27,6 +28,8 @@ class FPReplaceEntry
         FPReplaceEntry(FPReplaceEntryType type, size_t idx);
 
         FPReplaceEntryTag getEffectiveTag();
+
+        string toString();
 
         FPReplaceEntryType type;
         size_t idx;

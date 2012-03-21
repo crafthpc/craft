@@ -2368,6 +2368,11 @@ void FPAnalysisInplace::finalOutput()
                 ss2.clear();
                 ss2.str("");
                 ss2 << "instruction #" << i << ": count=" << instCount[i];
+                if (mainPolicy->getSVType(inst) == SVT_IEEE_Single) {
+                    ss2 << " [single]";
+                } else {
+                    ss2 << " [double]";
+                }
                 logFile->addMessage(ICOUNT, instCount[i], inst->getDisassembly(), ss2.str(),
                         "", inst);
 
