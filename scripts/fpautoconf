@@ -445,12 +445,17 @@ def finalize_autoconf
             has_exec = false
         end
         if line =~ /instrumented .* \[([\d.]*)%\] single/ then
-            inst_item = [cur_cfg, $1.to_f]
+            inst_item = [cur_cfg, inst_item[1]+$1.to_f]
         end
         if line =~ /executed .* \[([\d.]*)%\] single/ then
-            exec_item = [cur_cfg, $1.to_f]
+            puts line
+            exec_item = [cur_cfg, exec_item[1]+$1.to_f]
         end
         if line =~ /Success!/ then
+            if $mpi_enabled then
+                inst_item[1] /= $mpi_procs.to_f
+                exec_item[1] /= $mpi_procs.to_f
+            end
             inst_hash << inst_item
             exec_hash << exec_item
         end
@@ -488,11 +493,11 @@ def finalize_autoconf
     $all_cfgs.each_pair do |key, cfg|
         File.delete(cfg.filename) if File.exists?(cfg.filename) and not kept_configs.include?(cfg.filename)
     end
-    File.delete($settings_fn)
-    File.delete($allconfigs_fn)
+    #File.delete($settings_fn)
+    #File.delete($allconfigs_fn)
     File.delete($workqueue_fn)
     File.delete($inproc_fn)
-    File.delete($finalregexps_fn)
+    #File.delete($finalregexps_fn)
 
     elapsed = Time.now.to_f - $start_time.to_f
     puts "Done.  [Elapsed walltime: #{format_time(elapsed)}]"
