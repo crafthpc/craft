@@ -1822,11 +1822,14 @@ void instrumentApplication(BPatch_addressSpace *app)
 		}
 	}
 
-    // embed configuration entries and add an initialization call for each
+    // embed configuration entries and add an initialization call for each;
+    // since we need to insert them at the very beginning of initSnippets,
+    // add them in reverse order so that they'll be in the correct order in
+    // the binary
     vector<string> config;
     configuration->getAllSettings(config);
-    vector<string>::iterator cfgi;
-    for (cfgi = config.begin(); cfgi != config.end(); cfgi++) {
+    vector<string>::reverse_iterator cfgi;
+    for (cfgi = config.rbegin(); cfgi != config.rend(); cfgi++) {
         BPatch_Vector<BPatch_snippet*> *initNumInstsArgs = new BPatch_Vector<BPatch_snippet*>();
         BPatch_constExpr *initNumInstsStr = saveStringToBinary((*cfgi).c_str(), 0);
         initNumInstsArgs->push_back(initNumInstsStr);
