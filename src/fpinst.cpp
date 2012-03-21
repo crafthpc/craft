@@ -889,7 +889,7 @@ void replaceFunctionCalls(const char* oldFuncName, const char* newFuncName)
     mainImg->findFunction(oldFuncName, funcs, false);
     if (!funcs.size() || !funcs[0]) {
         // the function to be replaced does not exist; ignore it
-        cout << "WARNING: cannot find function \"" << oldFuncName << "\"" << endl;
+        //cout << "WARNING: cannot find function \"" << oldFuncName << "\"" << endl;
         return;
     }
     oldFunc = funcs[0];
@@ -898,7 +898,7 @@ void replaceFunctionCalls(const char* oldFuncName, const char* newFuncName)
     funcs.clear();
     mainImg->findFunction(newFuncName, funcs, false);
     if (!funcs.size()) {
-        cout << "WARNING: cannot find function \"" << newFuncName << "\"" << endl;
+        //cout << "WARNING: cannot find function \"" << newFuncName << "\"" << endl;
         return;
     }
     newFunc = funcs[0];
@@ -1055,7 +1055,7 @@ void wrapFunction(const char* oldFuncName, const char* newFuncName)
     mainImg->findFunction(oldFuncName, funcs, false);
     if (!funcs.size() || !funcs[0]) {
         // the function to be replaced does not exist; ignore it
-        cout << "WARNING: cannot find function \"" << oldFuncName << "\"" << endl;
+        //cout << "WARNING: cannot find function \"" << oldFuncName << "\"" << endl;
         return;
     }
     oldFunc = funcs[0];
@@ -1064,7 +1064,7 @@ void wrapFunction(const char* oldFuncName, const char* newFuncName)
     funcs.clear();
     mainImg->findFunction(newFuncName, funcs, false);
     if (!funcs.size()) {
-        cout << "WARNING: cannot find function \"" << newFuncName << "\"" << endl;
+        //cout << "WARNING: cannot find function \"" << newFuncName << "\"" << endl;
         return;
     }
     newFunc = funcs[0];
