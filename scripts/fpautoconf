@@ -98,6 +98,7 @@ def main
     $allconfigs_fn = "#{$autoconf_path}fpautoconf.allconfigs"
     $workqueue_fn = "#{$autoconf_path}fpautoconf.workqueue"
     $inproc_fn = "#{$autoconf_path}fpautoconf.inproc"
+    $tested_fn = "#{$autoconf_path}fpautoconf.tested"
     $finalregexps_fn = "#{$autoconf_path}fpautoconf.finalregexps"
     $mainlog_fn = "#{$autoconf_path}fpautoconf.mainlog"
     $orig_config_name = "#{$autoconf_path}fpautoconf_orig.cfg"
@@ -204,6 +205,7 @@ def initialize_autoconf
     File.new($allconfigs_fn, "w").close
     File.new($workqueue_fn, "w").close
     File.new($inproc_fn, "w").close
+    File.new($tested_fn, "w").close
     File.new($finalregexps_fn, "w").close
     File.new($mainlog_fn, "w").close
 
@@ -330,6 +332,7 @@ def run_main_autoconf_loop
 
         end
 
+        add_to_tested(key)
         remove_from_inproc(key)
         key = get_next_workqueue_item
     end
@@ -499,7 +502,7 @@ def finalize_autoconf
     #File.delete($finalregexps_fn)
 
     elapsed = Time.now.to_f - $start_time.to_f
-    puts "Done.  [Elapsed walltime: #{format_time(elapsed)}]"
+    puts "Done.  [Total configs tested: #{get_tested_length}]  [Elapsed walltime: #{format_time(elapsed)}]"
 
 end
 # }}}
@@ -749,6 +752,23 @@ def move_all_inproc_to_workqueue
         remove_from_inproc(item.chomp)
         add_to_workqueue(item.chomp)
     end
+end
+
+
+def add_to_tested(item)
+    f = File.new($tested_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    f.seek(0,IO::SEEK_END)
+    f.puts(item)
+    f.close
+end
+def get_tested_length
+    # could probably be read-only
+    f = File.new($tested_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    tested = f.readlines
+    f.close
+    return tested.size
 end
 
 
