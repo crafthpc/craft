@@ -1,0 +1,19 @@
+commit 59e8688f82821557dad52300a2a1721b69fe0953
+Author: Mike Lam <lam@cs.umd.edu>
+Date:   Thu Mar 3 17:59:41 2011 -0500
+
+    Makes register ASTs as untyped to avoid type checks
+
+diff --git a/dyninstAPI/src/ast.C b/dyninstAPI/src/ast.C
+index ae642db..f2e49a4 100644
+--- a/dyninstAPI/src/ast.C
++++ b/dyninstAPI/src/ast.C
+@@ -2355,7 +2355,7 @@ BPatch_type *AstOperandNode::checkType()
+         ret = BPatch::bpatch->type_Untyped; 
+     }
+     else if ((oType == origRegister)) {
+-        ret = BPatch::bpatch->stdTypes->findType("int");
++       ret = BPatch::bpatch->type_Untyped;
+     }
+     else {
+         ret = const_cast<BPatch_type *>(getType());

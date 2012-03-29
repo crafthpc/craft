@@ -1,0 +1,30 @@
+commit 841b8d93c2b9b27340b17a0467101a213eba3600
+Author: Mike Lam <lam@cs.umd.edu>
+Date:   Mon Sep 26 09:26:58 2011 -0400
+
+    Build fixes for buzz
+
+diff --git a/common/h/dwarfExpr.h b/common/h/dwarfExpr.h
+index 095531e..c6f4a85 100644
+--- a/common/h/dwarfExpr.h
++++ b/common/h/dwarfExpr.h
+@@ -29,6 +29,7 @@
+  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+  */
+ 
++#include <stdint.h>
+ #include <stack>
+ #include "dynutil/h/dyn_regs.h"
+ #if !defined(DWARF_EXPR_H)
+diff --git a/common/h/dwarfSW.h b/common/h/dwarfSW.h
+index 50e3970..8b6364b 100644
+--- a/common/h/dwarfSW.h
++++ b/common/h/dwarfSW.h
+@@ -32,6 +32,7 @@
+ #if !defined(DWARF_SW_H_)
+ #define DWARF_SW_H_
+ 
++#include <stdint.h>
+ #include "libdwarf.h"
+ 
+ typedef struct {
