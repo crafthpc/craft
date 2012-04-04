@@ -610,13 +610,13 @@ def run_config_file (fn, keep)
             if !success && line =~ /[^n]success/i then
                 success = true
             end
-            if !success && line =~ /passed/i then
+            if !success && line =~ / pass$/i then
                 success = true
             end
             if !error && line =~ /error/i then
                 error = true
             end
-            if !error && line =~ /failed/i then
+            if !error && line =~ /fail/i then
                 error = true
             end
             if !timeout && line =~ /timeout/i then
