@@ -27,6 +27,7 @@ def main
     $stat_preferred = "s"       # preferred replacement status
     $stat_alternate = "d"       # replacement status if cannot be preferred
     $fortran_mode = false       # pass "-N" to fpinst
+    $timeout = 0                # timeout interval (zero for no limit)
     $data_files = Array.new     # required data files
     $cmdline_options = ""       # mutatee command line options
     $mpi_enabled = false        # use mpirun?
@@ -52,6 +53,7 @@ def main
         puts "   -j <np>        spawn <np> worker threads"
         puts "   -np <np>       use MPI with <np> processes"
         puts "   -N             enable Fortran mode"
+        puts "   -t <s>         timeout mutatees after <s> secs"
         exit
     end
 
@@ -87,6 +89,9 @@ def main
         elsif opt == '-N' then
             # fortran mode
             $fortran_mode = true
+        elsif opt == '-t' then
+            # timeout
+            $timeout = ARGV.shift.to_i
         end
     end while ARGV.size > 0
 
@@ -575,11 +580,16 @@ def run_config_file (fn, keep)
 
     # execute rewritten mutatee and check for success
     success = false
+    error = false
+    timeout = false
     start = Time.now
     if $mpi_enabled then
         cmd = "mpirun -np #{$mpi_procs} mutant #{$cmdline_options}"
     else
         cmd = "./mutant #{$cmdline_options}"
+    end
+    if $timeout > 0 then
+        cmd = "timeout #{$timeout.to_s} #{cmd}"
     end
     #add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
     Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
@@ -587,14 +597,28 @@ def run_config_file (fn, keep)
             if line =~ /Inplace: (.*)$/ then
                 $status_buffer += "        #{$1}\n"
             end
-            if !success && line =~ /[^N]SUCCESS/ then
+            if !success && line =~ /[^n]success/i then
                 success = true
+            end
+            if !success && line =~ /passed/i then
+                success = true
+            end
+            if !error && line =~ /error/i then
+                error = true
+            end
+            if !error && line =~ /failed/i then
+                error = true
+            end
+            if !timeout && line =~ /timeout/i then
+                timeout = true
             end
         end
     end
     elapsed = Time.now.to_f - start.to_f
-    if success then
+    if success && !error && !timeout then
         $status_buffer += "        Success!"
+    elsif timeout then
+        $status_buffer += "        TIMEOUT!"
     else
         $status_buffer += "        FAILED!"
     end
@@ -613,7 +637,7 @@ def run_config_file (fn, keep)
         end
     end
 
-    return success
+    return success && !error && !timeout
 end
 
 # }}}
@@ -632,6 +656,7 @@ def save_all_configs
     f.puts $mpi_procs
     f.puts $cmdline_options
     f.puts($fortran_mode ? "fortran" : "other")
+    f.puts $timeout
     f.puts($data_files.size)
     $data_files.each do |fname|
         f.puts(fname)
@@ -665,6 +690,7 @@ def load_all_configs
     else
         $fortran_mode = false
     end
+    $timeout = f.gets.chomp.to_i
     $data_files = Array.new
     num = f.gets.chomp.to_i
     num.times do |i|
