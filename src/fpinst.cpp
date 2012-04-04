@@ -77,8 +77,9 @@ bool instrFrames = false;       // add instrumentation stack frames
 bool fortranMode = false;       // switch up instrumentation for FORTRAN programs
 
 // function/instruction indices and counts
-size_t fidx = 0, bbidx = 0, iidx = 0;
+size_t midx = 0, fidx = 0, bbidx = 0, iidx = 0;
 size_t total_replacements = 0;
+size_t total_modules = 0;
 size_t total_functions = 0;
 size_t instructions_in_curr_func = 0;
 size_t total_basicblocks = 0;
@@ -1671,7 +1672,7 @@ void instrumentBasicBlock(BPatch_function * function, BPatch_basicBlock *block,
 }
 
 void instrumentFunction(BPatch_function *function, BPatch_Vector<BPatch_snippet*> &initSnippets,
-        const char *name, const char *modname)
+        const char *name)
 {
     fidx++;
     total_functions++;
@@ -1688,17 +1689,57 @@ void instrumentFunction(BPatch_function *function, BPatch_Vector<BPatch_snippet*
         instrumentBasicBlock(function, *b, initSnippets);
     }
 
-    // print the function name if requested
     if (listFuncs) {
-        //printf(" %lu - %s [%s]\n", 
-                //fidx, name, modname, instructions_in_curr_func);
         Address start, end;
         function->getAddressRange(start, end);
-        printf("  FUNCTION %lu: module=%s name=%s base=%p size=%u %s (%lu instruction(s) instrumented)\n\n", fidx,
-                modname, name, function->getBaseAddr(),
+        printf("  FUNCTION %lu: name=%s base=%p size=%u %s (%lu instruction(s) instrumented)\n\n", fidx,
+                name, function->getBaseAddr(),
                 (unsigned)end - (unsigned)start,
                 (function->isSharedLib() ? "[shared] " : ""),
                 instructions_in_curr_func);
+    }
+}
+
+void instrumentModule(BPatch_module *module, BPatch_Vector<BPatch_snippet*> &initSnippets,
+        const char *name)
+{
+	char funcname[BUFFER_STRING_LEN];
+    midx++;
+    total_modules++;
+
+	// get list of all functions
+	std::vector<BPatch_function *>* functions;
+	functions = module->getProcedures();
+	printf("Instrumenting functions.\n");
+
+	// for each function ...
+	for (unsigned i = 0; i < functions->size(); i++) {
+		BPatch_function *function = functions->at(i);
+		function->getName(funcname, BUFFER_STRING_LEN);
+
+        // CRITERIA FOR INSTRUMENTATION:
+        // don't instrument
+        //   - main() or memset() or call_gmon_start() or frame_dummy()
+        //   - functions that begin with an underscore
+        //   - functions that begin with "targ"
+        // AND
+        // if there's a preset list of functions to instrument,
+        //   make sure the current function is on it
+        // (and the inverse for excluded functions)
+		if ( /* (strcmp(funcname,"main")!=0) && */ (strcmp(funcname,"memset")!=0)
+                && (strcmp(funcname,"call_gmon_start")!=0) && (strcmp(funcname,"frame_dummy")!=0)
+                && funcname[0] != '_' &&
+                !(strlen(funcname) > 4 && funcname[0]=='t' && funcname[1]=='a' && funcname[2]=='r' && funcname[3]=='g') &&
+                !(restrictFuncs == 'F' && find(funcs.begin(), funcs.end(), string(funcname)) != funcs.end()) &&
+                (restrictFuncs != 'f' || find(funcs.begin(), funcs.end(), string(funcname)) != funcs.end())) {
+
+            instrumentFunction(function, initSnippets, funcname);
+		}
+	}
+
+    if (listFuncs) {
+        printf("MODULE %lu: name=%s base=%p\n\n", midx,
+                name, module->getBaseAddr());
     }
 }
 
@@ -1721,10 +1762,6 @@ void instrumentApplication(BPatch_addressSpace *app)
     mainApp = app;
     mainImg = mainApp->getImage();
     mainMgr = PatchAPI::convert(mainApp);
-
-	// string/char buffers
-	char name[BUFFER_STRING_LEN];
-	char modname[BUFFER_STRING_LEN];
 
     // print pertinent warnings
     if (nullInst) {
@@ -1782,21 +1819,52 @@ void instrumentApplication(BPatch_addressSpace *app)
     // pointAfter very well for main()
     disableCall = new BPatch_nullExpr();
 
-	// get list of all functions
-	std::vector<BPatch_function *>* functions;
-	functions = mainImg->getProcedures();
-	printf("Instrumenting functions.\n");
+    // get list of all modules
+	char modname[BUFFER_STRING_LEN];
+    std::vector<BPatch_module *>* modules;
+    std::vector<BPatch_module *>::iterator m;
+    modules = mainImg->getModules();
+    printf("Instrumenting modules.\n");
 
-	// for each function ...
-	for (unsigned i = 0; i < functions->size(); i++) {
-		BPatch_function *function = functions->at(i);
-		function->getName(name, BUFFER_STRING_LEN);
-		function->getModule()->getName(modname, BUFFER_STRING_LEN);
+    // for each module ...
+    for (m = modules->begin(); m != modules->end(); m++) {
+        (*m)->getName(modname, BUFFER_STRING_LEN);
+
+        // don't config our own library or libm
+        if (strcmp(modname, "libfpanalysis.so") == 0 ||
+            strcmp(modname, "libm.so.6") == 0 ||
+            strcmp(modname, "libc.so.6") == 0) {
+            continue;
+        }
+
+        // don't config shared libs unless requested
+        if ((*m)->isSharedLib() && !instShared) {
+            continue;
+        }
+
+        instrumentModule(*m, initSnippets, modname);
+    }
+
+#if 0
+    // OLD METHOD (ALL FUNCTIONS)
+
+    // get list of all functions
+	char modname[BUFFER_STRING_LEN];
+	char funcname[BUFFER_STRING_LEN];
+    std::vector<BPatch_function *>* functions;
+    functions = mainImg->getProcedures();
+    printf("Instrumenting functions.\n");
+
+    // for each function ...
+    for (unsigned i = 0; i < functions->size(); i++) {
+        BPatch_function *function = functions->at(i);
+        function->getName(funcname, BUFFER_STRING_LEN);
+        function->getModule()->getName(modname, BUFFER_STRING_LEN);
 
         // don't instrument functions in our own library or libm
         if (strcmp(modname, "libfpanalysis.so") == 0 ||
             strcmp(modname, "libm.so.6") == 0) {
-            //printf(" skipping %s [%s]\n", name, modname);
+            //printf(" skipping %s [%s]\n", funcname, modname);
             continue;
         }
 
@@ -1809,18 +1877,18 @@ void instrumentApplication(BPatch_addressSpace *app)
         // if there's a preset list of functions to instrument,
         //   make sure the current function is on it
         // (and the inverse for excluded functions)
-		if (/*!function->getModule()->isSharedLib() && */
-                (instShared || !function->getModule()->isSharedLib())
-                /* && (strcmp(name,"main")!=0) */ && (strcmp(name,"memset")!=0)
-                && (strcmp(name,"call_gmon_start")!=0) && (strcmp(name,"frame_dummy")!=0)
-                && name[0] != '_' &&
-                !(strlen(name) > 4 && name[0]=='t' && name[1]=='a' && name[2]=='r' && name[3]=='g') &&
-                !(restrictFuncs == 'F' && find(funcs.begin(), funcs.end(), string(name)) != funcs.end()) &&
-                (restrictFuncs != 'f' || find(funcs.begin(), funcs.end(), string(name)) != funcs.end())) {
-
-            instrumentFunction(function, initSnippets, name, modname);
-		}
-	}
+        if (/*!function->getModule()->isSharedLib() && */
+            (instShared || !function->getModule()->isSharedLib())
+            /* && (strcmp(funcname,"main")!=0) */ && (strcmp(funcname,"memset")!=0)
+            && (strcmp(funcname,"call_gmon_start")!=0) && (strcmp(funcname,"frame_dummy")!=0)
+            && funcname[0] != '_' &&
+            !(strlen(funcname) > 4 && funcname[0]=='t' && funcname[1]=='a' && funcname[2]=='r' && funcname[3]=='g') &&
+            !(restrictFuncs == 'F' && find(funcs.begin(), funcs.end(), string(funcname)) != funcs.end()) &&
+            (restrictFuncs != 'f' || find(funcs.begin(), funcs.end(), string(funcname)) != funcs.end())) {
+                instrumentFunction(function, initSnippets, funcname);
+        }
+    }
+#endif
 
     // embed configuration entries and add an initialization call for each;
     // since we need to insert them at the very beginning of initSnippets,
@@ -1836,7 +1904,7 @@ void instrumentApplication(BPatch_addressSpace *app)
         BPatch_funcCallExpr *initNumInsts = new BPatch_funcCallExpr(*setFuncs[0], *initNumInstsArgs);
         initSnippets.insert(initSnippets.begin(), initNumInsts);
     }
-    
+
     // generate application report
     stringstream report;
     report.clear(); report.str("");

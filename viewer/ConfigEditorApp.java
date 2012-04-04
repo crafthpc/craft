@@ -245,6 +245,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         mainConfigMiscEntries = new ArrayList<String>();
 
         ConfigTreeNode appNode = new ConfigTreeNode();
+        ConfigTreeNode curModNode = null;
         ConfigTreeNode curFuncNode = null;
         ConfigTreeNode curBlockNode = null;
         ConfigTreeNode curNode = null;
@@ -260,15 +261,37 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     if (curNode.type == ConfigTreeNode.CNType.APPLICATION) {
                         appNode = curNode;
                         mainConfigEntries.add(curNode);
-                    } else if (curNode.type == ConfigTreeNode.CNType.FUNCTION) {
+                    } else if (curNode.type == ConfigTreeNode.CNType.MODULE) {
+                        if (curModNode != null) {
+                            // clean previous module (remove if it has no children)
+                            if (curModNode.getInsnCount() == 0) {
+                                TreeNode parent = curModNode.getParent();
+                                if (parent instanceof ConfigTreeNode) {
+                                    ((ConfigTreeNode)parent).remove(curModNode);
+                                }
+                            }
+                        }
                         appNode.add(curNode);
+                        curModNode = curNode;
+                        mainConfigEntries.add(curNode);
+                    } else if (curNode.type == ConfigTreeNode.CNType.FUNCTION) {
+                        if (curFuncNode != null) {
+                            // clean previous function (remove if it has no children)
+                            if (curFuncNode.getInsnCount() == 0) {
+                                TreeNode parent = curFuncNode.getParent();
+                                if (parent instanceof ConfigTreeNode) {
+                                    ((ConfigTreeNode)parent).remove(curFuncNode);
+                                }
+                            }
+                        }
+                        curModNode.add(curNode);
                         curFuncNode = curNode;
                         mainConfigEntries.add(curNode);
                     } else if (curNode.type == ConfigTreeNode.CNType.BASIC_BLOCK &&
                                curFuncNode != null) {
                         if (curBlockNode != null) {
                             // clean previous block (remove if it has no children)
-                            if (curBlockNode.getChildCount() == 0) {
+                            if (curBlockNode.getInsnCount() == 0) {
                                 TreeNode parent = curBlockNode.getParent();
                                 if (parent instanceof ConfigTreeNode) {
                                     ((ConfigTreeNode)parent).remove(curBlockNode);
@@ -298,16 +321,26 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         TreeModel model = new DefaultTreeModel(appNode);
         mainTree.setModel(model);
         refreshKeyLabels();
+
+        DefaultMutableTreeNode node = appNode.getNextNode();
+        while (node != null) {
+            if (node.getLevel() == 1) {
+                mainTree.expandPath(new TreePath(node.getPath()));
+            }
+            node = node.getNextNode();
+        }
     }
 
     public boolean mergeConfigFile(File file) {
 
         if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return false;
         ConfigTreeNode origAppNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+        ConfigTreeNode origModNode = null;
         ConfigTreeNode origFuncNode = null;
         ConfigTreeNode origBlockNode = null;
 
         ConfigTreeNode appNode = new ConfigTreeNode();
+        ConfigTreeNode curModNode = null;
         ConfigTreeNode curFuncNode = null;
         ConfigTreeNode curBlockNode = null;
         ConfigTreeNode curNode = null;
@@ -330,9 +363,25 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                             origAppNode.merge(appNode);
                         }
 
+                    } else if (curNode.type == ConfigTreeNode.CNType.MODULE) {
+                        curModNode = curNode;
+                        Enumeration<ConfigTreeNode> origModules = origAppNode.children();
+                        boolean found = false;
+                        while (origModules.hasMoreElements()) {
+                            ConfigTreeNode mod = origModules.nextElement();
+                            if (mod.label.equals(curModNode.label)) {
+                                mod.merge(curModNode);
+                                origModNode = mod;
+                                found = true;
+                            }
+                        }
+                        if (!found) {
+                            success = false;
+                        }
+
                     } else if (curNode.type == ConfigTreeNode.CNType.FUNCTION) {
                         curFuncNode = curNode;
-                        Enumeration<ConfigTreeNode> origFuncs = origAppNode.children();
+                        Enumeration<ConfigTreeNode> origFuncs = origModNode.children();
                         boolean found = false;
                         while (origFuncs.hasMoreElements()) {
                             ConfigTreeNode func = origFuncs.nextElement();
@@ -444,29 +493,36 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         ConfigTreeNode.CNStatus status;
         if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
         ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+        ConfigTreeNode curModNode = null;
         ConfigTreeNode curFuncNode = null;
         ConfigTreeNode curBlockNode = null;
         ConfigTreeNode curNode = null;
-        Enumeration<ConfigTreeNode> funcs = appNode.children();
-        while (funcs.hasMoreElements()) {
-            curFuncNode = funcs.nextElement();
-            Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
-            while (blocks.hasMoreElements()) {
-                curBlockNode = blocks.nextElement();
-                Enumeration<ConfigTreeNode> insns = curBlockNode.children();
-                while (insns.hasMoreElements()) {
-                    curNode = insns.nextElement();
-                    if (mainRenderer.getShowEffectiveStatus()) {
-                        status = curNode.getEffectiveStatus();
-                    } else {
-                        status = curNode.status;
-                    }
-                    switch (status) {
-                        case NONE:      noneCount++;        break;
-                        case IGNORE:    ignoreCount++;      break;
-                        case SINGLE:    singleCount++;      break;
-                        case DOUBLE:    doubleCount++;      break;
-                        default:                            break;
+
+
+        Enumeration<ConfigTreeNode> modules = appNode.children();
+        while (modules.hasMoreElements()) {
+            curModNode = modules.nextElement();
+            Enumeration<ConfigTreeNode> funcs = curModNode.children();
+            while (funcs.hasMoreElements()) {
+                curFuncNode = funcs.nextElement();
+                Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
+                while (blocks.hasMoreElements()) {
+                    curBlockNode = blocks.nextElement();
+                    Enumeration<ConfigTreeNode> insns = curBlockNode.children();
+                    while (insns.hasMoreElements()) {
+                        curNode = insns.nextElement();
+                        if (mainRenderer.getShowEffectiveStatus()) {
+                            status = curNode.getEffectiveStatus();
+                        } else {
+                            status = curNode.status;
+                        }
+                        switch (status) {
+                            case NONE:      noneCount++;        break;
+                            case IGNORE:    ignoreCount++;      break;
+                            case SINGLE:    singleCount++;      break;
+                            case DOUBLE:    doubleCount++;      break;
+                            default:                            break;
+                        }
                     }
                 }
             }
@@ -526,20 +582,25 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public void batchConfig(ConfigTreeNode.CNStatus orig, ConfigTreeNode.CNStatus dest) {
         if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
         ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+        ConfigTreeNode curModNode = null;
         ConfigTreeNode curFuncNode = null;
         ConfigTreeNode curBlockNode = null;
         ConfigTreeNode curNode = null;
-        Enumeration<ConfigTreeNode> funcs = appNode.children();
-        while (funcs.hasMoreElements()) {
-            curFuncNode = funcs.nextElement();
-            Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
-            while (blocks.hasMoreElements()) {
-                curBlockNode = blocks.nextElement();
-                Enumeration<ConfigTreeNode> insns = curBlockNode.children();
-                while (insns.hasMoreElements()) {
-                    curNode = insns.nextElement();
-                    if (curNode.status == orig) {
-                        curNode.status = dest;
+        Enumeration<ConfigTreeNode> modules = appNode.children();
+        while (modules.hasMoreElements()) {
+            curModNode = modules.nextElement();
+            Enumeration<ConfigTreeNode> funcs = curModNode.children();
+            while (funcs.hasMoreElements()) {
+                curFuncNode = funcs.nextElement();
+                Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
+                while (blocks.hasMoreElements()) {
+                    curBlockNode = blocks.nextElement();
+                    Enumeration<ConfigTreeNode> insns = curBlockNode.children();
+                    while (insns.hasMoreElements()) {
+                        curNode = insns.nextElement();
+                        if (curNode.status == orig) {
+                            curNode.status = dest;
+                        }
                     }
                 }
             }

@@ -34,7 +34,8 @@ char *binary = NULL;
 long binaryArg = 0;
 
 // function/instruction indices and counts
-size_t fidx = 0, bbidx = 0, iidx = 0;
+size_t midx = 0, fidx = 0, bbidx = 0, iidx = 0;
+size_t total_modules = 0;
 size_t total_functions = 0;
 size_t total_basicblocks = 0;
 size_t total_fp_instructions = 0;
@@ -195,58 +196,82 @@ void configFunction(BPatch_function *function, const char *name)
     }
 }
 
+void configModule(BPatch_module *mod, const char *name)
+{
+	char funcname[BUFFER_STRING_LEN];
+
+    midx++;
+    total_modules++;
+
+    // build config entry
+    FPReplaceEntry *entry = new FPReplaceEntry(RETYPE_MODULE, midx);
+    entry->name = name;
+    entry->address = mod->getBaseAddr();
+    mainConfig->addReplaceEntry(entry);
+
+	// get list of all functions
+	std::vector<BPatch_function *>* functions;
+	functions = mod->getProcedures();
+
+	// for each function ...
+	for (unsigned i = 0; i < functions->size(); i++) {
+		BPatch_function *function = functions->at(i);
+		function->getName(funcname, BUFFER_STRING_LEN);
+
+        // CRITERIA FOR INSTRUMENTATION:
+        // don't config:
+        //   - main() or memset() or call_gmon_start() or frame_dummy()
+        //   - functions that begin with an underscore
+        //   - functions that begin with "targ"
+		if ( /* (strcmp(funcname,"main")!=0) && */ (strcmp(funcname,"memset")!=0)
+                && (strcmp(funcname,"call_gmon_start")!=0) && (strcmp(funcname,"frame_dummy")!=0)
+                && funcname[0] != '_' &&
+                !(strlen(funcname) > 4 && funcname[0]=='t' && funcname[1]=='a' && funcname[2]=='r' && funcname[3]=='g')) {
+
+            configFunction(function, funcname);
+		}
+	}
+
+}
+
 void configApplication(BPatch_addressSpace *app)
 {
+	char modname[BUFFER_STRING_LEN];
+
 	// get a reference to the application image
     mainApp = app;
     mainImg = mainApp->getImage();
-
-	// string/char buffers
-	char name[BUFFER_STRING_LEN];
-	char modname[BUFFER_STRING_LEN];
-    stringstream ss;
 
     // build config entry
     FPReplaceEntry *entry = new FPReplaceEntry(RETYPE_APP, 1);
     entry->name = binary;
     mainConfig->addReplaceEntry(entry);
 
-	// get list of all functions
-	std::vector<BPatch_function *>* functions;
-	functions = mainImg->getProcedures();
+    // get list of all modules
+    std::vector<BPatch_module *>* modules;
+    std::vector<BPatch_module *>::iterator m;
+    modules = mainImg->getModules();
 
-	// for each function ...
-	for (unsigned i = 0; i < functions->size(); i++) {
-		BPatch_function *function = functions->at(i);
-		function->getName(name, BUFFER_STRING_LEN);
-		function->getModule()->getName(modname, BUFFER_STRING_LEN);
+    // for each module ...
+    for (m = modules->begin(); m != modules->end(); m++) {
+        (*m)->getName(modname, BUFFER_STRING_LEN);
 
-        // don't config functions in our own library or libm
+        // don't config our own library or libm
         if (strcmp(modname, "libfpanalysis.so") == 0 ||
-            strcmp(modname, "libm.so.6") == 0) {
+            strcmp(modname, "libm.so.6") == 0 ||
+            strcmp(modname, "libc.so.6") == 0) {
             //printf(" skipping %s [%s]\n", name, modname);
             continue;
         }
 
-        // CRITERIA FOR INSTRUMENTATION:
-        // don't config functions from shared libraries (unless requested)
-        //   or main() or memset() or call_gmon_start() or frame_dummy()
-        //   or functions that begin with an underscore
-        //   or functions that begin with "targ"
-        // AND
-        // if there's a preset list of functions to config,
-        //   make sure the current function is on it
-        // (and the inverse for excluded functions)
-		if (/*!function->getModule()->isSharedLib() && */
-                (instShared || !function->getModule()->isSharedLib())
-                /* && (strcmp(name,"main")!=0) */ && (strcmp(name,"memset")!=0)
-                && (strcmp(name,"call_gmon_start")!=0) && (strcmp(name,"frame_dummy")!=0)
-                && name[0] != '_' &&
-                !(strlen(name) > 4 && name[0]=='t' && name[1]=='a' && name[2]=='r' && name[3]=='g')) {
+        // don't config shared libs unless requested
+        if ((*m)->isSharedLib() && !instShared) {
+            continue;
+        }
 
-            configFunction(function, name);
-		}
-	}
+        configModule(*m, modname);
+    }
+
     
     // generate application report
     /*

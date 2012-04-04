@@ -3,6 +3,7 @@
 namespace FPInst {
 
 const string FPConfig::RE_APP = "APPLICATION";
+const string FPConfig::RE_MODULE = "MODULE";
 const string FPConfig::RE_FUNCTION = "FUNC";
 const string FPConfig::RE_BASICBLOCK = "BBLK";
 const string FPConfig::RE_INSTRUCTION = "INSN";
@@ -19,6 +20,7 @@ FPConfig* FPConfig::getMainConfig() {
 FPConfig::FPConfig()
 {
     currentApp = NULL;
+    currentModule = NULL;
     currentFunction = NULL;
     currentBasicBlock = NULL;
 }
@@ -26,6 +28,7 @@ FPConfig::FPConfig()
 FPConfig::FPConfig(string filename)
 {
     currentApp = NULL;
+    currentModule = NULL;
     currentFunction = NULL;
     currentBasicBlock = NULL;
     ifstream fin(filename.c_str());
@@ -153,9 +156,13 @@ void FPConfig::addReplaceEntry(string line)
     if (line.find(RE_APP) != string::npos) {
         entry->type = RETYPE_APP;
         currentApp = entry;
+    } else if (line.find(RE_MODULE) != string::npos) {
+        entry->type = RETYPE_MODULE;
+        entry->parent = currentApp;
+        currentModule = entry;
     } else if (line.find(RE_FUNCTION) != string::npos) {
         entry->type = RETYPE_FUNCTION;
-        entry->parent = currentApp;
+        entry->parent = currentModule;
         currentFunction = entry;
     } else if (line.find(RE_BASICBLOCK) != string::npos) {
         entry->type = RETYPE_BASICBLOCK;
@@ -333,11 +340,13 @@ string FPConfig::getReplaceEntryLine(FPReplaceEntry *rentry)
     switch (rentry->type) {
         case RETYPE_APP:        ss << RE_APP;
                                 currentApp = rentry;        break;
-        case RETYPE_FUNCTION:   ss << "  " << RE_FUNCTION;
+        case RETYPE_MODULE:     ss << "  " << RE_MODULE;
+                                currentModule = rentry;     break;
+        case RETYPE_FUNCTION:   ss << "    " << RE_FUNCTION;
                                 currentFunction = rentry;   break;
-        case RETYPE_BASICBLOCK: ss << "    " << RE_BASICBLOCK;
+        case RETYPE_BASICBLOCK: ss << "      " << RE_BASICBLOCK;
                                 currentBasicBlock = rentry; break;
-        case RETYPE_INSTRUCTION:ss << "      " << RE_INSTRUCTION; break;
+        case RETYPE_INSTRUCTION:ss << "        " << RE_INSTRUCTION; break;
     }
     ss << " #" << rentry->idx << ": " << hex << rentry->address << dec;
     if (rentry->name != "") {

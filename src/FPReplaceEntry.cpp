@@ -41,6 +41,7 @@ string FPReplaceEntry::toString()
     ss << "  RE: " << name << " addr=" << address;
     switch (type) {
         case RETYPE_APP:         ss << " [app]";       break;
+        case RETYPE_MODULE:      ss << " [mod]";       break;
         case RETYPE_FUNCTION:    ss << " [func]";      break;
         case RETYPE_BASICBLOCK:  ss << " [bblk]";      break;
         case RETYPE_INSTRUCTION: ss << " [insn]";      break;

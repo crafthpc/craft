@@ -31,7 +31,7 @@ public class ConfigTreeRenderer extends DefaultTreeCellRenderer {
         setFont(ConfigEditorApp.DEFAULT_FONT_MONO_PLAIN);
         if (value instanceof ConfigTreeNode) {
             ConfigTreeNode node = (ConfigTreeNode)value;
-            setText(node.toString());
+            setText(node.toString().trim());
             ConfigTreeNode.CNStatus status = node.status;
             if (showEffectiveStatus) {
                 status = node.getEffectiveStatus();

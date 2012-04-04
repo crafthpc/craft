@@ -54,6 +54,7 @@ class FPConfig
         static const char RE_SINGLE = 's';
         static const char RE_DOUBLE = 'd';
         static const string RE_APP;
+        static const string RE_MODULE;
         static const string RE_FUNCTION;
         static const string RE_BASICBLOCK;
         static const string RE_INSTRUCTION;
@@ -61,6 +62,7 @@ class FPConfig
         static FPConfig* singletonConfig;
 
         FPReplaceEntry *currentApp;
+        FPReplaceEntry *currentModule;
         FPReplaceEntry *currentFunction;
         FPReplaceEntry *currentBasicBlock;
 

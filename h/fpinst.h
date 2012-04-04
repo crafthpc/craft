@@ -89,7 +89,9 @@ void instrumentInstruction(void* addr, unsigned char *bytes, size_t nbytes,
         BPatch_Vector<BPatch_snippet*> &initSnippets);
 void instrumentBasicBlock(BPatch_basicBlock *block, BPatch_Vector<BPatch_snippet*> &initSnippets);
 void instrumentFunction(BPatch_function *function, BPatch_Vector<BPatch_snippet*> &initSnippets,
-        const char *name, const char *modname);
+        const char *name);
+void instrumentModule(BPatch_module *module, BPatch_Vector<BPatch_snippet*> &initSnippets,
+        const char *name);
 void instrumentApplication(BPatch_addressSpace *app);
 
 // command-line parsing and help text

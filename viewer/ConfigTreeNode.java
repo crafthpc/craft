@@ -12,7 +12,7 @@ import javax.swing.tree.*;
 public class ConfigTreeNode extends DefaultMutableTreeNode {
 
     public enum CNType {
-        NONE, APPLICATION, FUNCTION, BASIC_BLOCK, INSTRUCTION
+        NONE, APPLICATION, MODULE, FUNCTION, BASIC_BLOCK, INSTRUCTION
     }
 
     public enum CNStatus {
@@ -23,6 +23,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         String str = "UNKNOWN";
         switch (type) {
             case APPLICATION:       str = "APPL";    break;
+            case MODULE:            str = "MODL";    break;
             case FUNCTION:          str = "FUNC";    break;
             case BASIC_BLOCK:       str = "BBLK";    break;
             case INSTRUCTION:       str = "INSN";    break;
@@ -72,6 +73,8 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
 
         if (configLine.contains("APPLICATION")) {
             type = CNType.APPLICATION;
+        } else if (configLine.contains("MODULE")) {
+            type = CNType.MODULE;
         } else if (configLine.contains("FUNC")) {
             type = CNType.FUNCTION;
         } else if (configLine.contains("BBLK")) {
@@ -136,6 +139,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         if (insnCount == -1) {
             switch (type) {
                 case APPLICATION:
+                case MODULE:
                 case FUNCTION:
                 case BASIC_BLOCK:
                     Enumeration<ConfigTreeNode> children = children();
@@ -210,9 +214,10 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         str.append(' ');
         switch (type) {
             case APPLICATION:       str.append("APPLICATION");    break;
-            case FUNCTION:          str.append("  FUNC");         break;
-            case BASIC_BLOCK:       str.append("    BBLK");       break;
-            case INSTRUCTION:       str.append("      INSN");     break;
+            case MODULE:            str.append("  MODULE");    break;
+            case FUNCTION:          str.append("    FUNC");         break;
+            case BASIC_BLOCK:       str.append("      BBLK");       break;
+            case INSTRUCTION:       str.append("        INSN");     break;
             default:                str.append("UNKNOWN");        break;
         }
         str.append(" #");
@@ -226,9 +231,10 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         StringBuffer str = new StringBuffer();
         switch (type) {
             case APPLICATION:       str.append("APPLICATION");    break;
-            case FUNCTION:          str.append("  FUNC");         break;
-            case BASIC_BLOCK:       str.append("    BBLK");       break;
-            case INSTRUCTION:       str.append("      INSN");     break;
+            case MODULE:            str.append("  MODULE");    break;
+            case FUNCTION:          str.append("    FUNC");         break;
+            case BASIC_BLOCK:       str.append("      BBLK");       break;
+            case INSTRUCTION:       str.append("        INSN");     break;
             default:                str.append("UNKNOWN");        break;
         }
         //str.append(" #");
