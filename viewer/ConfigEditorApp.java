@@ -618,12 +618,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public void expandDoubleRows() {
         for (int i = 0; i < mainTree.getRowCount(); i++) {
             ConfigTreeNode curNode = (ConfigTreeNode)mainTree.getPathForRow(i).getLastPathComponent();
-            if (curNode.type == ConfigTreeNode.CNType.FUNCTION &&
-                curNode.status == ConfigTreeNode.CNStatus.NONE &&
-                    shouldExpandDoubleRow(curNode)) {
-                mainTree.expandRow(i);
-            } else if (curNode.type == ConfigTreeNode.CNType.BASIC_BLOCK &&
-                       curNode.status == ConfigTreeNode.CNStatus.NONE &&
+            if ((curNode.type == ConfigTreeNode.CNType.MODULE ||
+                 curNode.type == ConfigTreeNode.CNType.FUNCTION ||
+                 curNode.type == ConfigTreeNode.CNType.BASIC_BLOCK) &&
+                    curNode.status == ConfigTreeNode.CNStatus.NONE &&
                     shouldExpandDoubleRow(curNode)) {
                 mainTree.expandRow(i);
             } else if (curNode.type != ConfigTreeNode.CNType.APPLICATION) {

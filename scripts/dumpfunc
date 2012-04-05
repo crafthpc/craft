@@ -9,7 +9,7 @@ func_name = ARGV[1]
 
 
 # grab disassembly
-if func_name.start_with?("0x") then
+if func_name =~ /^0x/ then
 
     # start at an address
     addr = func_name
