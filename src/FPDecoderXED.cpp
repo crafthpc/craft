@@ -1157,25 +1157,35 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
                              OUTPUT_OP(IEEE_Double, REG_OP(0), 2);
                              break;
         case XED_IFORM_ANDPS_XMMps_MEMps:
-            OP_TYPE(OP_AND); INPUT_OP(IEEE_Single, REG_OP(0), 0); INPUT_OP(IEEE_Single, MEMORY_OP, 0);
-                             OUTPUT_OP(IEEE_Single, REG_OP(0), 0);
-                             INPUT_OP(IEEE_Single, REG_OP(0), 1); INPUT_OP(IEEE_Single, MEMORY_OP, 1);
-                             OUTPUT_OP(IEEE_Single, REG_OP(0), 1);
-                             INPUT_OP(IEEE_Single, REG_OP(0), 2); INPUT_OP(IEEE_Single, MEMORY_OP, 2);
-                             OUTPUT_OP(IEEE_Single, REG_OP(0), 2);
-                             INPUT_OP(IEEE_Single, REG_OP(0), 3); INPUT_OP(IEEE_Single, MEMORY_OP, 3);
-                             OUTPUT_OP(IEEE_Single, REG_OP(0), 3);
+            OP_TYPE(OP_AND); INPUT_OP(SSE_Quad, REG_OP(0), 0); INPUT_OP(SSE_Quad, MEMORY_OP, 0);
+                             OUTPUT_OP(SSE_Quad, REG_OP(0), 0);
                              mi++; break;
+            /*
+             *OP_TYPE(OP_AND); INPUT_OP(IEEE_Single, REG_OP(0), 0); INPUT_OP(IEEE_Single, MEMORY_OP, 0);
+             *                 OUTPUT_OP(IEEE_Single, REG_OP(0), 0);
+             *                 INPUT_OP(IEEE_Single, REG_OP(0), 1); INPUT_OP(IEEE_Single, MEMORY_OP, 1);
+             *                 OUTPUT_OP(IEEE_Single, REG_OP(0), 1);
+             *                 INPUT_OP(IEEE_Single, REG_OP(0), 2); INPUT_OP(IEEE_Single, MEMORY_OP, 2);
+             *                 OUTPUT_OP(IEEE_Single, REG_OP(0), 2);
+             *                 INPUT_OP(IEEE_Single, REG_OP(0), 3); INPUT_OP(IEEE_Single, MEMORY_OP, 3);
+             *                 OUTPUT_OP(IEEE_Single, REG_OP(0), 3);
+             *                 mi++; break;
+             */
         case XED_IFORM_ANDPS_XMMps_XMMps:
-            OP_TYPE(OP_AND); INPUT_OP(IEEE_Single, REG_OP(0), 0); INPUT_OP(IEEE_Single, REG_OP(1), 0);
-                             OUTPUT_OP(IEEE_Single, REG_OP(0), 0);
-                             INPUT_OP(IEEE_Single, REG_OP(0), 1); INPUT_OP(IEEE_Single, REG_OP(1), 1);
-                             OUTPUT_OP(IEEE_Single, REG_OP(0), 1);
-                             INPUT_OP(IEEE_Single, REG_OP(0), 2); INPUT_OP(IEEE_Single, REG_OP(1), 2);
-                             OUTPUT_OP(IEEE_Single, REG_OP(0), 2);
-                             INPUT_OP(IEEE_Single, REG_OP(0), 3); INPUT_OP(IEEE_Single, REG_OP(1), 3);
-                             OUTPUT_OP(IEEE_Single, REG_OP(0), 3);
+            OP_TYPE(OP_AND); INPUT_OP(SSE_Quad, REG_OP(0), 0); INPUT_OP(SSE_Quad, REG_OP(1), 0);
+                             OUTPUT_OP(SSE_Quad, REG_OP(0), 0);
                              break;
+            /*
+             *OP_TYPE(OP_AND); INPUT_OP(IEEE_Single, REG_OP(0), 0); INPUT_OP(IEEE_Single, REG_OP(1), 0);
+             *                 OUTPUT_OP(IEEE_Single, REG_OP(0), 0);
+             *                 INPUT_OP(IEEE_Single, REG_OP(0), 1); INPUT_OP(IEEE_Single, REG_OP(1), 1);
+             *                 OUTPUT_OP(IEEE_Single, REG_OP(0), 1);
+             *                 INPUT_OP(IEEE_Single, REG_OP(0), 2); INPUT_OP(IEEE_Single, REG_OP(1), 2);
+             *                 OUTPUT_OP(IEEE_Single, REG_OP(0), 2);
+             *                 INPUT_OP(IEEE_Single, REG_OP(0), 3); INPUT_OP(IEEE_Single, REG_OP(1), 3);
+             *                 OUTPUT_OP(IEEE_Single, REG_OP(0), 3);
+             *                 break;
+             */
         case XED_IFORM_PAND_XMMdq_MEMdq:
             OP_TYPE(OP_AND); INPUT_OP(SSE_Quad, REG_OP(0), 0); INPUT_OP(SSE_Quad, MEMORY_OP, 0);
                              OUTPUT_OP(SSE_Quad, REG_OP(0), 0);
