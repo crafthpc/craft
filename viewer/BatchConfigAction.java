@@ -11,6 +11,7 @@ import javax.swing.*;
 public class BatchConfigAction extends AbstractAction implements ActionListener {
 
     final ConfigTreeNode.CNStatus[] allStatuses = {
+            ConfigTreeNode.CNStatus.CANDIDATE,
             ConfigTreeNode.CNStatus.SINGLE,
             ConfigTreeNode.CNStatus.DOUBLE,
             ConfigTreeNode.CNStatus.IGNORE,

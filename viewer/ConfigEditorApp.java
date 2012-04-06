@@ -34,10 +34,11 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public static final Font DEFAULT_FONT_SANS_BOLD  = new Font("SansSerif",  Font.BOLD,  10);
     public static final Font DEFAULT_FONT_MONO_PLAIN = new Font("Monospaced", Font.PLAIN, 12);
     public static final Font DEFAULT_FONT_MONO_BOLD  = new Font("Monospaced", Font.BOLD,  12);
-    public static final Color DEFAULT_COLOR_IGNORE = new Color(225, 225,   0);
-    public static final Color DEFAULT_COLOR_SINGLE = new Color(125, 255, 125);
-    public static final Color DEFAULT_COLOR_DOUBLE = new Color(255, 120, 120);
-    public static final Color DEFAULT_COLOR_BORDER = new Color(  0,   0, 225);
+    public static final Color DEFAULT_COLOR_IGNORE    = new Color(225, 225,   0);
+    public static final Color DEFAULT_COLOR_SINGLE    = new Color(125, 255, 125);
+    public static final Color DEFAULT_COLOR_DOUBLE    = new Color(255, 120, 120);
+    public static final Color DEFAULT_COLOR_CANDIDATE = new Color(125, 175, 225);
+    public static final Color DEFAULT_COLOR_BORDER    = new Color(  0,   0, 225);
 
     // main data structures
     public File mainConfigFile;
@@ -55,6 +56,11 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public JButton collapseAllButton;
     public JCheckBox showEffectiveBox;
     public JButton toggleButton;
+    public JButton setNoneButton;
+    public JButton setIgnoreButton;
+    public JButton setSingleButton;
+    public JButton setDoubleButton;
+    public JButton setCandidateButton;
     public JButton saveButton;
     public JTree mainTree;
     public ConfigTreeRenderer mainRenderer;
@@ -62,6 +68,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public JLabel ignoreKeyLabel;
     public JLabel singleKeyLabel;
     public JLabel doubleKeyLabel;
+    public JLabel candidateKeyLabel;
     public JPanel bottomPanel;
 
     // }}}
@@ -122,6 +129,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         showEffectiveBox = new JCheckBox("Show effective status");
         showEffectiveBox.addActionListener(this);
         topPanel.add(showEffectiveBox);
+        topPanel.add(new JLabel("   "));
+        saveButton = new JButton("Save");
+        saveButton.addActionListener(this);
+        topPanel.add(saveButton);
 
         mainTree = new JTree();
         mainRenderer = new ConfigTreeRenderer();
@@ -156,15 +167,38 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         doubleKeyLabel.setFont(DEFAULT_FONT_MONO_BOLD);
         doubleKeyLabel.setOpaque(true);
         bottomPanel.add(doubleKeyLabel);
+        bottomPanel.add(new JLabel("  "));
+        candidateKeyLabel = new JLabel("CANDIDATE");
+        candidateKeyLabel.setBackground(DEFAULT_COLOR_CANDIDATE);
+        candidateKeyLabel.setFont(DEFAULT_FONT_MONO_BOLD);
+        candidateKeyLabel.setOpaque(true);
+        bottomPanel.add(candidateKeyLabel);
         refreshKeyLabels();
 
         bottomPanel.add(new JLabel("      "));
         toggleButton = new JButton("Toggle selection");
         toggleButton.addActionListener(this);
-        bottomPanel.add(toggleButton);
-        saveButton = new JButton("Save");
-        saveButton.addActionListener(this);
-        bottomPanel.add(saveButton);
+        //bottomPanel.add(toggleButton);
+        setNoneButton = new JButton(" ");
+        setNoneButton.setBackground(Color.WHITE);
+        setNoneButton.addActionListener(this);
+        bottomPanel.add(setNoneButton);
+        setIgnoreButton = new JButton("I");
+        setIgnoreButton.setBackground(DEFAULT_COLOR_IGNORE);
+        setIgnoreButton.addActionListener(this);
+        bottomPanel.add(setIgnoreButton);
+        setSingleButton = new JButton("S");
+        setSingleButton.setBackground(DEFAULT_COLOR_SINGLE);
+        setSingleButton.addActionListener(this);
+        bottomPanel.add(setSingleButton);
+        setDoubleButton = new JButton("D");
+        setDoubleButton.setBackground(DEFAULT_COLOR_DOUBLE);
+        setDoubleButton.addActionListener(this);
+        bottomPanel.add(setDoubleButton);
+        setCandidateButton = new JButton("C");
+        setCandidateButton.setBackground(DEFAULT_COLOR_CANDIDATE);
+        setCandidateButton.addActionListener(this);
+        bottomPanel.add(setCandidateButton);
 
         mainPanel = new JPanel();
         mainPanel.setLayout(new BorderLayout());
@@ -486,10 +520,11 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     }
 
     public void refreshKeyLabels() {
-        int noneCount   = 0;
-        int ignoreCount = 0;
-        int singleCount = 0;
-        int doubleCount = 0;
+        int noneCount      = 0;
+        int ignoreCount    = 0;
+        int singleCount    = 0;
+        int doubleCount    = 0;
+        int candidateCount = 0;
         ConfigTreeNode.CNStatus status;
         if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
         ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
@@ -521,6 +556,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                             case IGNORE:    ignoreCount++;      break;
                             case SINGLE:    singleCount++;      break;
                             case DOUBLE:    doubleCount++;      break;
+                            case CANDIDATE: candidateCount++;      break;
                             default:                            break;
                         }
                     }
@@ -531,6 +567,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         ignoreKeyLabel.setText(" IGNORE (" + ignoreCount + ") ");
         singleKeyLabel.setText(" SINGLE (" + singleCount + ") ");
         doubleKeyLabel.setText(" DOUBLE (" + doubleCount + ") ");
+        candidateKeyLabel.setText(" CANDIDATE (" + candidateCount + ") ");
     }
 
     public void search(boolean findNext) {
@@ -665,6 +702,21 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
     }
 
+    public void setSelection(ConfigTreeNode.CNStatus newStatus) {
+        TreePath[] paths = mainTree.getSelectionPaths();
+        if (paths != null) {
+            for (int i = 0; i < paths.length; i++) {
+                TreePath selPath = paths[i];
+                Object obj = selPath.getLastPathComponent();
+                if (obj instanceof ConfigTreeNode) {
+                    ((ConfigTreeNode)obj).status = newStatus;
+                }
+            }
+            mainTree.repaint();
+            refreshKeyLabels();
+        }
+    }
+
     public void openSourceWindow(ConfigTreeNode node) {
         // can't open anything except instructions
         if (node.type != ConfigTreeNode.CNType.INSTRUCTION) return;
@@ -771,6 +823,16 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             refreshKeyLabels();
         } else if (e.getSource() == toggleButton) {
             toggleSelection();
+        } else if (e.getSource() == setNoneButton) {
+            setSelection(ConfigTreeNode.CNStatus.NONE);
+        } else if (e.getSource() == setIgnoreButton) {
+            setSelection(ConfigTreeNode.CNStatus.IGNORE);
+        } else if (e.getSource() == setSingleButton) {
+            setSelection(ConfigTreeNode.CNStatus.SINGLE);
+        } else if (e.getSource() == setDoubleButton) {
+            setSelection(ConfigTreeNode.CNStatus.DOUBLE);
+        } else if (e.getSource() == setCandidateButton) {
+            setSelection(ConfigTreeNode.CNStatus.CANDIDATE);
         } else if (e.getSource() == saveButton) {
             saveConfigFile();
         }

@@ -46,6 +46,9 @@ public class ConfigTreeRenderer extends DefaultTreeCellRenderer {
                 case DOUBLE:
                     setBackground(ConfigEditorApp.DEFAULT_COLOR_DOUBLE);
                     setOpaque(true);        break;
+                case CANDIDATE:
+                    setBackground(ConfigEditorApp.DEFAULT_COLOR_CANDIDATE);
+                    setOpaque(true);        break;
                 default:
                     setOpaque(false);       break;
             }

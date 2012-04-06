@@ -16,7 +16,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     }
 
     public enum CNStatus {
-        NONE, IGNORE, SINGLE, DOUBLE
+        NONE, IGNORE, SINGLE, DOUBLE, CANDIDATE
     }
 
     public static String Type2Str(CNType type) {
@@ -38,6 +38,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             case IGNORE:    str = "IGNR";    break;
             case SINGLE:    str = "SING";    break;
             case DOUBLE:    str = "DOUB";    break;
+            case CANDIDATE: str = "CAND";    break;
         }
         return str;
     }
@@ -87,11 +88,12 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
 
         if (configLine.length() > 1) {
             switch (configLine.charAt(1)) {
-                case ' ':   status = CNStatus.NONE;     break;
-                case 'i':   status = CNStatus.IGNORE;   break;
-                case 's':   status = CNStatus.SINGLE;   break;
-                case 'd':   status = CNStatus.DOUBLE;   break;
-                default:    status = CNStatus.NONE;     break;
+                case ' ':   status = CNStatus.NONE;      break;
+                case 'i':   status = CNStatus.IGNORE;    break;
+                case 's':   status = CNStatus.SINGLE;    break;
+                case 'd':   status = CNStatus.DOUBLE;    break;
+                case 'c':   status = CNStatus.CANDIDATE; break;
+                default:    status = CNStatus.NONE;      break;
             }
         }
 
@@ -164,6 +166,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             case IGNORE:    status = CNStatus.NONE;         break;
             case SINGLE:    status = CNStatus.NONE;         break;
             case DOUBLE:    status = CNStatus.NONE;         break;
+            case CANDIDATE: status = CNStatus.NONE;         break;
             default:        status = CNStatus.NONE;         break;
         }
     }
@@ -174,6 +177,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             case IGNORE:    status = CNStatus.SINGLE;       break;
             case SINGLE:    status = CNStatus.IGNORE;       break;
             case DOUBLE:    status = CNStatus.IGNORE;       break;
+            case CANDIDATE: status = CNStatus.IGNORE;       break;
             default:        status = CNStatus.IGNORE;       break;
         }
     }
@@ -184,6 +188,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             case IGNORE:    status = CNStatus.SINGLE;       break;
             case SINGLE:    status = CNStatus.DOUBLE;       break;
             case DOUBLE:    status = CNStatus.NONE;         break;
+            case CANDIDATE: status = CNStatus.NONE;         break;
             default:        status = CNStatus.NONE;         break;
         }
     }
@@ -198,6 +203,8 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             status = CNStatus.IGNORE;
         } else if (status == CNStatus.DOUBLE || node.status == CNStatus.DOUBLE) {
             status = CNStatus.DOUBLE;
+        } else if (status == CNStatus.CANDIDATE || node.status == CNStatus.CANDIDATE) {
+            status = CNStatus.CANDIDATE;
         }
     }
 
@@ -209,6 +216,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             case IGNORE:    str.append('i');    break;
             case SINGLE:    str.append('s');    break;
             case DOUBLE:    str.append('d');    break;
+            case CANDIDATE: str.append('c');    break;
             default:        str.append(' ');    break;
         }
         str.append(' ');

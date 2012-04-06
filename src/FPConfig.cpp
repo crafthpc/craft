@@ -147,6 +147,7 @@ void FPConfig::addReplaceEntry(string line)
         switch (line[1]) {
             case RE_IGNORE:     entry->tag = RETAG_IGNORE;      break;
             case RE_DOUBLE:     entry->tag = RETAG_DOUBLE;      break;
+            case RE_CANDIDATE:  entry->tag = RETAG_CANDIDATE;   break;
             case RE_SINGLE:     entry->tag = RETAG_SINGLE;      break;
             default:            entry->tag = RETAG_NONE;        break;
         }
@@ -333,6 +334,7 @@ string FPConfig::getReplaceEntryLine(FPReplaceEntry *rentry)
     switch (rentry->tag) {
         case RETAG_IGNORE:      ss << RE_IGNORE;      break;
         case RETAG_DOUBLE:      ss << RE_DOUBLE;      break;
+        case RETAG_CANDIDATE:   ss << RE_CANDIDATE;   break;
         case RETAG_SINGLE:      ss << RE_SINGLE;      break;
         default:                ss << RE_NONE;      break;
     }

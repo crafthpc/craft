@@ -47,9 +47,10 @@ string FPReplaceEntry::toString()
         case RETYPE_INSTRUCTION: ss << " [insn]";      break;
     }
     switch (tag) {
-        case RETAG_SINGLE:  ss << " [single]";      break;
-        case RETAG_DOUBLE:  ss << " [double]";      break;
-        case RETAG_IGNORE:  ss << " [ignore]";      break;
+        case RETAG_SINGLE:    ss << " [single]";      break;
+        case RETAG_DOUBLE:    ss << " [double]";      break;
+        case RETAG_CANDIDATE: ss << " [candidate]";      break;
+        case RETAG_IGNORE:    ss << " [ignore]";      break;
         case RETAG_NONE:    break;
     }
     if (parent) {

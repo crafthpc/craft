@@ -48,11 +48,13 @@ class FPConfig
 
     private:
 
-        static const char RE_FLAG = '^';
-        static const char RE_NONE = ' ';
-        static const char RE_IGNORE = 'i';
-        static const char RE_SINGLE = 's';
-        static const char RE_DOUBLE = 'd';
+        static const char RE_FLAG      = '^';
+        static const char RE_NONE      = ' ';
+        static const char RE_IGNORE    = 'i';
+        static const char RE_SINGLE    = 's';
+        static const char RE_DOUBLE    = 'd';
+        static const char RE_CANDIDATE = 'c';
+
         static const string RE_APP;
         static const string RE_MODULE;
         static const string RE_FUNCTION;

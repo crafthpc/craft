@@ -28,6 +28,7 @@ def main
     $stat_alternate = "d"       # replacement status if cannot be preferred
     $fortran_mode = false       # pass "-N" to fpinst
     $timeout = 0                # timeout interval (zero for no limit)
+    $initial_cfg_fn = ""        # initial config filename (may be blank)
     $data_files = Array.new     # required data files
     $cmdline_options = ""       # mutatee command line options
     $mpi_enabled = false        # use mpirun?
@@ -47,7 +48,8 @@ def main
         puts "          or"
         puts "        #{$self_invoke} -w <dir>                 (worker process)"
         puts "Valid options:"
-        puts "   -c \"opts\"    pass command-line options to mutatee"
+        puts "   -c <file>      use <file> as initial base configuration"
+        puts "   -C \"opts\"    pass command-line options to mutatee"
         puts "   -d             debug mode (ignore->double)"
         puts "   -D <file>      copy in a data file"
         puts "   -j <np>        spawn <np> worker threads"
@@ -84,6 +86,9 @@ def main
             # data file
             $data_files << ARGV.shift
         elsif opt == "-c" then
+            # initial configuration
+            $initial_cfg_fn = ARGV.shift
+        elsif opt == "-C" then
             # command-line option
             $cmdline_options = ARGV.shift
         elsif opt == '-N' then
@@ -165,12 +170,16 @@ class SingleReplacementConfig
     attr_accessor :filename         # .cfg filename
     attr_accessor :type             # mod, func, bblk, insn
     attr_accessor :regexp           # config pattern for creating final config
-    attr_accessor :icount           # number of fp instructions replaced
+    attr_accessor :ccount           # number of candidate fp instructions
+    attr_accessor :rcount           # number of restricted (ignore/single/double) structures
     attr_accessor :children         # proper subset configs
-    def initialize(id, type)
+    attr_accessor :initial          # value of initial replacement ('c','s','d','i',' ')
+    def initialize(id, type, initial)
         @key = "#{type}_#{id}"
         @filename = "#{$binary_name}_#{key}.cfg"
         @type = type
+        @children = Array.new
+        @initial = initial
         if @type == "mod" then
             @regexp = Regexp.new("MODULE.*\"#{id}\"")
         elsif @type == "func" then
@@ -182,12 +191,16 @@ class SingleReplacementConfig
         else
             @regexp = //
         end
-        if @type == "insn" then
-            @icount = 1
+        if @type == "insn" && @initial == "c" then
+            @ccount = 1
         else
-            @icount = 0
+            @ccount = 0
         end
-        @children = Array.new
+        if @initial == "i" || @initial == "s" || @initial == "d" then
+            @rcount = 1
+        else
+            @rcount = 0
+        end
     end
 end
 # }}}
@@ -197,15 +210,6 @@ def initialize_autoconf
 
     # parent initialization
     $start_time = Time.now
-
-    # delete all existing .cfg files (and old mutant files)
-    Dir.foreach($autoconf_path) do |fn|
-        if fn =~ /\.cfg/ || fn =~ /lib(c|m)\.so\.6/ || fn =~ /\.log/ || fn =~ /mutant/ then
-            File.delete(fn)
-        elsif fn =~ /worker\d+/ then
-            FileUtils.rm_rf(fn)
-        end
-    end
 
     # create search config files
     File.new($settings_fn, "w").close
@@ -248,43 +252,62 @@ def initialize_autoconf
     print "Generating initial configuration ... "
     $stdout.flush
     orig_cfg = File.open($orig_config_name, "w")
-    mod = nil
-    func = nil
-    bblk = nil
-    IO.popen("fpconf #{$binary_path}") do |io|
-        io.each_line do |line|
-            orig_cfg.puts line
-            if line =~ /MODULE.*\"(.+)\"/ then
-                mod = SingleReplacementConfig.new($1, "mod")
-                $all_cfgs[mod.key] = mod
+    puts "initial: #{$initial_cfg_fn}"
+    if $initial_cfg_fn.length > 0 && File.exists?($initial_cfg_fn) then
+        IO.foreach($initial_cfg_fn) do |io|
+            io.each_line do |line|
+                orig_cfg.puts line
             end
-            if line =~ /FUNC.*\"(.+)\"/ then
-                func = SingleReplacementConfig.new($1, "func")
-                $all_cfgs[func.key] = func
-                mod.children << func.key if mod != nil
-            end
-            if line =~ /BBLK #\d+: 0x([0-9A-Fa-f]+)/ then
-                bblk = SingleReplacementConfig.new($1, "bblk")
-                $all_cfgs[bblk.key] = bblk
-                func.children << bblk.key if func != nil
-            end
-            if line =~ /INSN #\d+: 0x([0-9A-Fa-f]+)/ then
-                insn = SingleReplacementConfig.new($1, "insn")
-                $all_cfgs[insn.key] = insn
-                bblk.children << insn.key if bblk != nil
-                bblk.icount += 1
-                func.icount += 1
-                mod.icount += 1
+        end
+    else
+        IO.popen("fpconf #{$binary_path}") do |io|
+            io.each_line do |line|
+                orig_cfg.puts line
             end
         end
     end
     orig_cfg.close
+    mod = nil
+    func = nil
+    bblk = nil
+    IO.foreach($orig_config_name) do |io|
+        io.each_line do |line|
+            if line =~ /MODULE.*\"(.+)\"/ then
+                mod = SingleReplacementConfig.new($1, "mod", line[1,1])
+                $all_cfgs[mod.key] = mod
+            end
+            if line =~ /FUNC.*\"(.+)\"/ then
+                func = SingleReplacementConfig.new($1, "func", line[1,1])
+                $all_cfgs[func.key] = func
+                mod.children << func.key if mod != nil
+                mod.rcount  += func.rcount if mod != nil
+            end
+            if line =~ /BBLK #\d+: 0x([0-9A-Fa-f]+)/ then
+                bblk = SingleReplacementConfig.new($1, "bblk", line[1,1])
+                $all_cfgs[bblk.key] = bblk
+                func.children << bblk.key if func != nil
+                func.rcount += bblk.rcount if func != nil
+                mod.rcount  += bblk.rcount if mod != nil
+            end
+            if line =~ /INSN #\d+: 0x([0-9A-Fa-f]+)/ then
+                insn = SingleReplacementConfig.new($1, "insn", line[1,1])
+                $all_cfgs[insn.key] = insn
+                bblk.children << insn.key if bblk != nil
+                bblk.ccount += insn.ccount if bblk != nil
+                func.ccount += insn.ccount if func != nil
+                mod.ccount  += insn.ccount if mod != nil
+                bblk.rcount += insn.rcount if bblk != nil
+                func.rcount += insn.rcount if func != nil
+                mod.rcount  += insn.rcount if mod != nil
+            end
+        end
+    end
     puts "done."
 
     # throw away empty configs
     to_delete = Array.new
     $all_cfgs.each_pair do |key, cfg|
-        to_delete << key if cfg.icount == 0
+        to_delete << key if cfg.ccount == 0
     end
     to_delete.each do |key|
         $all_cfgs.delete(key)
@@ -298,8 +321,8 @@ def initialize_autoconf
     count = 0
     $all_cfgs.each_pair do |key, cfg|
         # FOR TESTING: limit to five
-        #if cfg.type == "mod" && cfg.icount > 0 && count < 5
-        if cfg.type == "mod" && cfg.icount > 0 then
+        #if cfg.type == "mod" && cfg.ccount > 0 && count < 5
+        if cfg.type == "mod" && cfg.ccount > 0 then
             add_to_workqueue(cfg.key)
             count += 1
         end
@@ -326,7 +349,9 @@ def run_main_autoconf_loop
         $status_buffer += "[Queue length: #{"%3d" % (queue_length+1)}]  "
         $max_queue_length = queue_length if queue_length > $max_queue_length
 
-        if run_config(cfg) then
+        #puts "#{cfg.key} #{cfg.ccount} #{cfg.rcount}"
+
+        if cfg.rcount == 0 && run_config(cfg) then
 
             # this config passed; add it to the final
             add_final_regexp(cfg.regexp)
@@ -334,12 +359,12 @@ def run_main_autoconf_loop
         else
 
             # add any children we need to test
-            if (cfg.type == "mod"  && cfg.icount >= 1) ||
-               (cfg.type == "func" && cfg.icount >= 1) ||
-               (cfg.type == "bblk" && cfg.icount >= 2) then
+            if (cfg.type == "mod"  && cfg.ccount >= 1) ||
+               (cfg.type == "func" && cfg.ccount >= 1) ||
+               (cfg.type == "bblk" && cfg.ccount >= 2) then
                 cfg.children.each do |ckey|
                     child = $all_cfgs[ckey]
-                    if child != nil then
+                    if child != nil && child.ccount > 0 then
                         add_to_workqueue(ckey)
                     end
                 end
@@ -437,7 +462,7 @@ def finalize_autoconf
             end
         end
         if !line_found then
-            if line =~ /^\^s/ then
+            if line =~ /^\^c/ then
                 final_config.puts "^#{$stat_alternate}#{line[2,line.size-1]}"
             else
                 final_config.puts line
@@ -533,7 +558,7 @@ def run_config (cfg)
     IO.foreach($orig_config_name) do |line|
         if line =~ cfg.regexp then
             f.puts "^#{$stat_preferred}#{line[2,line.size-1]}"
-        elsif line =~ /^\^s/ then
+        elsif line =~ /^\^c/ then
             f.puts "^#{$stat_alternate}#{line[2,line.size-1]}"
         else
             f.puts line
@@ -667,6 +692,7 @@ def save_all_configs
     f.puts $cmdline_options
     f.puts($fortran_mode ? "fortran" : "other")
     f.puts $timeout
+    f.puts $initial_cfg_fn
     f.puts($data_files.size)
     $data_files.each do |fname|
         f.puts(fname)
@@ -701,6 +727,7 @@ def load_all_configs
         $fortran_mode = false
     end
     $timeout = f.gets.chomp.to_i
+    $initial_cfg_fn = f.gets.chomp
     $data_files = Array.new
     num = f.gets.chomp.to_i
     num.times do |i|
