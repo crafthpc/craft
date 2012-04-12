@@ -322,7 +322,9 @@ def initialize_autoconf
     $all_cfgs.each_pair do |key, cfg|
         # FOR TESTING: limit to five
         #if cfg.type == "mod" && cfg.ccount > 0 && count < 5
-        if cfg.type == "mod" && cfg.ccount > 0 then
+        if cfg.type == "mod" && cfg.ccount > 0 &&
+                (cfg.initial == " " || cfg.initial == "c") then
+            puts "Adding config #{cfg.key} to workqueue"
             add_to_workqueue(cfg.key)
             count += 1
         end
@@ -349,7 +351,7 @@ def run_main_autoconf_loop
         $status_buffer += "[Queue length: #{"%3d" % (queue_length+1)}]  "
         $max_queue_length = queue_length if queue_length > $max_queue_length
 
-        #puts "#{cfg.key} #{cfg.ccount} #{cfg.rcount}"
+        puts "Testing config #{cfg.key}: ccount=#{cfg.ccount} rcount=#{cfg.rcount}"
 
         if cfg.rcount == 0 && run_config(cfg) then
 
@@ -364,7 +366,9 @@ def run_main_autoconf_loop
                (cfg.type == "bblk" && cfg.ccount >= 2) then
                 cfg.children.each do |ckey|
                     child = $all_cfgs[ckey]
-                    if child != nil && child.ccount > 0 then
+                    if child != nil && child.ccount > 0 &&
+                            (child.initial == " " || child.initial == "c") then
+                        puts "Adding config #{ckey} to workqueue"
                         add_to_workqueue(ckey)
                     end
                 end
@@ -419,11 +423,15 @@ def run_main_supervisor_loop
             Process.wait(job.to_i)
             FileUtils.rm_rf(dir)
         end
-        Dir.foreach(".") do |fn|
-            if fn =~ Regexp.new("^#{$binary_name}_\\d+_worker\\d+$") then
-                FileUtils.rm_rf(fn)
-            end
-        end
+        #begin
+            #Dir.glob("*").each do |fn|
+                #if fn =~ Regexp.new("^#{$binary_name}_\\d+_worker\\d+$") then
+                    #FileUtils.rm_rf(fn)
+                #end
+            #end
+        #rescue
+            #puts "Error clearing old worker directories"
+        #end
 
         # move any unfinished configs back to the workqueue
         if get_inproc_length > 0 then
@@ -665,10 +673,14 @@ def run_config_file (fn, keep)
 
     # clean out mutant, logs, and rewritten library files
     if !keep then
-        Dir.foreach(".") do |fn|
-            if fn =~ /mutant/ || fn =~ /\.log/ || fn =~ /lib(c|m)\.so\.6/ then
-                File.delete(fn)
+        begin
+            Dir.glob("*").each do |fn|
+                if fn =~ /mutant/ || fn =~ /\.log/ || fn =~ /lib(c|m)\.so\.6/ then
+                    File.delete(fn)
+                end
             end
+        rescue
+            puts "Error clearing old files"
         end
     end
 
