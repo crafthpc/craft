@@ -1,0 +1,42 @@
+wrap:  a PMPI wrapper generator.
+
+https://github.com/tgamblin/wrap
+
+Usage: wrap.py [-fgd] [-i pmpi_init] [-c mpicc_name] [-o file] wrapper.w [...]
+ Python script for creating PMPI wrappers. Roughly follows the syntax of
+   the Argonne PMPI wrapper generator, with some enhancements.
+ Options:"
+   -d             Just dump function declarations parsed out of mpi.h
+   -f             Generate fortran wrappers in addition to C wrappers.
+   -g             Generate reentry guards around wrapper functions.
+   -c exe         Provide name of MPI compiler (for parsing mpi.h).  Default is \'mpicc\'.
+   -s             Skip writing #includes, #defines, and other front-matter (for non-C output).
+   -i pmpi_init   Specify proper binding for the fortran pmpi_init function.
+                  Default is \'pmpi_init_\'.  Wrappers compiled for PIC will guess the
+                  right binding automatically (use -DPIC when you compile dynamic libs).
+   -o file        Send output to a file instead of stdout.
+
+ by Todd Gamblin, tgamblin@llnl.gov
+
+Thanks to these people for their suggestions and contributions:
+  David Lecomber, Allinea
+  Barry Rountree, LLNL
+
+Known Bugs:
+  - Certain fortran bindings need some bugfixes and may not work.
+
+Wrapper file syntax:
+
+Wrap syntax is a superset of the syntax defined in Appendix C of
+the MPE manual [1].
+
+See the example.w file for a tutorial on the wrapper langauge itself.
+It contains documentation on all the fucnctions, and it's even wrappable
+itself.
+
+
+[1]  Anthony Chan, William Gropp and Weing Lusk.  User's Guide for MPE:
+Extensions for MPI Programs.  ANL/MCS-TM-ANL-98/xx.
+ftp://ftp.mcs.anl.gov/pub/mpi/mpeman.pdf
+
+

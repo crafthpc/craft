@@ -1,5 +1,6 @@
 #CC = icc -w1
 CC = g++
+MPICC = mpicc
 MACHINE = $(shell hostname)
 UTILDIR = /fs/dyninst/utils
 ULIBDIR = $(UTILDIR)/machines/$(MACHINE)/64/lib64
@@ -71,7 +72,7 @@ CONF_MODULES = fpconf
 PROF_MODULES = fpinst
 
 
-TARGETS = $(PLATFORM)/libfpanalysis.so $(PLATFORM)/fpconf $(PLATFORM)/fpinst
+TARGETS = $(PLATFORM)/libfpanalysis.so $(PLATFORM)/libfpshift.so $(PLATFORM)/fpconf $(PLATFORM)/fpinst
 CONF_MODULE_FILES = $(foreach module, $(CONF_MODULES), $(PLATFORM)/$(module).o)
 PROF_MODULE_FILES = $(foreach module, $(PROF_MODULES), $(PLATFORM)/$(module).o)
 LIB_MODULE_FILES = $(foreach module, $(LIB_MODULES), $(PLATFORM)/$(module).o)
@@ -91,6 +92,12 @@ $(PLATFORM)/:
 
 $(PLATFORM)/libfpanalysis.so: $(PLATFORM)/ $(EXTERN_LIBS) $(LIB_MODULE_FILES)
 	$(CC) $(LIB_LDFLAGS) -shared -o $@ $(LIB_MODULE_FILES)
+
+$(PLATFORM)/libfpshift.so: src/libfpshift.c
+	$(MPICC) -fPIC -DPIC -shared -o $(PLATFORM)/libfpshift.so src/libfpshift.c
+
+src/libfpshift.c: src/libfpshift.w
+	extern/wrap/wrap.py -f -i pmpi_init_ -o src/libfpshift.c src/libfpshift.w
 
 $(PLATFORM)/fpconf: $(CONF_MODULE_FILES) $(PLATFORM)/libfpanalysis.so
 	$(CC) $(CONF_CFLAGS) $(CONF_LDFLAGS) -o $@ $(CONF_MODULE_FILES)
