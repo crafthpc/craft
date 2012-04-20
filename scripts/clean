@@ -1,4 +1,4 @@
 #!/bin/sh
 
-rm -f *.log *.core fpout mutant libm.* libc.*
+rm -f *.log *.core *.btr fpout mutant libm.* libc.*
 

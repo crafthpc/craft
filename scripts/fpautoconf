@@ -223,7 +223,9 @@ def initialize_autoconf
     # copy in data files
     tmp = Array.new
     $data_files.each do |fname|
-        FileUtils.cp(fname, $autoconf_path)
+        if not File.exists?($autoconf_path + File.basename(fname)) then
+            FileUtils.cp(fname, $autoconf_path)
+        end
         tmp << File.basename(fname)
     end
     $data_files = Array.new

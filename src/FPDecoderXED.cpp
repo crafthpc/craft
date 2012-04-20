@@ -606,6 +606,21 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
 
         // {{{ x87 comparisons
         // TODO: retain more architecture-specific comparison information
+        case XED_IFORM_FCOM_ST0_X87:
+            OP_TYPE(OP_COM); INPUT_OP(C99_LongDouble, REG_ST0, 0); INPUT_OP(C99_LongDouble, REG_OP(1), 0);
+                              operation->addOutputOperand(new FPOperand(UnsignedInt32, REG_EFLAGS)); break;
+        case XED_IFORM_FCOMI_ST0_X87:
+            OP_TYPE(OP_COMI); INPUT_OP(C99_LongDouble, REG_ST0, 0); INPUT_OP(C99_LongDouble, REG_OP(1), 0);
+                              operation->addOutputOperand(new FPOperand(UnsignedInt32, REG_EFLAGS)); break;
+        case XED_IFORM_FCOMIP_ST0_X87:
+            OP_TYPE(OP_COMI); INPUT_OP(C99_LongDouble, REG_ST0, 0); INPUT_OP(C99_LongDouble, REG_OP(1), 0);
+                              operation->addOutputOperand(new FPOperand(UnsignedInt32, REG_EFLAGS)); break;
+        case XED_IFORM_FCOMP_ST0_X87:
+            OP_TYPE(OP_COM); INPUT_OP(C99_LongDouble, REG_ST0, 0); INPUT_OP(C99_LongDouble, REG_OP(1), 0);
+                              operation->addOutputOperand(new FPOperand(UnsignedInt32, REG_EFLAGS)); break;
+        case XED_IFORM_FCOMPP_ST0_ST1:
+            OP_TYPE(OP_COM); INPUT_OP(C99_LongDouble, REG_ST0, 0); INPUT_OP(C99_LongDouble, REG_OP(1), 0);
+                              operation->addOutputOperand(new FPOperand(UnsignedInt32, REG_EFLAGS)); break;
         case XED_IFORM_FUCOM_ST0_X87:
             OP_TYPE(OP_UCOM); INPUT_OP(C99_LongDouble, REG_ST0, 0); INPUT_OP(C99_LongDouble, REG_OP(1), 0);
                               operation->addOutputOperand(new FPOperand(UnsignedInt32, REG_EFLAGS)); break;
@@ -621,6 +636,7 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
         case XED_IFORM_FUCOMPP_ST0_ST1:
             OP_TYPE(OP_UCOM); INPUT_OP(C99_LongDouble, REG_ST0, 0); INPUT_OP(C99_LongDouble, REG_OP(1), 0);
                               operation->addOutputOperand(new FPOperand(UnsignedInt32, REG_EFLAGS)); break;
+
         // }}}
 
         // {{{ x87 misc operations
