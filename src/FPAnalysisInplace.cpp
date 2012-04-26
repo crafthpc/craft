@@ -1004,11 +1004,6 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
     size_t origNumBytes = inst->getNumBytes();
     unsigned char *orig_code, *pos, *last_pos;
     vector<FPInplaceBlobInputEntry> inputs;
-    FPRegister replacementRM = REG_NONE;
-    size_t spec_code = 0, pre_code = 0, rep_code = 0, post_code = 0;
-
-    bool packed = false;            // instruction is packed SSE
-    bool replaced = false;          // instruction has been fully replaced
 
     initialize();
 
@@ -1029,6 +1024,11 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
     //printf("    building binary blob for %p: %s\n",
             //inst->getAddress(), inst->getDisassembly().c_str());
 
+    bool packed = false;            // instruction is packed SSE
+    bool replaced = false;          // instruction has been fully replaced
+
+    FPRegister replacementRM = REG_NONE;
+    size_t spec_code = 0, pre_code = 0, rep_code = 0, post_code = 0;
     FPOperation *op;
     FPOperand *input, *output = NULL;
     size_t i, j, k;
