@@ -1710,7 +1710,7 @@ void instrumentModule(BPatch_module *module, BPatch_Vector<BPatch_snippet*> &ini
 	// get list of all functions
 	std::vector<BPatch_function *>* functions;
 	functions = module->getProcedures();
-	printf("Instrumenting functions.\n");
+	//printf("Instrumenting functions.\n");
 
 	// for each function ...
 	for (unsigned i = 0; i < functions->size(); i++) {

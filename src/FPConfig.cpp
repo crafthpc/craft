@@ -273,6 +273,8 @@ FPReplaceEntryTag FPConfig::getReplaceTag(void *address)
     if (ientry != NULL) {
         tag = ientry->getEffectiveTag();
     }
+    //printf("FPConfig::getReplaceTag(%p) = %s  (ientry=%p)\n",
+            //address, (tag == RETAG_NONE ? "none" : "other"), ientry);
     return tag;
 }
 

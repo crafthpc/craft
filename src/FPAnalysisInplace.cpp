@@ -196,6 +196,8 @@ bool FPAnalysisInplace::shouldReplace(FPSemantics *inst)
             || inst->hasOperandOfType(C99_LongDouble)) {
         decision = false;
     }
+    //printf("FPAnalysisInplace::shouldReplace(%s) = %s\n",
+            //inst->getDisassembly().c_str(), (decision ? "yes" : "no"));
     return decision;
 }
 
@@ -1024,6 +1026,7 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
     //printf("    building binary blob for %p: %s\n",
             //inst->getAddress(), inst->getDisassembly().c_str());
 
+//#if 0
     bool packed = false;            // instruction is packed SSE
     bool replaced = false;          // instruction has been fully replaced
 
@@ -1257,6 +1260,10 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
         pos += buildFooter(pos);
     }
 
+//#endif
+
+    //pos += mainGen->buildNop(pos);
+
     // TODO: clean up input data structure
 
     // copy into PatchAPI buffer
@@ -1345,6 +1352,7 @@ Snippet::Ptr FPAnalysisInplace::buildReplacementCode(FPSemantics *inst,
 
     } else {
         printf("        default replacement: %s\n", inst->getDisassembly().c_str());
+        //printf("%s\n", inst->toString().c_str());
         //printf("default replacement: %s\n", inst->getDisassembly().c_str());
         needsRegisters = true;
         return Snippet::Ptr();

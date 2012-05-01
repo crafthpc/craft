@@ -22,9 +22,10 @@ FPSVType FPSVConfigPolicy::RETag2SVType(FPReplaceEntryTag tag)
 bool FPSVConfigPolicy::shouldInstrument(FPSemantics *inst)
 {
     FPReplaceEntryTag tag = config->getReplaceTag(inst->getAddress());
-    //cout << " shouldInstrument(" << inst->getDisassembly() << ") = " 
-        //<< (tag == RETAG_SINGLE ? "single" : "not single") << endl;
-    return (tag == RETAG_SINGLE || tag == RETAG_DOUBLE);
+    bool instrument = (tag == RETAG_SINGLE || tag == RETAG_DOUBLE);
+    //printf("FPSVConfigPolicy::shouldInstrument(%s) = %s\n",
+            //inst->getDisassembly().c_str(), (instrument ? "yes" : "no"));
+    return instrument;
 }
 
 FPSVType FPSVConfigPolicy::getSVType()

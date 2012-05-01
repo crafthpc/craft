@@ -37,6 +37,9 @@ bool FPSVPolicy::shouldInstrument(FPSemantics *inst)
        //instrument = true;
     //}
 
+    //printf("FPSVPolicy::shouldInstrument(%s) = %s\n",
+            //inst->getDisassembly().c_str(), (instrument ? "yes" : "no"));
+
     return instrument;
 }
 
