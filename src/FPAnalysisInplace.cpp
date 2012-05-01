@@ -1788,8 +1788,11 @@ double FPAnalysisInplace::handleUnaryReplacedFunc(FPOperationType type, double i
             if (singlePrec) { return isnanf(fval); }     else { return isnan(input); } break;
         case OP_ISINF:
             if (singlePrec) { return isinff(fval); }     else { return isinf(input); } break;
+        case OP_NEG:
+            if (singlePrec) { return -fval; }            else { return -input; } break;
 
         default:        // all other operations
+            printf("Unhandled operation: %s\n", FPOperation::FPOpType2Str(type).c_str());
             assert(!"Unhandled operation");
     }
 
@@ -1886,8 +1889,10 @@ double FPAnalysisInplace::handleBinaryReplacedFunc(FPOperationType type, double 
         HANDLE_BINARY_CASE_DBL(OP_ATAN2, atan2f, atan2);
         HANDLE_BINARY_CASE_DBL(OP_FMOD,  fmodf,  fmod);
         HANDLE_BINARY_CASE_DBL(OP_POW,   powf,   pow);
+        HANDLE_BINARY_CASE_DBL(OP_COPYSIGN, copysignf, copysign);
 
         default:        // all other operations
+            printf("Unhandled operation: %s\n", FPOperation::FPOpType2Str(type).c_str());
             assert(!"Unhandled operation");
     }
 
