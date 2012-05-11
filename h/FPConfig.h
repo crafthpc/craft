@@ -36,6 +36,7 @@ class FPConfig
         FPReplaceEntryTag getReplaceTag(void *address);
 
         void getAllShadowEntries(vector<FPShadowEntry*> &entries);
+        void getAllReplaceEntries(vector<FPReplaceEntry*> &entries);
         int getAddressList(void* addresses[], string key);
         string getSummary(bool includeReplace=false);
 

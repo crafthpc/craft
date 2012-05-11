@@ -260,10 +260,14 @@ void FPConfig::getAllSettings(vector<string> &vals)
     for (j=shadowEntries.begin(); j!=shadowEntries.end(); j++) {
         vals.push_back(getShadowEntryLine(*j));
     }
-    vector<FPReplaceEntry*>::iterator jj;
-    for (jj=replaceEntries.begin(); jj!=replaceEntries.end(); jj++) {
-        vals.push_back(getReplaceEntryLine(*jj));
-    }
+    /* could be thousands of these, so let's ignore them in the common case;
+     * call getAllReplaceEntries if you really want them
+     *
+     *vector<FPReplaceEntry*>::iterator jj;
+     *for (jj=replaceEntries.begin(); jj!=replaceEntries.end(); jj++) {
+     *    vals.push_back(getReplaceEntryLine(*jj));
+     *}
+     */
 }
 
 FPReplaceEntryTag FPConfig::getReplaceTag(void *address)
@@ -282,6 +286,13 @@ void FPConfig::getAllShadowEntries(vector<FPShadowEntry*> &entries)
 {
     vector<FPShadowEntry*>::iterator i;
     for (i=shadowEntries.begin(); i!=shadowEntries.end(); i++)
+        entries.push_back(*i);
+}
+
+void FPConfig::getAllReplaceEntries(vector<FPReplaceEntry*> &entries)
+{
+    vector<FPReplaceEntry*>::iterator i;
+    for (i=replaceEntries.begin(); i!=replaceEntries.end(); i++)
         entries.push_back(*i);
 }
 

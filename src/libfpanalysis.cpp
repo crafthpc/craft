@@ -145,6 +145,17 @@ void _INST_set_config (char* setting)
     _INST_status = _INST_INACTIVE;
 }
 
+void _INST_set_config_replace_entry (size_t idx, void* address, int type, int tag)
+{
+    _INST_status = _INST_ACTIVE;
+    FPReplaceEntry *entry = new FPReplaceEntry((FPReplaceEntryType)type, idx);
+    entry->address = address;
+    entry->tag = (FPReplaceEntryTag)tag;
+    //printf("adding replace entry: %s\n", entry->toString().c_str());
+    FPConfig::getMainConfig()->addReplaceEntry(entry);
+    _INST_status = _INST_INACTIVE;
+}
+
 void _INST_begin_profiling ()
 {
     struct sigaction sa;

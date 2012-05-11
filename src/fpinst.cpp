@@ -172,6 +172,7 @@ BPatch_variableExpr *r15PtrExpr = NULL;
 BPatch_Vector<BPatch_function*> initFuncs;
 BPatch_Vector<BPatch_function*> enableFuncs;
 BPatch_Vector<BPatch_function*> setFuncs;
+BPatch_Vector<BPatch_function*> setReplaceFuncs;
 BPatch_Vector<BPatch_function*> regFuncs;
 BPatch_Vector<BPatch_function*> disableFuncs;
 BPatch_Vector<BPatch_function*> cleanupFuncs;
@@ -346,6 +347,7 @@ void prepareForInstrumentation()
     mainImg->findFunction("_INST_init_analysis", initFuncs);
     mainImg->findFunction("_INST_enable_analysis", enableFuncs);
     mainImg->findFunction("_INST_set_config", setFuncs);
+    mainImg->findFunction("_INST_set_config_replace_entry", setReplaceFuncs);
     mainImg->findFunction("_INST_register_inst", regFuncs);
     mainImg->findFunction("_INST_disable_analysis", disableFuncs);
     mainImg->findFunction("_INST_cleanup_analysis", cleanupFuncs);
@@ -406,12 +408,11 @@ BPatch_constExpr* saveStringToBinary(const char *str, size_t nbytes)
      *}
      *printf("\"");
      */
-    if (nbytes < 2048) {
-        BPatch_variableExpr *strExpr = mainApp->malloc(nbytes);
-        strExpr->writeValue(str, nbytes, false);
-        //printf(" @ %p", strExpr->getBaseAddr());
-        ptr = new BPatch_constExpr(strExpr->getBaseAddr());
-    }
+    assert(nbytes < 2048);
+    BPatch_variableExpr *strExpr = mainApp->malloc(nbytes);
+    strExpr->writeValue(str, nbytes, false);
+    //printf(" @ %p", strExpr->getBaseAddr());
+    ptr = new BPatch_constExpr(strExpr->getBaseAddr());
     //printf("\n");
     return ptr;
 }
@@ -1898,11 +1899,34 @@ void instrumentApplication(BPatch_addressSpace *app)
     configuration->getAllSettings(config);
     vector<string>::reverse_iterator cfgi;
     for (cfgi = config.rbegin(); cfgi != config.rend(); cfgi++) {
-        BPatch_Vector<BPatch_snippet*> *initNumInstsArgs = new BPatch_Vector<BPatch_snippet*>();
+        BPatch_Vector<BPatch_snippet*> *initConfigArgs = new BPatch_Vector<BPatch_snippet*>();
         BPatch_constExpr *initNumInstsStr = saveStringToBinary((*cfgi).c_str(), 0);
-        initNumInstsArgs->push_back(initNumInstsStr);
-        BPatch_funcCallExpr *initNumInsts = new BPatch_funcCallExpr(*setFuncs[0], *initNumInstsArgs);
-        initSnippets.insert(initSnippets.begin(), initNumInsts);
+        initConfigArgs->push_back(initNumInstsStr);
+        BPatch_funcCallExpr *initConfigEntry = new BPatch_funcCallExpr(*setFuncs[0], *initConfigArgs);
+        initSnippets.insert(initSnippets.begin(), initConfigEntry);
+    }
+    
+    // special handling for replacement configuration entries since we don't
+    // want to have to allocate an entire string for them; again,
+    // add them in reverse order so that they'll be in the correct order in
+    // the binary
+    vector<FPReplaceEntry*> rentries;
+    configuration->getAllReplaceEntries(rentries);
+    vector<FPReplaceEntry*>::reverse_iterator renti;
+    for (renti = rentries.rbegin(); renti != rentries.rend(); renti++) {
+        BPatch_Vector<BPatch_snippet*> *initReplaceArgs = new BPatch_Vector<BPatch_snippet*>();
+        FPReplaceEntry *entry = *renti;
+        //printf("adding replace entry: %s\n", entry->toString().c_str());
+        BPatch_constExpr idxExpr (entry->idx);
+        BPatch_constExpr addrExpr(entry->address);
+        BPatch_constExpr typeExpr(entry->type);
+        BPatch_constExpr tagExpr (entry->tag);
+        initReplaceArgs->push_back(&idxExpr);
+        initReplaceArgs->push_back(&addrExpr);
+        initReplaceArgs->push_back(&typeExpr);
+        initReplaceArgs->push_back(&tagExpr);
+        BPatch_funcCallExpr *initReplaceEntry = new BPatch_funcCallExpr(*setReplaceFuncs[0], *initReplaceArgs);
+        initSnippets.insert(initSnippets.begin(), initReplaceEntry);
     }
 
     // generate application report
