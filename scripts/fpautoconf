@@ -24,15 +24,11 @@ def main
     srand
 
     # global variables
+    $craft_driver = "craft_driver"    # standard driver program name
     $stat_preferred = "s"       # preferred replacement status
     $stat_alternate = "d"       # replacement status if cannot be preferred
     $fortran_mode = false       # pass "-N" to fpinst
-    $timeout = 0                # timeout interval (zero for no limit)
     $initial_cfg_fn = ""        # initial config filename (may be blank)
-    $data_files = Array.new     # required data files
-    $cmdline_options = ""       # mutatee command line options
-    $mpi_enabled = false        # use mpirun?
-    $mpi_procs = 0              # number of MPI processes
     $max_queue_length = 0       # track largest queue size (approximate)
     $is_worker = false          # is this the parent process or a worker?
     $workers = Hash.new         # worker proc info (pid => dirname)
@@ -47,15 +43,28 @@ def main
         puts "        #{$self_invoke} -r                       (resume parent process)"
         puts "          or"
         puts "        #{$self_invoke} -w <dir>                 (worker process)"
+        puts "          or"
+        puts "        #{$self_invoke} clean                    (reset search)"
         puts "Valid options:"
         puts "   -c <file>      use <file> as initial base configuration"
-        puts "   -C \"opts\"    pass command-line options to mutatee"
-        puts "   -d             debug mode (ignore->double)"
-        puts "   -D <file>      copy in a data file"
+        puts "   -d             debug mode (ignore->double instead of double->single)"
         puts "   -j <np>        spawn <np> worker threads"
-        puts "   -np <np>       use MPI with <np> processes"
-        puts "   -N             enable Fortran mode"
-        puts "   -t <s>         timeout mutatees after <s> secs"
+        puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
+        exit
+    end
+
+    # cleaning mode
+    if ARGV.size == 1 and ARGV[0] == "clean" then
+        puts "Cleaning..."
+        toDelete = Array.new
+        Dir.glob("fpautoconf.*") do |fn| toDelete << fn end
+        Dir.glob("*_worker*") do |fn| toDelete << fn end
+        Dir.glob("*.cfg") do |fn| toDelete << fn end
+        Dir.glob("*.log") do |fn| toDelete << fn end
+        toDelete.each do |fn|
+            FileUtils.rm_rf(fn)
+        end
+        puts "Done."
         exit
     end
 
@@ -68,10 +77,6 @@ def main
             # worker process
             $is_worker = true
             $autoconf_path = ARGV.shift
-        elsif opt == "-np" then
-            # enable MPI
-            $mpi_enabled = true
-            $mpi_procs = ARGV.shift.to_i
         elsif opt == "-j" then
             # parallel: "-j 4" variant
             num_workers = ARGV.shift.to_i
@@ -82,21 +87,12 @@ def main
             # debug mode
             $stat_preferred = "d"
             $stat_alternate = "i"
-        elsif opt == "-D" then
-            # data file
-            $data_files << ARGV.shift
         elsif opt == "-c" then
             # initial configuration
             $initial_cfg_fn = ARGV.shift
-        elsif opt == "-C" then
-            # command-line option
-            $cmdline_options = ARGV.shift
         elsif opt == '-N' then
             # fortran mode
             $fortran_mode = true
-        elsif opt == '-t' then
-            # timeout
-            $timeout = ARGV.shift.to_i
         end
     end while ARGV.size > 0
 
@@ -114,6 +110,13 @@ def main
     $orig_config_name = "#{$autoconf_path}fpautoconf_orig.cfg"
     $final_config_name = "#{$autoconf_path}fpautoconf_final.cfg"
     $final_path = "#{$autoconf_path}final/"
+
+    # check for driver script
+    if !File.exist?("#{$autoconf_path}#{$craft_driver}") then
+        puts "No driver program \"craft_driver\" found."
+        puts "Aborting."
+        exit
+    end
 
     if $is_worker then
 
@@ -220,34 +223,34 @@ def initialize_autoconf
     File.new($finalregexps_fn, "w").close
     File.new($mainlog_fn, "w").close
 
-    # copy in data files
-    tmp = Array.new
-    $data_files.each do |fname|
-        if not File.exists?($autoconf_path + File.basename(fname)) then
-            FileUtils.cp(fname, $autoconf_path)
-        end
-        tmp << File.basename(fname)
-    end
-    $data_files = Array.new
-    tmp.each do |fname|
-        $data_files << tmp
-    end
-
     # initial performance run
     print "Performing baseline performance test ... "
     $stdout.flush
-    start = Time.now
-    if $mpi_enabled then
-        cmd = "mpirun -np #{$mpi_procs} #{$binary_path} #{$cmdline_options}"
-    else
-        cmd = "#{$binary_path} #{$cmdline_options}"
-    end
+    passed = false
+    $baseline_error = 0.0
+    $baseline_runtime = 0
+    cmd = "#{$autoconf_path}#{$craft_driver} #{$binary_path}"
     Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
         io_out.each_line do |line|
+            if line =~ /status:\s*(pass|fail)/i then
+                if $1 =~ /pass/i then
+                    passed = true
+                end
+            end
+            if line =~ /error:\s*(.+)/i then
+                $baseline_error = $1.to_f
+            end
+            if line =~ /time:\s*(.+)/i then
+                $baseline_runtime = $1.to_i
+            end
         end
     end
-    $baseline_runtime = Time.now.to_f - start.to_f
-    puts " [Base walltime: #{format_time($baseline_runtime)}]"
+    if !passed then
+        puts "Baseline performance test failed verification!"
+        puts "Aborting search."
+        exit
+    end
+    puts " [Base error: #{$baseline_error}  walltime: #{format_time($baseline_runtime.to_f)}]"
 
     # generate initial configuration by calling fpconf
     # and initialize global data structures
@@ -480,6 +483,7 @@ def finalize_autoconf
         end
     end
     final_config.close
+    FileUtils.cp($final_config_name, $final_path)
     puts "done."
 
     # find best individual configs
@@ -504,10 +508,6 @@ def finalize_autoconf
             exec_item = [cur_cfg, exec_item[1]+$1.to_f]
         end
         if line =~ /Success!/ then
-            if $mpi_enabled then
-                inst_item[1] /= $mpi_procs.to_f
-                exec_item[1] /= $mpi_procs.to_f
-            end
             inst_hash << inst_item
             exec_hash << exec_item
         end
@@ -589,22 +589,6 @@ def run_config_file (fn, keep)
     puts "Testing #{basename} ..."
     $status_buffer = "    Finished #{basename}:\n"
 
-    # TODO: FOR TESTING; remove this!
-    #success = true
-    #if rand(6) == 0 then
-        #success = true
-    #else
-        #success = false
-    #end
-    #if success then
-        #$status_buffer += "success!"
-    #else
-        #$status_buffer += "FAILED!"
-    #end
-    #puts $status_buffer
-    #$status_buffer = ""
-    #return success
-
     # build rewritten mutatee
     cmd = "fpinst -i #{$fortran_mode ? "-N" : ""}"
     cmd += " -c #{fn}"
@@ -618,57 +602,46 @@ def run_config_file (fn, keep)
         end
     end
 
-    # copy in any data files
-    $data_files.each do |fname|
-        FileUtils.cp("#{$autoconf_path}#{fname}", Dir.getwd)
-    end
-
     # execute rewritten mutatee and check for success
-    success = false
-    error = false
-    timeout = false
-    start = Time.now
-    if $mpi_enabled then
-        cmd = "mpirun -np #{$mpi_procs} mutant #{$cmdline_options}"
-    else
-        cmd = "./mutant #{$cmdline_options}"
-    end
-    if $timeout > 0 then
-        cmd = "timeout #{$timeout.to_s} #{cmd}"
-    end
+    passed = false
+    runtime = 0
+    error = 0.0
+    cmd = "#{$autoconf_path}#{$craft_driver} #{Dir.getwd}/mutant"
     #add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
     Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
         io_out.each_line do |line|
-            if line =~ /Inplace: (.*)$/ then
-                $status_buffer += "        #{$1}\n"
-            end
-            if !success && line =~ /[^n]success/i then
-                success = true
-            end
-            if !success && line =~ / pass$/i then
-                success = true
-            end
-            if !error && line =~ /error/i then
-                error = true
-            end
-            if !error && line =~ /fail/i then
-                error = true
-            end
-            if !timeout && line =~ /timeout/i then
-                timeout = true
+            if line =~ /status:\s*(pass|fail)/i then
+                if $1 =~ /pass/i then
+                    passed = true
+                end
+            elsif line =~ /error:\s*(.+)/i then
+                error = $1.to_f
+            elsif line =~ /time:\s*(.+)/i then
+                runtime = $1.to_i
             end
         end
     end
-    elapsed = Time.now.to_f - start.to_f
-    if success && !error && !timeout then
+
+    # scan log file(s) for info
+    Dir.glob("*.log").each do |fn|
+        if fn != "fpinst.log" then
+            IO.foreach(fn) do |line|
+                if line =~ /Inplace: (.*)$/ then
+                    $status_buffer += "        #{$1.gsub(/<.*>/, "")}\n"
+                end
+            end
+        end
+    end
+
+    # print output
+    if passed then
         $status_buffer += "        Success!"
-    elsif timeout then
-        $status_buffer += "        TIMEOUT!"
     else
         $status_buffer += "        FAILED!"
     end
-    $status_buffer += "  [Walltime: #{format_time(elapsed)}"
-    $status_buffer += " %.1fX]"%[elapsed / $baseline_runtime]
+    $status_buffer += "  [Walltime: #{format_time(runtime.to_f)}"
+    $status_buffer += " %.1fX"%[runtime / $baseline_runtime.to_f]
+    $status_buffer += " Error: %g]"%[error]
     puts $status_buffer
     add_to_mainlog($status_buffer)
     $status_buffer = ""
@@ -686,7 +659,7 @@ def run_config_file (fn, keep)
         end
     end
 
-    return success && !error && !timeout
+    return passed
 end
 
 # }}}
@@ -702,15 +675,8 @@ def save_all_configs
     f.puts $stat_preferred
     f.puts $stat_alternate
     f.puts $baseline_runtime
-    f.puts $mpi_procs
-    f.puts $cmdline_options
     f.puts($fortran_mode ? "fortran" : "other")
-    f.puts $timeout
     f.puts $initial_cfg_fn
-    f.puts($data_files.size)
-    $data_files.each do |fname|
-        f.puts(fname)
-    end
     f.close
     f = File.new($allconfigs_fn, File::RDWR)
     f.flock File::LOCK_EX
@@ -726,27 +692,14 @@ def load_all_configs
     $binary_path = f.gets.chomp
     $stat_preferred = f.gets.chomp
     $stat_alternate = f.gets.chomp
-    $baseline_runtime = f.gets.chomp.to_f
-    $mpi_procs = f.gets.chomp.to_i
-    $cmdline_options = f.gets.chomp
-    if $mpi_procs > 0 then
-        $mpi_enabled = true
-    else
-        $mpi_enabled = false
-    end
+    $baseline_runtime = f.gets.chomp.to_i
     lang = f.gets.chomp
     if lang == "fortran" then
         $fortran_mode = true
     else
         $fortran_mode = false
     end
-    $timeout = f.gets.chomp.to_i
     $initial_cfg_fn = f.gets.chomp
-    $data_files = Array.new
-    num = f.gets.chomp.to_i
-    num.times do |i|
-        $data_files << f.gets.chomp
-    end
     f.close
     # could probably be read-only
     f = File.new($allconfigs_fn, File::RDWR)
@@ -892,7 +845,8 @@ end
 def format_time (elapsed)
     mins, secs = elapsed.divmod 60.0
     hrs, mins = mins.divmod 60.0
-    return "%d:%02d:%05.2f"%[hrs.to_i, mins.to_i, secs]
+    #return "%d:%02d:%05.2f"%[hrs.to_i, mins.to_i, secs]
+    return "%d:%02d:%02d"%[hrs.to_i, mins.to_i, secs.to_i]
 end
 # }}}
 

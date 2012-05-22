@@ -2412,7 +2412,7 @@ void FPAnalysisInplace::finalOutput()
                (double)exec_double/(double)exec_total*100.0) << "%]"
        << " double)";
     logFile->addMessage(SUMMARY, 0, getDescription(), ss.str(), "");
-    cout << ss.str() << endl;
+    cerr << ss.str() << endl;
 
     // shadow table output initialization
     outputString.clear();
