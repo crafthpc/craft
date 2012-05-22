@@ -56,7 +56,7 @@ CONF_MODULES = fpconf
 PROF_MODULES = fpinst
 
 # make rules
-TARGETS = $(PLATFORM)/libfpanalysis.so $(PLATFORM)/libfpshift.so $(PLATFORM)/fpconf $(PLATFORM)/fpinst
+TARGETS = $(PLATFORM)/libfpanalysis.so $(PLATFORM)/fpconf $(PLATFORM)/fpinst
 CONF_MODULE_FILES = $(foreach module, $(CONF_MODULES), $(PLATFORM)/$(module).o)
 PROF_MODULE_FILES = $(foreach module, $(PROF_MODULES), $(PLATFORM)/$(module).o)
 LIB_MODULE_FILES = $(foreach module, $(LIB_MODULES), $(PLATFORM)/$(module).o)
