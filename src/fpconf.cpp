@@ -32,6 +32,8 @@ FPAnalysisInplace *mainAnalysisInplace = NULL;
 // configuration file options
 char *binary = NULL;
 long binaryArg = 0;
+bool addAll = false;
+bool outputOriginal = false;
 
 // function/instruction indices and counts
 size_t midx = 0, fidx = 0, bbidx = 0, iidx = 0;
@@ -120,8 +122,18 @@ void configInstruction(void *addr, unsigned char *bytes, size_t nbytes)
        << mainLog->getSourceLineInfo(inst->getAddress()) << "]";
     entry->name = ss.str();
     entry->address = addr;
-    if (mainAnalysisInplace->shouldReplace(inst)) {
-        entry->tag = RETAG_CANDIDATE;
+    if (addAll || mainAnalysisInplace->shouldReplace(inst)) {
+        if (outputOriginal) {
+            if (inst->hasOperandOfType(IEEE_Double)) {
+                entry->tag = RETAG_DOUBLE;
+            } else if (inst->hasOperandOfType(IEEE_Single)) {
+                entry->tag = RETAG_SINGLE;
+            } else {
+                entry->tag = RETAG_IGNORE;
+            }
+        } else {
+            entry->tag = RETAG_CANDIDATE;
+        }
         mainConfig->addReplaceEntry(entry);
     } else {
         entry->tag = RETAG_NONE;
@@ -296,6 +308,8 @@ void usage()
     printf("\n");
     printf(" Options:\n");
     printf("\n");
+    printf("  -a                   configure all instructions (including single-precision)\n");
+    printf("  -r                   report original precision (intended to be used with '-a')\n");
     printf("  -s                   configure functions in shared libraries\n");
     printf("\n");
 }
@@ -310,6 +324,10 @@ bool parseCommandLine(unsigned argc, char *argv[])
 		if (strcmp(argv[i], "-h")==0) {
 			usage();
 			exit(EXIT_SUCCESS);
+        } else if (strcmp(argv[i], "-a")==0) {
+            addAll = true;
+        } else if (strcmp(argv[i], "-r")==0) {
+            outputOriginal = true;
 		} else if (strcmp(argv[i], "-s")==0) {
 			instShared = true;
         } else if (argv[i][0] == '-') {
