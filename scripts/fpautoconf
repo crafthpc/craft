@@ -50,6 +50,10 @@ require 'fileutils.rb'
     #end
 #end
  
+$STATUS_PASSED = "Success!"
+$STATUS_FAILED = "FAILED!"
+$STATUS_ERROR  = "ERROR!!!"
+
 # {{{ main method
 def main
     srand
@@ -58,9 +62,12 @@ def main
     $craft_driver = "craft_driver"    # standard driver program name
     $stat_preferred = "s"       # preferred replacement status
     $stat_alternate = "d"       # replacement status if cannot be preferred
+    $stat_ignored = "i"         # "cannot instrument" replacement status
+    $stat_blank = " "           # "no result" replacement status
     $fortran_mode = false       # pass "-N" to fpinst
     $initial_cfg_fn = ""        # initial config filename (may be blank)
     $max_queue_length = 0       # track largest queue size (approximate)
+    $is_status = false          # is this just a status thread?
     $is_worker = false          # is this the parent process or a worker?
     $workers = Hash.new         # worker proc info (pid => dirname)
     $status_buffer = ""         # buffer for output (keeps multiprocess output clean)
@@ -92,11 +99,22 @@ def main
         Dir.glob("*_worker*") do |fn| toDelete << fn end
         Dir.glob("*.cfg") do |fn| toDelete << fn end
         Dir.glob("*.log") do |fn| toDelete << fn end
+        Dir.glob("final") do |fn| toDelete << fn end
+        Dir.glob("best") do |fn| toDelete << fn end
+        Dir.glob("passed") do |fn| toDelete << fn end
+        Dir.glob("failed") do |fn| toDelete << fn end
+        Dir.glob("aborted") do |fn| toDelete << fn end
         toDelete.each do |fn|
             FileUtils.rm_rf(fn)
         end
         puts "Done."
         exit
+    end
+
+    # status mode
+    if ARGV.size == 1 and ARGV[0] == "status" then
+        $is_status = true;
+        ARGV.shift
     end
 
     # parse command-line options
@@ -137,11 +155,17 @@ def main
     $workqueue_fn = "#{$autoconf_path}fpautoconf.workqueue"
     $inproc_fn = "#{$autoconf_path}fpautoconf.inproc"
     $tested_fn = "#{$autoconf_path}fpautoconf.tested"
-    $finalregexps_fn = "#{$autoconf_path}fpautoconf.finalregexps"
+    $regexps_fn = "#{$autoconf_path}fpautoconf.regexps"
     $mainlog_fn = "#{$autoconf_path}fpautoconf.mainlog"
+    $walltime_fn = "#{$autoconf_path}fpautoconf.walltime"
     $orig_config_name = "#{$autoconf_path}fpautoconf_orig.cfg"
     $final_config_name = "#{$autoconf_path}fpautoconf_final.cfg"
+    $debug_config_name = "#{$autoconf_path}fpautoconf_debug.cfg"
     $final_path = "#{$autoconf_path}final/"
+    $best_path = "#{$autoconf_path}best/"
+    $passed_path = "#{$autoconf_path}passed/"
+    $failed_path = "#{$autoconf_path}failed/"
+    $aborted_path = "#{$autoconf_path}aborted/"
 
     # check for driver script
     if !File.exist?("#{$autoconf_path}#{$craft_driver}") then
@@ -150,7 +174,52 @@ def main
         exit
     end
 
-    if $is_worker then
+    if $is_status then
+
+        overall_status = "not running"
+        full = false
+        if File.exist?($settings_fn) then
+            begin
+                load_all_configs false
+                num_workers = Dir.glob("*_worker*").size
+                elapsed = Time.now.to_f - $start_time.to_f
+                overall_status = "initializing"
+                overall_status = "running" if get_workqueue_length > 0
+                overall_status = "finalizing" if File.exist?($final_path)
+                if File.exist?($walltime_fn) then
+                    overall_status = "DONE"
+                    elapsed = IO.readlines($walltime_fn)[0].to_f
+                end
+                full = true
+            rescue
+                overall_status = "initializing"
+            end
+        end
+
+        puts "==============================================="
+        puts "                   CRAFT"
+        if full then
+            puts "    Application: #{"%25s" % $binary_name}"
+            puts "    Fortran mode:  #{"%23s" % ($fortran_mode ? "Y" : "N")}"
+            puts "    Worker threads:            #{"%11d" % num_workers}"
+            puts "    Total configs tested:      #{"%11d" % get_tested_length}"
+            puts "      Total passed:            #{"%11d" % get_regexps_length("passed")}"
+            puts "      Total failed:            #{"%11d" % get_regexps_length("failed")}"
+            puts "      Total aborted:           #{"%11d" % get_regexps_length("aborted")}"
+            puts "    Current in-proc length:    #{"%11d" % get_inproc_length}"
+            puts "    Current workqueue length:  #{"%11d" % get_workqueue_length}"
+            puts "    Total elapsed walltime: #{"%14s" % format_time(elapsed)}"
+        end
+        puts "    Overall status:         #{"%14s" % overall_status}"
+        puts "==============================================="
+        if full then
+            puts build_best_report.join("\n")
+            puts "==============================================="
+        end
+
+        exit
+
+    elsif $is_worker then
 
         # worker process
         #LinuxScheduler.set_affinity($worker_id+1)
@@ -162,7 +231,7 @@ def main
 
         $binary_name = File.basename(opt)
         $binary_path = File.expand_path(opt)
-        puts "FPAutoConf"
+        puts "CRAFT"
         puts "Autoconfiguring #{$binary_name} ..."
         puts "Working dir: #{$autoconf_path}"
 
@@ -205,6 +274,7 @@ class SingleReplacementConfig
     attr_accessor :key              # unique config identifier
     attr_accessor :filename         # .cfg filename
     attr_accessor :type             # mod, func, bblk, insn
+    attr_accessor :tag              # user-friendly short description
     attr_accessor :regexp           # config pattern for creating final config
     attr_accessor :ccount           # number of candidate fp instructions
     attr_accessor :rcount           # number of restricted (ignore/single/double) structures
@@ -212,6 +282,7 @@ class SingleReplacementConfig
     attr_accessor :initial          # value of initial replacement ('c','s','d','i',' ')
     def initialize(id, type, initial)
         @key = "#{type}_#{id}"
+        @tag = "#{key}"
         @filename = "#{$binary_name}_#{key}.cfg"
         @type = type
         @children = Array.new
@@ -219,7 +290,7 @@ class SingleReplacementConfig
         if @type == "mod" then
             @regexp = Regexp.new("MODULE.*\"#{id}\"")
         elsif @type == "func" then
-            @regexp = Regexp.new("FUNC.*\"#{id}\"")
+            @regexp = Regexp.new("FUNC #\\d+: 0x#{id}")
         elsif @type == "bblk" then
             @regexp = Regexp.new("BBLK #\\d+: 0x#{id}")
         elsif @type == "insn" then
@@ -253,7 +324,9 @@ def initialize_autoconf
     File.new($workqueue_fn, "w").close
     File.new($inproc_fn, "w").close
     File.new($tested_fn, "w").close
-    File.new($finalregexps_fn, "w").close
+    File.new("#{$regexps_fn}-passed", "w").close
+    File.new("#{$regexps_fn}-failed", "w").close
+    File.new("#{$regexps_fn}-aborted", "w").close
     File.new($mainlog_fn, "w").close
 
     # initial performance run
@@ -263,19 +336,19 @@ def initialize_autoconf
     $baseline_error = 0.0
     $baseline_runtime = 0
     cmd = "#{$autoconf_path}#{$craft_driver} #{$binary_path}"
-    Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
-        io_out.each_line do |line|
-            if line =~ /status:\s*(pass|fail)/i then
-                if $1 =~ /pass/i then
-                    passed = true
-                end
+    io_in, io_out, io_err = Open3.popen3(cmd)
+    io_err.each_line do |line| end
+    io_out.each_line do |line|
+        if line =~ /status:\s*(pass|fail)/i then
+            if $1 =~ /pass/i then
+                passed = true
             end
-            if line =~ /error:\s*(.+)/i then
-                $baseline_error = $1.to_f
-            end
-            if line =~ /time:\s*(.+)/i then
-                $baseline_runtime = $1.to_i
-            end
+        end
+        if line =~ /error:\s*(.+)/i then
+            $baseline_error = $1.to_f
+        end
+        if line =~ /time:\s*(.+)/i then
+            $baseline_runtime = $1.to_i
         end
     end
     if !passed then
@@ -290,8 +363,9 @@ def initialize_autoconf
     print "Generating initial configuration ... "
     $stdout.flush
     orig_cfg = File.open($orig_config_name, "w")
-    puts "initial: #{$initial_cfg_fn}"
     if $initial_cfg_fn.length > 0 && File.exists?($initial_cfg_fn) then
+        print "(using base: #{$initial_cfg_fn}) "
+        $stdout.flush
         IO.foreach($initial_cfg_fn) do |io|
             io.each_line do |line|
                 orig_cfg.puts line
@@ -314,8 +388,9 @@ def initialize_autoconf
                 mod = SingleReplacementConfig.new($1, "mod", line[1,1])
                 $all_cfgs[mod.key] = mod
             end
-            if line =~ /FUNC.*\"(.+)\"/ then
+            if line =~ /FUNC #\d+: 0x([0-9A-Fa-f]+) \"(.+)\"/ then
                 func = SingleReplacementConfig.new($1, "func", line[1,1])
+                func.tag = "func_#{$2}"
                 $all_cfgs[func.key] = func
                 mod.children << func.key if mod != nil
                 mod.rcount  += func.rcount if mod != nil
@@ -352,6 +427,7 @@ def initialize_autoconf
     end
 
     # save project config to file (for workers to load)
+    puts "Total # of configurations: #{$all_cfgs.size}"
     save_all_configs
 
     # initialize work queue
@@ -359,15 +435,25 @@ def initialize_autoconf
     count = 0
     $all_cfgs.each_pair do |key, cfg|
         # FOR TESTING: limit to five
-        #if cfg.type == "mod" && cfg.ccount > 0 && count < 5
+        #if cfg.type == "mod" && cfg.ccount > 0 && count < 5 then
         if cfg.type == "mod" && cfg.ccount > 0 &&
                 (cfg.initial == " " || cfg.initial == "c") then
-            puts "Adding config #{cfg.key} to workqueue"
+            puts "Adding config #{cfg.tag} to workqueue"
             add_to_workqueue(cfg.key)
             count += 1
         end
     end
     $max_queue_length = get_workqueue_length
+
+    # create folders for saving configurations
+    FileUtils.rm_rf($best_path)
+    Dir.mkdir($best_path)
+    FileUtils.rm_rf($passed_path)
+    Dir.mkdir($passed_path)
+    FileUtils.rm_rf($failed_path)
+    Dir.mkdir($failed_path)
+    FileUtils.rm_rf($aborted_path)
+    Dir.mkdir($aborted_path)
 
 end
 # }}}
@@ -389,12 +475,11 @@ def run_main_autoconf_loop
         $status_buffer += "[Queue length: #{"%3d" % (queue_length+1)}]  "
         $max_queue_length = queue_length if queue_length > $max_queue_length
 
-        puts "Testing config #{cfg.key}: ccount=#{cfg.ccount} rcount=#{cfg.rcount}"
+        puts "Testing config #{cfg.tag}: ccount=#{cfg.ccount} rcount=#{cfg.rcount}"
 
-        if cfg.rcount == 0 && run_config(cfg) then
+        if cfg.rcount == 0 && run_config(cfg) == $STATUS_PASSED then
 
-            # this config passed; add it to the final
-            add_final_regexp(cfg.regexp)
+            # this config passed
 
         else
 
@@ -406,7 +491,7 @@ def run_main_autoconf_loop
                     child = $all_cfgs[ckey]
                     if child != nil && child.ccount > 0 &&
                             (child.initial == " " || child.initial == "c") then
-                        puts "Adding config #{ckey} to workqueue"
+                        puts "Adding config #{child.tag} to workqueue"
                         add_to_workqueue(ckey)
                     end
                 end
@@ -445,7 +530,7 @@ def run_main_supervisor_loop
                         FileUtils.rm_rf(dir)
                         Dir.mkdir(dir)
                         job = fork do
-                            exec "cd #{dir} && #{$self_invoke} -w #{$autoconf_path}"
+                            exec "cd #{dir} && #{$self_invoke} -w #{id} #{$autoconf_path}"
                         end
                         $workers[job] = dir
                     end
@@ -495,9 +580,115 @@ def finalize_autoconf
     puts "Candidate queue exhausted.  [Max queue length: ~#{$max_queue_length} item(s)]"
 
     # generate final config file
-    final_config_regexps = load_final_regexps
     print "Generating final configuration ... "
     $stdout.flush
+    build_final_config
+    build_debug_config
+    FileUtils.cp($final_config_name, $final_path)
+    puts "done."
+
+    # try the final config (and keep results)
+    Dir.chdir($final_path)
+    run_config_file($final_config_name, true, "final")
+    Dir.chdir($autoconf_path)
+
+    # start generating final report
+    report = build_best_report(true)
+
+    # clean all config and temporary files
+    $all_cfgs.each_pair do |key, cfg|
+        File.delete(cfg.filename) if File.exists?(cfg.filename)
+    end
+    File.delete($workqueue_fn)
+    File.delete($inproc_fn)
+
+    # finalize report
+    elapsed = Time.now.to_f - $start_time.to_f
+    report << "Total configs generated:  #{"%6d" % $all_cfgs.size}"
+    report << "Total configs tested:     #{"%6d" % get_tested_length}"
+    report << "  Total passed:           #{"%6d" % get_regexps_length("passed")}"
+    report << "  Total failed:           #{"%6d" % get_regexps_length("failed")}"
+    report << "  Total aborted:          #{"%6d" % get_regexps_length("aborted")}"
+    report << "Done.  [Total elapsed walltime: #{format_time(elapsed)}]"
+    report << ""
+    add_to_mainlog(report.join("\n"))
+    puts report.join("\n")
+
+    # wtf = wall time file
+    # what did *you* think it meant?!?!?
+    #
+    wtf = File.new($walltime_fn,"w")
+    wtf.puts elapsed.to_s
+    wtf.close
+
+end
+# }}}
+
+# {{{ configuration test helpers
+
+def build_best_report(copy_files=false)
+    # find best individual configs
+    mainlog = load_mainlog
+    cur_cfg = ""
+    inst_item = ["",0.0]
+    exec_item = ["",0.0]
+    inst_hash = Array.new
+    exec_hash = Array.new
+    mainlog.each do |line|
+        if line =~ /Finished (.*):/ then
+            cur_cfg = $1
+            inst_item = ["",0.0]
+            exec_item = ["",0.0]
+            has_exec = false
+        end
+        if line =~ /instrumented .* \[([\d.]*)%\] single/ then
+            inst_item = [cur_cfg, inst_item[1]+$1.to_f]
+        end
+        if line =~ /executed .* \[([\d.]*)%\] single/ then
+            exec_item = [cur_cfg, exec_item[1]+$1.to_f]
+        end
+        if (not cur_cfg == "final") and line.include?($STATUS_PASSED) then
+            inst_hash << inst_item
+            exec_hash << exec_item
+        end
+    end
+    inst_hash = inst_hash.sort_by { |cfg,pct| -pct }
+    exec_hash = exec_hash.sort_by { |cfg,pct| -pct }
+    report = Array.new
+    report << " "
+    report << " Top %-14s%15s  %s"%["instrumented:","CONFIG","% REPLACED"]
+    10.times do
+        entry = inst_hash.shift
+        if !entry.nil? then
+            cfg = $all_cfgs[entry[0]]
+            if !cfg.nil? then
+                FileUtils.cp(cfg.filename, $best_path) if copy_files
+                report << "    %30s  %4.1f"%[cfg.tag,entry[1]]
+            else
+                report << "    %30s  %4.1f"%[entry[0],entry[1]]
+            end
+        end
+    end
+    report << " "
+    report << " Top %-14s%15s  %s"%["executed:","CONFIG","% REPLACED"]
+    10.times do
+        entry = exec_hash.shift
+        if !entry.nil? then
+            cfg = $all_cfgs[entry[0]]
+            if !cfg.nil? then
+                FileUtils.cp(cfg.filename, $best_path) if copy_files
+                report << "    %30s  %4.1f"%[cfg.tag,entry[1]]
+            else
+                report << "    %30s  %4.1f"%[entry[0],entry[1]]
+            end
+        end
+    end
+    report << " "
+    return report
+end
+
+def build_final_config
+    final_config_regexps = load_regexps("passed")
     final_config = File.open($final_config_name, "w")
     IO.foreach($orig_config_name) do |line|
         line_found = false
@@ -516,81 +707,39 @@ def finalize_autoconf
         end
     end
     final_config.close
-    FileUtils.cp($final_config_name, $final_path)
-    puts "done."
-
-    # find best individual configs
-    kept_configs = Array.new
-    mainlog = load_mainlog
-    cur_cfg = ""
-    inst_item = ["",0.0]
-    exec_item = ["",0.0]
-    inst_hash = Array.new
-    exec_hash = Array.new
-    mainlog.each do |line|
-        if line =~ /Finished (.*\.cfg):/ then
-            cur_cfg = $1
-            inst_item = ["",0.0]
-            exec_item = ["",0.0]
-            has_exec = false
-        end
-        if line =~ /instrumented .* \[([\d.]*)%\] single/ then
-            inst_item = [cur_cfg, inst_item[1]+$1.to_f]
-        end
-        if line =~ /executed .* \[([\d.]*)%\] single/ then
-            exec_item = [cur_cfg, exec_item[1]+$1.to_f]
-        end
-        if line =~ /Success!/ then
-            inst_hash << inst_item
-            exec_hash << exec_item
-        end
-    end
-    inst_hash = inst_hash.sort_by { |cfg,pct| -pct }
-    exec_hash = exec_hash.sort_by { |cfg,pct| -pct }
-    report = Array.new
-    report << " "
-    report << "Top %-15s%15s  %s"%["instrumented:","CONFIG","% REPLACED"]
-    10.times do
-        entry = inst_hash.shift
-        if !entry.nil? then
-            report << "    %30s  %4.1f"%[entry[0],entry[1]]
-            kept_configs << "#{$binary_name}#{entry[0]}"
-        end
-    end
-    report << " "
-    report << "Top %-15s%15s  %s"%["executed:","CONFIG","% REPLACED"]
-    10.times do
-        entry = exec_hash.shift
-        if !entry.nil? then
-            report << "    %30s  %4.1f"%[entry[0],entry[1]]
-            kept_configs << "#{$binary_name}#{entry[0]}"
-        end
-    end
-    report << " "
-    add_to_mainlog(report.join("\n"))
-
-    # try the final config (and keep results)
-    Dir.chdir($final_path)
-    run_config_file($final_config_name, true)
-    Dir.chdir($autoconf_path)
-
-    # clean all config and temporary files
-    $all_cfgs.each_pair do |key, cfg|
-        File.delete(cfg.filename) if File.exists?(cfg.filename) and not kept_configs.include?(cfg.filename)
-    end
-    #File.delete($settings_fn)
-    #File.delete($allconfigs_fn)
-    File.delete($workqueue_fn)
-    File.delete($inproc_fn)
-    #File.delete($finalregexps_fn)
-
-    elapsed = Time.now.to_f - $start_time.to_f
-    puts "Done.  [Total configs tested: #{get_tested_length}]  [Elapsed walltime: #{format_time(elapsed)}]"
-
 end
-# }}}
 
-# {{{ configuration test helpers
+def build_debug_config
+    passed_regexps = load_regexps("passed")
+    failed_regexps = load_regexps("failed")
+    aborted_regexps = load_regexps("aborted")
+    debug_config = File.open($debug_config_name, "w")
+    IO.foreach($orig_config_name) do |line|
+        line_found = false
+        passed_regexps.each do |reg|
+            if !line_found && line =~ reg then
+                debug_config.puts "^#{$stat_preferred}#{line[2,line.size-1]}"
+                line_found = true
+            end
+        end
+        failed_regexps.each do |reg|
+            if !line_found && line =~ reg then
+                debug_config.puts "^#{$stat_alternate}#{line[2,line.size-1]}"
+                line_found = true
+            end
+        end
+        aborted_regexps.each do |reg|
+            if !line_found && line =~ reg then
+                debug_config.puts "^#{$stat_ignored}#{line[2,line.size-1]}"
+                line_found = true
+            end
+        end
+        if !line_found then
+            debug_config.puts "^#{$stat_blank}#{line[2,line.size-1]}"
+        end
+    end
+    debug_config.close
+end
 
 # build and run a configuration (takes a configuration object)
 def run_config (cfg)
@@ -610,55 +759,71 @@ def run_config (cfg)
     f.close
 
     # pass off to filename version
-    return run_config_file(cfg_path, false)
+    status = run_config_file(cfg_path, false, cfg.key)
+
+    # add regexp to appropriate file
+    if status == $STATUS_PASSED then
+        add_regexp("passed", cfg.regexp)
+    elsif status == $STATUS_FAILED then
+        add_regexp("failed", cfg.regexp)
+    elsif status == $STATUS_ERROR then
+        add_regexp("aborted", cfg.regexp)
+    end
+
+    return status
 end
 
 # build and run a configuration (takes a .cfg filename)
-def run_config_file (fn, keep)
+def run_config_file (fn, keep, key)
 
     # status updates
-    basename = File.basename(fn)
-    basename = basename[$binary_name.length, basename.length-$binary_name.length]
-    puts "Testing #{basename} ..."
-    $status_buffer = "    Finished #{basename}:\n"
+    #basename = File.basename(fn)
+    #if basename =~ /^#{$binary_name}(.*)/ then
+        #basename = $1
+    #end
+    #puts "  Testing #{basename} ..."
+    $status_buffer = "    Finished #{key}:\n"
 
     # build rewritten mutatee
     cmd = "fpinst -i #{$fortran_mode ? "-N" : ""}"
     cmd += " -c #{fn}"
     cmd += " #{$binary_path}"
     #add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
-    Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
-        io_out.each_line do |line|
-            if line =~ /Inplace: (.*)$/ then
-                $status_buffer += "        #{$1}\n"
-            end
+    io_in, io_out, io_err = Open3.popen3(cmd)
+    io_err.each_line do |line| end
+    io_out.each_line do |line|
+        if line =~ /Inplace: (.*)$/ then
+            $status_buffer += "        #{$1}\n"
         end
     end
 
     # execute rewritten mutatee and check for success
-    passed = false
+    status = $STATUS_ERROR
     runtime = 0
     error = 0.0
     cmd = "#{$autoconf_path}#{$craft_driver} #{Dir.getwd}/mutant"
     #add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
-    Open3.popen3(cmd) do |io_in, io_out, io_err, io_wait|
-        io_out.each_line do |line|
-            if line =~ /status:\s*(pass|fail)/i then
-                if $1 =~ /pass/i then
-                    passed = true
-                end
-            elsif line =~ /error:\s*(.+)/i then
-                error = $1.to_f
-            elsif line =~ /time:\s*(.+)/i then
-                runtime = $1.to_i
+    io_in, io_out, io_err = Open3.popen3(cmd)
+    io_err.each_line do |line| end
+    io_out.each_line do |line|
+        if line =~ /status:\s*(pass|fail)/i then
+            tmp = $1
+            if tmp =~ /pass/i then
+                status = $STATUS_PASSED
+            elsif tmp =~ /fail/i then
+                status = $STATUS_FAILED
             end
+        elsif line =~ /error:\s*(.+)/i then
+            error = $1.to_f
+        elsif line =~ /time:\s*(.+)/i then
+            runtime = $1.to_i
         end
     end
 
     # scan log file(s) for info
-    Dir.glob("*.log").each do |fn|
-        if fn != "fpinst.log" then
-            IO.foreach(fn) do |line|
+    Dir.glob("*.log").each do |lfn|
+        if lfn != "fpinst.log" then
+            IO.foreach(lfn) do |line|
                 if line =~ /Inplace: (.*)$/ then
                     $status_buffer += "        #{$1.gsub(/<.*>/, "")}\n"
                 end
@@ -667,11 +832,7 @@ def run_config_file (fn, keep)
     end
 
     # print output
-    if passed then
-        $status_buffer += "        Success!"
-    else
-        $status_buffer += "        FAILED!"
-    end
+    $status_buffer += "        #{status}"
     $status_buffer += "  [Walltime: #{format_time(runtime.to_f)}"
     $status_buffer += " %.1fX"%[runtime / $baseline_runtime.to_f]
     $status_buffer += " Error: %g]"%[error]
@@ -682,9 +843,9 @@ def run_config_file (fn, keep)
     # clean out mutant, logs, and rewritten library files
     if !keep then
         begin
-            Dir.glob("*").each do |fn|
-                if fn =~ /mutant/ || fn =~ /\.log/ || fn =~ /lib(c|m)\.so\.6/ then
-                    File.delete(fn)
+            Dir.glob("*").each do |lfn|
+                if lfn =~ /mutant/ || lfn =~ /\.log/ || lfn =~ /lib(c|m)\.so\.6/ then
+                    File.delete(lfn)
                 end
             end
         rescue
@@ -692,7 +853,20 @@ def run_config_file (fn, keep)
         end
     end
 
-    return passed
+    # copy config to appropriate folder
+    if status == $STATUS_PASSED then
+        FileUtils.cp(fn, $passed_path)
+    elsif status == $STATUS_FAILED then
+        FileUtils.cp(fn, $failed_path)
+    elsif status == $STATUS_ERROR then
+        FileUtils.cp(fn, $aborted_path)
+    end
+
+    # rebuild "best-so-far" config
+    build_final_config
+    build_debug_config
+
+    return status
 end
 
 # }}}
@@ -713,10 +887,12 @@ def save_all_configs
     f.close
     f = File.new($allconfigs_fn, File::RDWR)
     f.flock File::LOCK_EX
+    puts "Saving all configurations to disk."
     YAML.dump($all_cfgs, f)
+    puts "Done saving configurations."
     f.close
 end
-def load_all_configs
+def load_all_configs(full=true)
     # could probably be read-only
     f = File.new($settings_fn, File::RDWR)
     f.flock File::LOCK_EX
@@ -735,10 +911,12 @@ def load_all_configs
     $initial_cfg_fn = f.gets.chomp
     f.close
     # could probably be read-only
-    f = File.new($allconfigs_fn, File::RDWR)
-    f.flock File::LOCK_EX
-    $all_cfgs = YAML.load(f)
-    f.close
+    if full then
+        f = File.new($allconfigs_fn, File::RDWR)
+        f.flock File::LOCK_EX
+        $all_cfgs = YAML.load(f)
+        f.close
+    end
 end
 
 
@@ -767,10 +945,14 @@ def get_next_workqueue_item
 end
 def get_workqueue_length
     # could probably be read-only
-    f = File.new($workqueue_fn, File::RDWR)
-    f.flock File::LOCK_EX
-    workqueue = f.readlines
-    f.close
+    begin
+        f = File.new($workqueue_fn, File::RDWR)
+        f.flock File::LOCK_EX
+        workqueue = f.readlines
+        f.close
+    rescue
+        return 0
+    end
     return workqueue.size
 end
 
@@ -799,10 +981,14 @@ def remove_from_inproc(item)
 end
 def get_inproc_length
     # could probably be read-only
-    f = File.new($inproc_fn, File::RDWR)
-    f.flock File::LOCK_EX
-    inproc = f.readlines
-    f.close
+    begin
+        f = File.new($inproc_fn, File::RDWR)
+        f.flock File::LOCK_EX
+        inproc = f.readlines
+        f.close
+    rescue
+        return 0
+    end
     return inproc.size
 end
 def move_all_inproc_to_workqueue
@@ -835,24 +1021,32 @@ def get_tested_length
 end
 
 
-def add_final_regexp(reg)
-    f = File.new($finalregexps_fn, File::RDWR)
+def add_regexp(tag, reg)
+    f = File.new("#{$regexps_fn}-#{tag}", File::RDWR)
     f.flock File::LOCK_EX
     f.seek(0,IO::SEEK_END)
     f.puts(reg.to_s)
     f.close
 end
-def load_final_regexps
+def load_regexps(tag)
     # could probably be read-only
-    f = File.new($finalregexps_fn,  File::RDWR)
+    f = File.new("#{$regexps_fn}-#{tag}",  File::RDWR)
     f.flock File::LOCK_EX
     lines = f.readlines
     f.close
-    final_config_regexps = Array.new
+    regexps = Array.new
     lines.each do |line|
-        final_config_regexps << Regexp.new(line.chomp)
+        regexps << Regexp.new(line.chomp)
     end
-    return final_config_regexps
+    return regexps
+end
+def get_regexps_length(tag)
+    # could probably be read-only
+    f = File.new("#{$regexps_fn}-#{tag}",  File::RDWR)
+    f.flock File::LOCK_EX
+    lines = f.readlines
+    f.close
+    return lines.size
 end
 
 
