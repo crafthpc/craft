@@ -19,6 +19,37 @@ require 'yaml.rb'
 # needed for easier directory removal
 require 'fileutils.rb'
 
+#require 'rubygems'
+#require 'inline'
+ 
+# By Peter Cooper - http://www.rubyinside.com/
+# Oodles of inspiration and examples from
+# http://www-128.ibm.com/developerworks/linux/library/l-affinity.html
+ 
+#class LinuxScheduler
+    #inline do |builder|
+        #builder.include '<sched.h>'
+        #builder.include '<stdio.h>'
+        #builder.c '
+        #int _set_affinity(int cpu_id) {
+            #cpu_set_t mask;
+            #__CPU_ZERO(&mask);
+            #__CPU_SET(cpu_id, &mask);
+            #if(sched_setaffinity(getpid(), sizeof(mask), &mask ) == -1) {
+                #printf("WARNING: Could not set CPU Affinity, continuing as-is\n");
+                #return 0;
+            #}
+            #return 1;
+        #}
+        #'
+    #end
+ 
+    # cpu_id is 0-based, so for core/cpu 1 = 0, etc..
+    #def self.set_affinity(cpu_id)
+        #self.new._set_affinity(cpu_id.to_i)
+    #end
+#end
+ 
 # {{{ main method
 def main
     srand
@@ -42,7 +73,7 @@ def main
         puts "          or"
         puts "        #{$self_invoke} -r                       (resume parent process)"
         puts "          or"
-        puts "        #{$self_invoke} -w <dir>                 (worker process)"
+        puts "        #{$self_invoke} -w <id> <dir>            (worker process)"
         puts "          or"
         puts "        #{$self_invoke} clean                    (reset search)"
         puts "Valid options:"
@@ -76,6 +107,7 @@ def main
         elsif opt == "-w" then
             # worker process
             $is_worker = true
+            $worker_id = ARGV.shift
             $autoconf_path = ARGV.shift
         elsif opt == "-j" then
             # parallel: "-j 4" variant
@@ -121,6 +153,7 @@ def main
     if $is_worker then
 
         # worker process
+        #LinuxScheduler.set_affinity($worker_id+1)
         load_all_configs
         run_main_autoconf_loop
         puts "Worker finished.  [Empty queue]"
@@ -151,7 +184,7 @@ def main
             end
             Dir.mkdir(worker_dir)
             job = fork do
-                exec "cd #{worker_dir} && #{$self_invoke} -w #{$autoconf_path}"
+                exec "cd #{worker_dir} && #{$self_invoke} -w #{i} #{$autoconf_path}"
             end
             $workers[job] = worker_dir
         end
