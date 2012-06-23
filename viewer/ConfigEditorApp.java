@@ -52,6 +52,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public JLabel filenameLabel;
     public JTextField searchBox;
     public JButton expandAllButton;
+    public JButton expandSingleButton;
     public JButton expandDoubleButton;
     public JButton collapseAllButton;
     public JCheckBox showEffectiveBox;
@@ -122,6 +123,9 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         collapseAllButton = new JButton("Collapse all");
         collapseAllButton.addActionListener(this);
         topPanel.add(collapseAllButton);
+        expandSingleButton = new JButton("View singles");
+        expandSingleButton.addActionListener(this);
+        topPanel.add(expandSingleButton);
         expandDoubleButton = new JButton("View doubles");
         expandDoubleButton.addActionListener(this);
         topPanel.add(expandDoubleButton);
@@ -652,14 +656,14 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
     }
 
-    public void expandDoubleRows() {
+    public void expandRows(ConfigTreeNode.CNStatus status) {
         for (int i = 0; i < mainTree.getRowCount(); i++) {
             ConfigTreeNode curNode = (ConfigTreeNode)mainTree.getPathForRow(i).getLastPathComponent();
             if ((curNode.type == ConfigTreeNode.CNType.MODULE ||
                  curNode.type == ConfigTreeNode.CNType.FUNCTION ||
                  curNode.type == ConfigTreeNode.CNType.BASIC_BLOCK) &&
                     curNode.status == ConfigTreeNode.CNStatus.NONE &&
-                    shouldExpandDoubleRow(curNode)) {
+                    shouldExpandRow(curNode, status)) {
                 mainTree.expandRow(i);
             } else if (curNode.type != ConfigTreeNode.CNType.APPLICATION) {
                 mainTree.collapseRow(i);
@@ -667,14 +671,14 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
     }
 
-    public boolean shouldExpandDoubleRow(TreeNode parent) {
+    public boolean shouldExpandRow(TreeNode parent, ConfigTreeNode.CNStatus status) {
         if (parent == null || !(parent instanceof ConfigTreeNode)) return false;
         ConfigTreeNode child = null;
         Enumeration<ConfigTreeNode> children = parent.children();
         while (children.hasMoreElements()) {
             child = children.nextElement();
-            if (child.status == ConfigTreeNode.CNStatus.DOUBLE ||
-                    shouldExpandDoubleRow(child)) {
+            if (child.status == status ||
+                    shouldExpandRow(child, status)) {
                 return true;
             }
         }
@@ -813,8 +817,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             search(true);
         } else if (e.getSource() == expandAllButton) {
             expandAllRows();
+        } else if (e.getSource() == expandSingleButton) {
+            expandRows(ConfigTreeNode.CNStatus.SINGLE);
         } else if (e.getSource() == expandDoubleButton) {
-            expandDoubleRows();
+            expandRows(ConfigTreeNode.CNStatus.DOUBLE);
         } else if (e.getSource() == collapseAllButton) {
             collapseAllRows();
         } else if (e.getSource() == showEffectiveBox) {
