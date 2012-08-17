@@ -86,6 +86,7 @@ def main
         puts "Valid options:"
         puts "   -c <file>      use <file> as initial base configuration"
         puts "   -d             debug mode (ignore->double instead of double->single)"
+        puts "   -D             debug mode (ignore->single instead of double->single)"
         puts "   -j <np>        spawn <np> worker threads"
         puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
         exit
@@ -134,8 +135,12 @@ def main
             # parallel: "-j4" variant
             num_workers = opt[2,opt.length-2].to_i
         elsif opt == "-d" then
-            # debug mode
+            # debug mode (double precision)
             $stat_preferred = "d"
+            $stat_alternate = "i"
+        elsif opt == "-D" then
+            # debug mode (single precision)
+            $stat_preferred = "s"
             $stat_alternate = "i"
         elsif opt == "-c" then
             # initial configuration
