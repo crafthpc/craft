@@ -16,10 +16,10 @@ WARN_FLAGS = -Wall -Werror -W -Wcast-align
 #WARN_FLAGS = -Wall -Werror -W -falign-functions=16
 #WARN_FLAGS = -Wall -Werror -W -mpreferred-stack-boundary=4
 #WARN_FLAGS = -Wall -Werror -W -Wpointer-arith -Wwrite-strings -fno-common
-COMMON_LIBS = -lrt -rdynamic -lxed -lgmp -lmpfr -lgc 
-COMMON_INCLUDES = -I./h -Iextern -Iextern/xed/include -Iextern/mpfr/include -Iextern/gc/include
+COMMON_LIBS = -lrt -rdynamic -lxed -lgmp -lmpfr -lgc -lelf
+COMMON_INCLUDES = -I./h -I/fs/maxfli/lam/opt/boost_1_50_0 -Iextern -Iextern/xed/include -Iextern/mpfr/include -Iextern/gc/include -I
 
-DYNINST_CFLAGS = -I$(DYNINST_ROOT)/include \
+DYNINST_CFLAGS = -I$(DYNINST_ROOT)/$(PLATFORM)/include \
 				 -I$(DYNINST_ROOT)/dyninst
 
 # this mess enables me to use Dyninst internals;
