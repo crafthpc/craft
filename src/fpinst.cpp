@@ -1370,13 +1370,16 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
             for (i = insnBlock->sources().begin(); i != insnBlock->sources().end(); i++) {
                 edges.push_back(*i);
 
-                //printf("redirecting edge; type=%s\n", ParseAPI::format((*i)->type()).c_str());
+                if (patchAPI_debug) {
+                    printf("checking incoming edge of type %s\n", ParseAPI::format((*i)->type()).c_str());
+                }
 
-                // we can't redirect these types of edges
-                if ((*i)->type() == ParseAPI::INDIRECT || 
-                    (*i)->type() == ParseAPI::CATCH ||
-                    (*i)->type() == ParseAPI::RET ||
-                    (*i)->type() == ParseAPI::CALL) {
+                // we can only redirect these types of edges
+                if (!((*i)->type() == ParseAPI::COND_TAKEN || 
+                      (*i)->type() == ParseAPI::COND_NOT_TAKEN ||
+                      (*i)->type() == ParseAPI::DIRECT ||
+                      (*i)->type() == ParseAPI::FALLTHROUGH ||
+                      (*i)->type() == ParseAPI::CALL_FT)) {
                     keepInsnBlock = true;
                 }
             }
