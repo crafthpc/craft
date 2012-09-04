@@ -84,17 +84,27 @@ public class InstructionModel extends AbstractTableModel {
             case 2: return instr.function;
             case 3: return instr.getSource();
             case 4: return instr.disassembly;
-            case 5: return (new Integer(instr.count)).toString();
-            case 6: if (instr.totalCancels > 0)
-                        return (new Integer(instr.totalCancels)).toString();
+            case 5: return instr.rstatus;
+            //case 6: return (new Integer(instr.count)).toString();
+            case 6: return new Integer(instr.count);
+            case 7: if (instr.totalCancels > 0)
+                        //return (new Integer(instr.totalCancels)).toString();
+                        return new Integer(instr.totalCancels);
                     else
-                        return (new Integer(instr.cancellations)).toString();
-            case 7: return (new Integer(instr.cancellations)).toString();
-            case 8: return ratioFormatter.format(instr.ratio);
-            case 9: return avgDigitsFormatter.format(instr.averageDigits);
-            case 10: return (new Double(instr.min)).toString();
-            case 11: return (new Double(instr.max)).toString();
-            case 12: return (new Double(instr.range)).toString();
+                        //return (new Integer(instr.cancellations)).toString();
+                        return new Integer(instr.cancellations);
+            //case 8: return (new Integer(instr.cancellations)).toString();
+            case 8: return new Integer(instr.cancellations);
+            //case 9: return ratioFormatter.format(instr.ratio);
+            //case 10: return avgDigitsFormatter.format(instr.averageDigits);
+            case 9: return new Double(instr.ratio);
+            case 10: return new Double(instr.averageDigits);
+            //case 11: return (new Double(instr.min)).toString();
+            //case 12: return (new Double(instr.max)).toString();
+            //case 13: return (new Double(instr.range)).toString();
+            case 11: return new Double(instr.min);
+            case 12: return new Double(instr.max);
+            case 13: return new Double(instr.range);
             default: return "";
         }
     }
@@ -104,7 +114,7 @@ public class InstructionModel extends AbstractTableModel {
     }
 
     public int getColumnCount() {
-        return 13;
+        return 14;
     }
 
     public int getRowCount() {
@@ -118,14 +128,15 @@ public class InstructionModel extends AbstractTableModel {
             case 2: return "Function";
             case 3: return "Source";
             case 4: return "Assembly";
-            case 5: return "Count";
-            case 6: return "Cancels";
-            case 7: return "Samples";
-            case 8: return "Ratio";
-            case 9: return "AvgDigits";
-            case 10: return "Min";
-            case 11: return "Max";
-            case 12: return "Range";
+            case 5: return "Status";
+            case 6: return "Count";
+            case 7: return "Cancels";
+            case 8: return "Samples";
+            case 9: return "Ratio";
+            case 10: return "AvgDigits";
+            case 11: return "Min";
+            case 12: return "Max";
+            case 13: return "Range";
             default: return "";
         }
     }
@@ -137,16 +148,17 @@ public class InstructionModel extends AbstractTableModel {
     public void setPreferredColumnSizes(TableColumnModel model) {
         model.getColumn(0).setPreferredWidth(20);
         model.getColumn(1).setPreferredWidth(75);
-        model.getColumn(2).setPreferredWidth(100);
+        model.getColumn(2).setPreferredWidth(75);
         model.getColumn(3).setPreferredWidth(100);
         model.getColumn(4).setPreferredWidth(200);
-        model.getColumn(5).setPreferredWidth(40);
+        model.getColumn(5).setPreferredWidth(75);
         model.getColumn(6).setPreferredWidth(40);
         model.getColumn(7).setPreferredWidth(40);
         model.getColumn(8).setPreferredWidth(40);
         model.getColumn(9).setPreferredWidth(40);
-        model.getColumn(10).setPreferredWidth(60);
+        model.getColumn(10).setPreferredWidth(40);
         model.getColumn(11).setPreferredWidth(60);
+        model.getColumn(12).setPreferredWidth(60);
     }
 
     public boolean isCellEditable(int row, int col) {

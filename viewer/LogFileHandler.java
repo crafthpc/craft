@@ -138,6 +138,7 @@ public class LogFileHandler extends DefaultHandler {
             logfile.traces.put(currentTrace.id, currentTrace);
         } else if (localName.equals("instruction")) {
             logfile.instructions.put(currentInstruction.id, currentInstruction);
+            logfile.instructionsByAddress.put(currentInstruction.address, currentInstruction);
         } else if (localName.equals("frame")) {
             currentTrace.frames.add(currentFrame);
         } else if (localName.equals("log")) {

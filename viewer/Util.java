@@ -7,6 +7,7 @@
 import java.io.*;
 import java.text.*;
 import java.util.*;
+import java.util.regex.*;
 
 public class Util {
 
@@ -54,6 +55,16 @@ public class Util {
         return ret;
     }
 
+    public static String getExtension(File f) {
+        String ext = null;
+        String s = f.getName();
+        int i = s.lastIndexOf('.');
+        if (i > 0 &&  i < s.length() - 1) {
+            ext = s.substring(i+1).toLowerCase();
+        }
+        return ext;
+    }
+
     public static double parseDouble(String str) {
         if (str.length() >= 3 && str.substring(0,3).equalsIgnoreCase("inf")) {
             return Double.POSITIVE_INFINITY;
@@ -65,6 +76,16 @@ public class Util {
         } else {
             return Double.parseDouble(str);
         }
+    }
+
+    public static String extractRegex(String data, String regex, int group) {
+        Pattern p = Pattern.compile(regex);
+        Matcher m = p.matcher(data);
+        String s = null;
+        if (m.find()) {
+            s = m.group(group);
+        }
+        return s;
     }
 }
 

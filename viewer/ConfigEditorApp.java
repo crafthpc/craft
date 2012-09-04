@@ -21,6 +21,9 @@ import javax.swing.border.*;
 import javax.swing.event.*;
 import javax.swing.table.*;
 import javax.swing.tree.*;
+import javax.xml.parsers.*;
+import org.xml.sax.*;
+import org.xml.sax.helpers.*;
 // }}}
 
 public class ConfigEditorApp extends JFrame implements ActionListener, DocumentListener {
@@ -277,7 +280,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
     }
 
-    public void openConfigFile(File file) {
+    public ConfigTreeNode openConfigFile(File file) {
         mainConfigFile = file;
         mainConfigEntries = new ArrayList<ConfigTreeNode>();
         mainConfigMiscEntries = new ArrayList<String>();
@@ -367,6 +370,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             }
             node = node.getNextNode();
         }
+
+        return appNode;
     }
 
     public boolean mergeConfigFile(File file) {
@@ -488,30 +493,6 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                 wrt.println(s);
             }
 
-            // walk the config tree and emit all settings
-            /*
-             *ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
-             *ConfigTreeNode curFuncNode = null;
-             *ConfigTreeNode curBlockNode = null;
-             *ConfigTreeNode curNode = null;
-             *wrt.println(appNode.formatFileEntry());
-             *Enumeration<ConfigTreeNode> funcs = appNode.children();
-             *while (funcs.hasMoreElements()) {
-             *   curFuncNode = funcs.nextElement();
-             *   wrt.println(curFuncNode.formatFileEntry());
-             *   Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
-             *   while (blocks.hasMoreElements()) {
-             *       curBlockNode = blocks.nextElement();
-             *       wrt.println(curBlockNode.formatFileEntry());
-             *       Enumeration<ConfigTreeNode> insns = curBlockNode.children();
-             *       while (insns.hasMoreElements()) {
-             *           curNode = insns.nextElement();
-             *           wrt.println(curNode.formatFileEntry());
-             *       }
-             *   }
-             *}
-             */
-
             // emit all config entries
             for (ConfigTreeNode node : mainConfigEntries) {
                 wrt.println(node.formatFileEntry());
@@ -520,6 +501,88 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             wrt.close();
         } catch (IOException e) {
             System.err.println("ERROR: " + e.getMessage());
+        }
+    }
+
+    public void mergeLogFile(File file) {
+        if (!file.exists()) {
+            JOptionPane.showMessageDialog(null, "I/O error: " + file.getAbsolutePath() + " does not exist!");
+            return;
+        }
+        try {
+            // parse the logfile
+            SAXParserFactory factory = SAXParserFactory.newInstance();
+            factory.setNamespaceAware(true);
+            SAXParser parser = factory.newSAXParser();
+            LogFileHandler fileLoader = new LogFileHandler();
+            parser.parse(file, fileLoader);
+            LLogFile logfile = fileLoader.getLogFile();
+            InstructionModel im = new InstructionModel(logfile);
+            im.refreshData();
+
+            // walk the config tree and retrieve/calculate all execution counts
+            ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+            ConfigTreeNode curModuleNode = null;
+            ConfigTreeNode curFuncNode = null;
+            ConfigTreeNode curBlockNode = null;
+            ConfigTreeNode curNode = null;
+            Enumeration<ConfigTreeNode> modules = appNode.children();
+            while (modules.hasMoreElements()) {
+                curModuleNode = modules.nextElement();
+                Enumeration<ConfigTreeNode> funcs = curModuleNode.children();
+                while (funcs.hasMoreElements()) {
+                    curFuncNode = funcs.nextElement();
+                    Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
+                    while (blocks.hasMoreElements()) {
+                        curBlockNode = blocks.nextElement();
+                        Enumeration<ConfigTreeNode> insns = curBlockNode.children();
+                        while (insns.hasMoreElements()) {
+                            curNode = insns.nextElement();
+                            LInstruction insn = logfile.instructionsByAddress.get(curNode.address);
+                            if (insn != null) {
+                                long count = insn.count;
+                                curNode.totalExecCount       = count;
+                                curNode.execCount.put(curNode.status, new Long(count));
+                                curBlockNode.totalExecCount += count;
+                                if (curBlockNode.execCount.containsKey(curNode.status)) {
+                                    curBlockNode.execCount.put(curNode.status,
+                                            new Long(count) + curBlockNode.execCount.get(curNode.status));
+                                } else {
+                                    curBlockNode.execCount.put(curNode.status, new Long(count));
+                                }
+                                curFuncNode.totalExecCount  += count;
+                                if (curFuncNode.execCount.containsKey(curNode.status)) {
+                                    curFuncNode.execCount.put(curNode.status,
+                                            new Long(count) + curFuncNode.execCount.get(curNode.status));
+                                } else {
+                                    curFuncNode.execCount.put(curNode.status, new Long(count));
+                                }
+                                appNode.totalExecCount      += count;
+                                if (appNode.execCount.containsKey(curNode.status)) {
+                                    appNode.execCount.put(curNode.status,
+                                            new Long(count) + appNode.execCount.get(curNode.status));
+                                } else {
+                                    appNode.execCount.put(curNode.status, new Long(count));
+                                }
+                            } else {
+                            }
+                        }
+                    }
+                }
+            }
+
+        } catch (ParserConfigurationException ex) {
+            JOptionPane.showMessageDialog(null, "Parser configuration error: " + ex.getMessage());
+            ex.printStackTrace();
+        } catch (SAXException ex) {
+            JOptionPane.showMessageDialog(null, "XML parsing error: " + ex.getMessage());
+            ex.printStackTrace();
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(null, "I/O error: " + ex.getMessage());
+            ex.printStackTrace();
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(null, "Error: " + ex.getMessage());
+            ex.printStackTrace();
         }
     }
 
@@ -867,7 +930,13 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                 app = new ConfigEditorApp();
                 app.openFile(f);
             } else {
-                app.mergeConfigFile(f);
+                if (Util.getExtension(f).equals("cfg")) {
+                    app.mergeConfigFile(f);
+                } else if (Util.getExtension(f).equals("log")) {
+                    app.mergeLogFile(f);
+                } else {
+                    JOptionPane.showMessageDialog(null, "Invalid file extension: " + f.getName());
+                }
             }
         }
 

@@ -13,6 +13,7 @@ public class LLogFile {
     public java.util.List<LMessage> messages;
     public Map<String, LTrace> traces;
     public Map<String, LInstruction> instructions;
+    public Map<String, LInstruction> instructionsByAddress;
     public String appname;
     public File file;
 
@@ -20,6 +21,7 @@ public class LLogFile {
         messages = new ArrayList<LMessage>();
         traces = new HashMap<String, LTrace>();
         instructions = new HashMap<String, LInstruction>();
+        instructionsByAddress = new HashMap<String, LInstruction>();
         appname = "";
         file = null;
     }
@@ -72,6 +74,7 @@ public class LLogFile {
                         String newInstrID = (new Integer(instructions.size()+1)).toString();
                         oldInstr.id = newInstrID;
                         instructions.put(newInstrID, oldInstr);
+                        // no need to re-insert into instructionsByAddress
                         instrMapping.put(oldInstrID, newInstrID);
                         msg.instructionID = newInstrID;
                     }
@@ -91,6 +94,7 @@ public class LLogFile {
                 String newInstrID = (new Integer(instructions.size()+1)).toString();
                 instr.id = newInstrID;
                 instructions.put(instr.id, instr);
+                instructionsByAddress.put(instr.address, instr);
             }
         }
     }

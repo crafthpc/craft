@@ -41,31 +41,34 @@ public class InstructionComparator implements Comparator<LInstruction> {
                 case 4:     // disassembly
                     order = i1.disassembly.compareTo(i2.disassembly);
                     break;
-                case 5:     // count
+                case 5:     // replacement status
+                    order = i1.rstatus.compareTo(i2.rstatus);
+                    break;
+                case 6:     // count
                     order = i1.count - i2.count;
                     break;
-                case 6:     // cancellations
+                case 7:     // cancellations
                     if (i1.totalCancels > 0 && i2.totalCancels > 0)
                         order = i1.totalCancels - i2.totalCancels;
                     else
                         order = i1.cancellations - i2.cancellations;
                     break;
-                case 7:     // samples
+                case 8:     // samples
                     order = i1.cancellations - i2.cancellations;
                     break;
-                case 8:     // ratio
+                case 9:     // ratio
                     order = (i1.ratio == i2.ratio) ? 0 : (i1.ratio < i2.ratio ? -1: 1);
                     break;
-                case 9:     // average digits
+                case 10:     // average digits
                     order = (i1.averageDigits == i2.averageDigits) ? 0 : (i1.averageDigits < i2.averageDigits ? -1: 1);
                     break;
-                case 10:    // min
+                case 11:    // min
                     order = (i1.min == i2.min) ? 0 : (i1.min < i2.min ? -1: 1);
                     break;
-                case 11:    // max
+                case 12:    // max
                     order = (i1.max == i2.max) ? 0 : (i1.max < i2.max ? -1: 1);
                     break;
-                case 12:    // range
+                case 13:    // range
                     order = (i1.range == i2.range) ? 0 : (i1.range < i2.range ? -1: 1);
                     break;
                 default:

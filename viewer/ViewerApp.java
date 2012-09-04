@@ -28,7 +28,7 @@ import org.xml.sax.*;
 import org.xml.sax.helpers.*;
 // }}}
 
-public class ViewerApp extends JFrame {
+public class ViewerApp extends JFrame implements ActionListener, DocumentListener {
 
     // {{{ member variables
 
@@ -68,6 +68,10 @@ public class ViewerApp extends JFrame {
     public JTable instructionList;
     public InstructionListener iListener;
     public TableHeaderListener ithListener;
+    public TableRowSorter<InstructionModel> instructionSorter;
+    public JPanel instructionFilter;
+    public JTextField filterText;
+    public JCheckBox filterInverse;
 
     // variable tab
     public JLabel variableLabel;
@@ -251,19 +255,28 @@ public class ViewerApp extends JFrame {
         instructionList.setShowVerticalLines(false);
         instructionList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         ithListener = new TableHeaderListener(instructionList);
-        instructionList.getTableHeader().addMouseListener(ithListener);
+        //instructionList.getTableHeader().addMouseListener(ithListener);
         InstructionHeaderRenderer ihRenderer = new InstructionHeaderRenderer(ithListener);
         ihRenderer.setFont(DEFAULT_FONT_SANS_PLAIN);
-        instructionList.getTableHeader().setDefaultRenderer(ihRenderer);
+        //instructionList.getTableHeader().setDefaultRenderer(ihRenderer);
         mainTabListener.add(instructionList);
         JScrollPane instructionScroll = new JScrollPane(instructionList);
         instructionLabel = new JLabel();
         instructionLabel.setFont(DEFAULT_FONT_SANS_BOLD);
+        filterText = new JTextField(30);
+        filterText.getDocument().addDocumentListener(this);
+        filterInverse = new JCheckBox("Inverse");
+        filterInverse.addActionListener(this);
+        instructionFilter = new JPanel();
+        instructionFilter.add(new JLabel("Filter (regex): "));
+        instructionFilter.add(filterText);
+        instructionFilter.add(filterInverse);
         JPanel instructionPanel = new JPanel();
         instructionPanel.setBackground(Color.WHITE);
         instructionPanel.setLayout(new BorderLayout());
         instructionPanel.add(instructionLabel, BorderLayout.NORTH);
         instructionPanel.add(instructionScroll, BorderLayout.CENTER);
+        instructionPanel.add(instructionFilter, BorderLayout.SOUTH);
         instructionPanel.setBorder(BorderFactory.createLoweredBevelBorder());
 
         // event listeners
@@ -351,8 +364,72 @@ public class ViewerApp extends JFrame {
         topPanel.repaint();
     }
 
+    public void applyFilter() {
+        RowFilter<InstructionModel, Object> rf = null;
+        try {
+            rf = RowFilter.regexFilter(filterText.getText(), 4);
+        } catch (PatternSyntaxException e) {
+            return;
+        }
+        if (filterInverse.isSelected()) {
+            instructionSorter.setRowFilter(RowFilter.notFilter(rf));
+        } else {
+            instructionSorter.setRowFilter(rf);
+        }
+    }
+
     // }}}
 
+    // {{{ event listeners
+
+    public void changedUpdate(DocumentEvent e) {
+        applyFilter();
+    }
+
+    public void insertUpdate(DocumentEvent e) {
+        applyFilter();
+    }
+
+    public void removeUpdate(DocumentEvent e) {
+        applyFilter();
+    }
+
+    public void actionPerformed(ActionEvent e) {
+        if (e.getSource() == filterInverse) {
+            applyFilter();
+        }
+    }
+
+    // }}}
+
+    // {{{ mergeConfigFile
+    public void mergeConfigFile(File file) {
+        if (!file.exists()) {
+            JOptionPane.showMessageDialog(null, "I/O error: " + file.getAbsolutePath() + " does not exist!");
+            return;
+        }
+        ConfigEditorApp capp = new ConfigEditorApp();
+        ConfigTreeNode cnode = capp.openConfigFile(file);
+        for (ConfigTreeNode node : capp.mainConfigEntries) {
+            if (node.type == ConfigTreeNode.CNType.INSTRUCTION) {
+                String addr = Util.extractRegex(node.label, "0x[0-9a-fA-F]+", 0);
+                if (addr != null) {
+                    LInstruction insn = mainLogFile.instructionsByAddress.get(addr);
+                    if (insn != null) {
+                        ConfigTreeNode.CNStatus status = node.getEffectiveStatus();
+                        switch (status) {
+                            case NONE:      insn.rstatus = "";        break;
+                            case IGNORE:    insn.rstatus = "-";       break;
+                            case SINGLE:    insn.rstatus = "flt";     break;
+                            case DOUBLE:    insn.rstatus = "double";  break;
+                            case CANDIDATE: insn.rstatus = "?";       break;
+                        }
+                    }
+                }
+            }
+        }
+        capp.dispose();
+    } // }}}
     // {{{ mergeLogFile
     public void mergeLogFile(File file) {
         if (!file.exists()) {
@@ -383,6 +460,8 @@ public class ViewerApp extends JFrame {
                 InstructionModel im = new InstructionModel(logfile);
                 instructionList.setModel(im);
                 im.setPreferredColumnSizes(instructionList.getColumnModel());
+                instructionSorter = new TableRowSorter<InstructionModel>(im);
+                instructionList.setRowSorter(instructionSorter);
                 ShadowValueModel vm = new ShadowValueModel(logfile);
                 variableList.setModel(vm);
                 vm.setPreferredColumnSizes(variableList.getColumnModel());
@@ -613,7 +692,13 @@ public class ViewerApp extends JFrame {
         } else {
             // open all given log files
             for (File f : files) {
-                app.mergeLogFile(f);
+                if (Util.getExtension(f).equals("cfg")) {
+                    app.mergeConfigFile(f);
+                } else if (Util.getExtension(f).equals("log")) {
+                    app.mergeLogFile(f);
+                } else {
+                    JOptionPane.showMessageDialog(null, "Invalid file extension: " + f.getName());
+                }
             }
             app.setVisible(true);
         }

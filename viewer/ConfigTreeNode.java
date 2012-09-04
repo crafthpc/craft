@@ -47,7 +47,10 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     public CNStatus status;
     public int number;
     public long insnCount;
+    public long totalExecCount;
+    public Map<CNStatus, Long> execCount;
     public String label;
+    public String address;
 
     public ConfigTreeNode() {
         super();
@@ -55,6 +58,8 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         status = CNStatus.NONE;
         number = 1;
         insnCount = -1;
+        totalExecCount = 0;
+        execCount = new HashMap<CNStatus, Long>();
         label = "Default App";
     }
 
@@ -64,6 +69,8 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         status = s;
         number = num;
         insnCount = -1;
+        totalExecCount = 0;
+        execCount = new HashMap<CNStatus, Long>();
         label = lbl;
     }
 
@@ -120,7 +127,11 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             label = "(empty)";
         }
 
+        address = Util.extractRegex(configLine, "(0x[0-9a-fA-F]+)", 0);
+
         insnCount = -1;
+        totalExecCount = 0;
+        execCount = new HashMap<CNStatus, Long>();
     }
 
     public CNStatus getEffectiveStatus() {
@@ -249,13 +260,37 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         //str.append(number);
         str.append(": ");
         str.append(label);
-        while (str.length() < 50) {
-            str.append(' ');
-        }
         if (type == CNType.FUNCTION) {
+            while (str.length() < 50) {
+                str.append(' ');
+            }
             str.append(" [");
             str.append(getInsnCount());
             str.append(" instruction(s)]");
+            while (str.length() < 75) {
+                str.append(' ');
+            }
+            str.append("  [");
+            str.append(totalExecCount);
+            str.append(" execution(s)");
+            if (totalExecCount > 0) {
+                str.append(": ");
+                Long sgl = new Long(0), dbl = new Long(0);
+                if (execCount.containsKey(ConfigTreeNode.CNStatus.SINGLE)) {
+                    sgl = execCount.get(ConfigTreeNode.CNStatus.SINGLE) * 100 / new Long(totalExecCount);
+                }
+                if (execCount.containsKey(ConfigTreeNode.CNStatus.DOUBLE)) {
+                    dbl = execCount.get(ConfigTreeNode.CNStatus.DOUBLE) * 100 / new Long(totalExecCount);
+                }
+                str.append(sgl);
+                str.append("%/");
+                str.append(dbl);
+                str.append("%");
+            }
+            str.append("]");
+            while (str.length() < 125) {
+                str.append(' ');
+            }
         }
         return str.toString();
     }

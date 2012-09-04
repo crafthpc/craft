@@ -22,6 +22,7 @@ public class LInstruction {
     public double min;
     public double max;
     public double range;
+    public String rstatus;  // replacement status
 
     public LInstruction() {
         id = ""; address = ""; text = ""; disassembly = "";
@@ -31,6 +32,7 @@ public class LInstruction {
         min = Double.POSITIVE_INFINITY;
         max = Double.NEGATIVE_INFINITY;
         range = Double.POSITIVE_INFINITY;
+        rstatus = "";
     }
 
     public void updateRatio() {
