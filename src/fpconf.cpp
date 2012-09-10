@@ -237,8 +237,9 @@ void configModule(BPatch_module *mod, const char *name)
         //   - functions that begin with "targ"
 		if ( /* (strcmp(funcname,"main")!=0) && */ (strcmp(funcname,"memset")!=0)
                 && (strcmp(funcname,"call_gmon_start")!=0) && (strcmp(funcname,"frame_dummy")!=0)
-                && funcname[0] != '_' &&
-                !(strlen(funcname) > 4 && funcname[0]=='t' && funcname[1]=='a' && funcname[2]=='r' && funcname[3]=='g')) {
+                && funcname[0] != '_' //&&
+                //!(strlen(funcname) > 4 && funcname[0]=='t' && funcname[1]=='a' && funcname[2]=='r' && funcname[3]=='g')
+                ) {
 
             configFunction(function, funcname);
 		}
