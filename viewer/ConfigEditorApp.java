@@ -99,9 +99,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         JMenu logMenu = new JMenu("Actions");
         logMenu.setMnemonic(KeyEvent.VK_A);
         logMenu.add(new OpenConfigAction(this, "Open", null, new Integer(KeyEvent.VK_O)));
-        logMenu.add(new SaveConfigAction(this, "Save", null, new Integer(KeyEvent.VK_M)));
+        logMenu.add(new SaveConfigAction(this, "Save", null, new Integer(KeyEvent.VK_S)));
         logMenu.add(new JSeparator());
         logMenu.add(new BatchConfigAction(this, "Batch Config", null, new Integer(KeyEvent.VK_M)));
+        logMenu.add(new RemoveNonExecutedAction(this, "Remove Non-executed Entries", null, new Integer(KeyEvent.VK_N)));
         
         JMenuBar menuBar = new JMenuBar();
         menuBar.add(logMenu);
@@ -214,7 +215,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         mainPanel.add(bottomPanel, BorderLayout.SOUTH);
 
         getContentPane().add(mainPanel);
-        setSize(1000,900);
+        setSize(1200,900);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setTitle(DEFAULT_TITLE);
@@ -359,8 +360,15 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
         setTitle(DEFAULT_TITLE + " - " + mainConfigFile.getName());
         filenameLabel.setText(mainConfigFile.getName());
+        refreshTree(appNode);
+
+        return appNode;
+    }
+
+    public void refreshTree(ConfigTreeNode appNode) {
         TreeModel model = new DefaultTreeModel(appNode);
         mainTree.setModel(model);
+        mainTree.repaint();
         refreshKeyLabels();
 
         DefaultMutableTreeNode node = appNode.getNextNode();
@@ -370,8 +378,6 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             }
             node = node.getNextNode();
         }
-
-        return appNode;
     }
 
     public boolean mergeConfigFile(File file) {
@@ -541,8 +547,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                             LInstruction insn = logfile.instructionsByAddress.get(curNode.address);
                             if (insn != null) {
                                 long count = insn.count;
-                                curNode.totalExecCount       = count;
+                                curNode.totalExecCount = count;
                                 curNode.execCount.put(curNode.status, new Long(count));
+
+                                // aggregate replacement status statistics
                                 curBlockNode.totalExecCount += count;
                                 if (curBlockNode.execCount.containsKey(curNode.status)) {
                                     curBlockNode.execCount.put(curNode.status,
@@ -550,21 +558,36 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                                 } else {
                                     curBlockNode.execCount.put(curNode.status, new Long(count));
                                 }
-                                curFuncNode.totalExecCount  += count;
+                                curFuncNode.totalExecCount += count;
                                 if (curFuncNode.execCount.containsKey(curNode.status)) {
                                     curFuncNode.execCount.put(curNode.status,
                                             new Long(count) + curFuncNode.execCount.get(curNode.status));
                                 } else {
                                     curFuncNode.execCount.put(curNode.status, new Long(count));
                                 }
-                                appNode.totalExecCount      += count;
+                                curModuleNode.totalExecCount += count;
+                                if (curModuleNode.execCount.containsKey(curNode.status)) {
+                                    curModuleNode.execCount.put(curNode.status,
+                                            new Long(count) + curModuleNode.execCount.get(curNode.status));
+                                } else {
+                                    curModuleNode.execCount.put(curNode.status, new Long(count));
+                                }
+                                appNode.totalExecCount += count;
                                 if (appNode.execCount.containsKey(curNode.status)) {
                                     appNode.execCount.put(curNode.status,
                                             new Long(count) + appNode.execCount.get(curNode.status));
                                 } else {
                                     appNode.execCount.put(curNode.status, new Long(count));
                                 }
-                            } else {
+
+                                // code coverage
+                                if (count > 0) {
+                                    curNode.insnExecCount++;
+                                    curBlockNode.insnExecCount++;
+                                    curFuncNode.insnExecCount++;
+                                    curModuleNode.insnExecCount++;
+                                    appNode.insnExecCount++;
+                                }
                             }
                         }
                     }
@@ -599,7 +622,6 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         ConfigTreeNode curFuncNode = null;
         ConfigTreeNode curBlockNode = null;
         ConfigTreeNode curNode = null;
-
 
         Enumeration<ConfigTreeNode> modules = appNode.children();
         while (modules.hasMoreElements()) {
@@ -711,6 +733,58 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
         mainTree.repaint();
         refreshKeyLabels();
+    }
+
+    public void removeNonExecutedEntries() {
+        if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
+
+        Set<ConfigTreeNode> nodesToRemove = new HashSet<ConfigTreeNode>();
+
+        ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+        ConfigTreeNode curModNode = null;
+        ConfigTreeNode curFuncNode = null;
+        ConfigTreeNode curBlockNode = null;
+        ConfigTreeNode curNode = null;
+        Enumeration<ConfigTreeNode> modules = appNode.children();
+        while (modules.hasMoreElements()) {
+            curModNode = modules.nextElement();
+            if (curModNode.totalExecCount == 0) {
+                nodesToRemove.add(curModNode);
+            } else {
+                Enumeration<ConfigTreeNode> funcs = curModNode.children();
+                while (funcs.hasMoreElements()) {
+                    curFuncNode = funcs.nextElement();
+                    if (curFuncNode.totalExecCount == 0) {
+                        nodesToRemove.add(curFuncNode);
+                    } else {
+                        Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
+                        while (blocks.hasMoreElements()) {
+                            curBlockNode = blocks.nextElement();
+                            if (curBlockNode.totalExecCount == 0) {
+                                nodesToRemove.add(curBlockNode);
+                            } else {
+                                Enumeration<ConfigTreeNode> insns = curBlockNode.children();
+                                while (insns.hasMoreElements()) {
+                                    curNode = insns.nextElement();
+                                    if (curNode.totalExecCount == 0) {
+                                        nodesToRemove.add(curNode);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for (ConfigTreeNode node : nodesToRemove) {
+            TreeNode parent = node.getParent();
+            if (parent instanceof ConfigTreeNode) {
+                ((ConfigTreeNode)parent).remove(node);
+            }
+        }
+
+        refreshTree(appNode);
     }
 
     public void expandAllRows() {
