@@ -1926,7 +1926,7 @@ void instrumentApplication(BPatch_addressSpace *app)
         BPatch_constExpr idxExpr (entry->idx);
         BPatch_constExpr addrExpr(entry->address);
         BPatch_constExpr typeExpr(entry->type);
-        BPatch_constExpr tagExpr (entry->tag);
+        BPatch_constExpr tagExpr (entry->getEffectiveTag());
         initReplaceArgs->push_back(&idxExpr);
         initReplaceArgs->push_back(&addrExpr);
         initReplaceArgs->push_back(&typeExpr);
