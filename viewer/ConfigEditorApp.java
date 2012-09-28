@@ -42,6 +42,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public static final Color DEFAULT_COLOR_DOUBLE    = new Color(255, 120, 120);
     public static final Color DEFAULT_COLOR_CANDIDATE = new Color(125, 175, 225);
     public static final Color DEFAULT_COLOR_BORDER    = new Color(  0,   0, 225);
+    public static String fpconfOptions = "";
 
     // main data structures
     public File mainConfigFile;
@@ -238,7 +239,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             // this is a binary; use a config file in the current directory
             // with the same base name
             File cfgFile = new File(file.getName() + ".cfg");
-            String cmd = FPCONF_PATH + " " + file.getAbsolutePath();
+            String cmd = FPCONF_PATH + " " + fpconfOptions + " " + file.getAbsolutePath();
             try {
 
                 // if the config file already exists, prompt for overwrite confirmation
@@ -995,7 +996,13 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
         // parse command-line args
         for (i = 0; i < args.length; i++) {
-            files.add(new File(args[i]));
+            if (args[i].equals("-r")) {
+                fpconfOptions += "-r ";
+            } else if (args[i].equals("-a")) {
+                fpconfOptions += "-a ";
+            } else {
+                files.add(new File(args[i]));
+            }
         }
 
         // open all given log files
