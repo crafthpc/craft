@@ -317,14 +317,14 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
                 str.append("   ");
             }
             str.append("  [global: ");
-            str.append(String.format("%3d", coverage));
-            str.append("% cov, ");
             str.append(String.format("%3d", gsgl));
             str.append("%/");
             str.append(String.format("%3d", gdbl));
             str.append("%/");
             str.append(String.format("%3d", gign));
             str.append("; local: ");
+            str.append(String.format("%3d", coverage));
+            str.append("% cov, ");
             str.append(String.format("%3d", sgl));
             str.append("%/");
             str.append(String.format("%3d", dbl));
