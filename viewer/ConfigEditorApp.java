@@ -547,38 +547,39 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                             curNode = insns.nextElement();
                             LInstruction insn = logfile.instructionsByAddress.get(curNode.address);
                             if (insn != null) {
+                                ConfigTreeNode.CNStatus status = curNode.getEffectiveStatus();
                                 long count = insn.count;
                                 curNode.totalExecCount = count;
-                                curNode.execCount.put(curNode.status, new Long(count));
+                                curNode.execCount.put(status, new Long(count));
 
                                 // aggregate replacement status statistics
                                 curBlockNode.totalExecCount += count;
-                                if (curBlockNode.execCount.containsKey(curNode.status)) {
-                                    curBlockNode.execCount.put(curNode.status,
-                                            new Long(count) + curBlockNode.execCount.get(curNode.status));
+                                if (curBlockNode.execCount.containsKey(status)) {
+                                    curBlockNode.execCount.put(status,
+                                            new Long(count) + curBlockNode.execCount.get(status));
                                 } else {
-                                    curBlockNode.execCount.put(curNode.status, new Long(count));
+                                    curBlockNode.execCount.put(status, new Long(count));
                                 }
                                 curFuncNode.totalExecCount += count;
-                                if (curFuncNode.execCount.containsKey(curNode.status)) {
-                                    curFuncNode.execCount.put(curNode.status,
-                                            new Long(count) + curFuncNode.execCount.get(curNode.status));
+                                if (curFuncNode.execCount.containsKey(status)) {
+                                    curFuncNode.execCount.put(status,
+                                            new Long(count) + curFuncNode.execCount.get(status));
                                 } else {
-                                    curFuncNode.execCount.put(curNode.status, new Long(count));
+                                    curFuncNode.execCount.put(status, new Long(count));
                                 }
                                 curModuleNode.totalExecCount += count;
-                                if (curModuleNode.execCount.containsKey(curNode.status)) {
-                                    curModuleNode.execCount.put(curNode.status,
-                                            new Long(count) + curModuleNode.execCount.get(curNode.status));
+                                if (curModuleNode.execCount.containsKey(status)) {
+                                    curModuleNode.execCount.put(status,
+                                            new Long(count) + curModuleNode.execCount.get(status));
                                 } else {
-                                    curModuleNode.execCount.put(curNode.status, new Long(count));
+                                    curModuleNode.execCount.put(status, new Long(count));
                                 }
                                 appNode.totalExecCount += count;
-                                if (appNode.execCount.containsKey(curNode.status)) {
-                                    appNode.execCount.put(curNode.status,
-                                            new Long(count) + appNode.execCount.get(curNode.status));
+                                if (appNode.execCount.containsKey(status)) {
+                                    appNode.execCount.put(status,
+                                            new Long(count) + appNode.execCount.get(status));
                                 } else {
-                                    appNode.execCount.put(curNode.status, new Long(count));
+                                    appNode.execCount.put(status, new Long(count));
                                 }
 
                                 // code coverage
