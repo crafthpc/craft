@@ -257,7 +257,13 @@ void configApplication(BPatch_addressSpace *app)
 
     // build config entry
     FPReplaceEntry *entry = new FPReplaceEntry(RETYPE_APP, 1);
-    entry->name = binary;
+    char *appName = binary, *tmp = binary;
+    while (*tmp != '\0') {
+        if (*tmp++ == '/') {
+            appName = tmp;
+        }
+    }
+    entry->name = appName;
     mainConfig->addReplaceEntry(entry);
 
     // get list of all modules
