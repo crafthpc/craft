@@ -1,0 +1,1551 @@
+#!/usr/bin/ruby
+#
+# craft_search
+#
+# Generate floating-point precision configurations for a target binary, and test
+# them. Assemble a final recommended configuration. Based on "fpautoconf" and
+# improved to be far more generic and robust.
+#
+# Mike Lam, UMD
+# October 2012
+#
+
+# needed for opening stderr as well as stdin/stdout
+# when spawning new system processes
+require 'open3.rb'
+
+# needed for object serialization
+require 'yaml.rb'
+
+# needed for file manipulation and directory removal
+require 'fileutils.rb'
+
+
+# {{{ top-level: global constants
+
+$RESULT_PASS  = "Success!"                          # test result possibilities
+$RESULT_FAIL  = "FAILED!"
+$RESULT_ERROR = "ERROR!!!"
+
+$TYPE_APPLICATION = "APPLICATION"                   # control point levels
+$TYPE_MODULE      = "MODULE"
+$TYPE_FUNCTION    = "FUNC"
+$TYPE_BASICBLOCK  = "BBLK"
+$TYPE_INSTRUCTION = "INSN"
+$TYPE_SPACES = Hash.new("")
+$TYPE_SPACES[$TYPE_APPLICATION] = ""                # for pretty output
+$TYPE_SPACES[$TYPE_MODULE]      = "  "
+$TYPE_SPACES[$TYPE_FUNCTION]    = "    "
+$TYPE_SPACES[$TYPE_BASICBLOCK]  = "      "
+$TYPE_SPACES[$TYPE_INSTRUCTION] = "        "
+
+$STATUS_NONE      = " "                             # replacement status posibilities
+$STATUS_SINGLE    = "s"
+$STATUS_DOUBLE    = "d"
+$STATUS_IGNORE    = "i"
+$STATUS_CANDIDATE = "c"
+
+# }}}
+
+
+# PPoint
+#
+# Represents a single control point in a program. There is a single APPLICATION
+# PPoint at the root, and then it branches into modules, functions, etc. This
+# keeps the entire program's structure in memory while only requiring a single
+# copy (as older versions of this script did). The PPoint knows how to output
+# actual configuration files (given a Config object) that the mutator can use.
+#
+# {{{ PPoint
+class PPoint
+    attr_accessor :uid              # unique regex identifier; e.g. "INSN #34: 0x804d3f"
+    attr_accessor :type             # module, function, instruction, etc.
+    attr_accessor :orig_status      # single, double, ignore, candidate, none
+    attr_accessor :parent           # PPoint
+    attr_accessor :children         # array of PPoints
+    attr_accessor :attrs            # string => string
+    attr_accessor :bycuid           # uid => PPoint          (for increased lookup speed)
+    attr_accessor :byaddr           # addr => insn PPoint    (for increased lookup speed)
+
+    def initialize (uid, type, orig_status)
+        @uid = uid
+        @type = type
+        @orig_status = orig_status
+        @parent = nil
+        @children = Array.new
+        @attrs = Hash.new
+        @bycuid = Hash.new
+        @byaddr = Hash.new
+    end
+
+    def build_config_file (config, fn)
+        # write out a configuration file for this program and the given config
+        # this method will only be called in an APPLICATION node; it calls
+        # output() to recursively print the other levels
+        fout = File.new(fn, "w")
+        if @attrs.has_key?("prolog") then
+            fout << @attrs["prolog"]
+        end
+        output(config, fout, nil)
+        fout.close
+    end
+
+    def build_lookup_hash(pt=nil)
+        if pt.nil? then
+            @bycuid[@uid] = self
+            @children.each do |child|
+                build_lookup_hash(child)
+            end
+        else
+            if pt.type == $TYPE_INSTRUCTION and pt.attrs.has_key?("addr") then
+                @byaddr[pt.attrs["addr"]] = pt
+            end
+            @bycuid[pt.uid] = pt
+            pt.children.each do |child|
+                build_lookup_hash(child)
+            end
+        end
+    end
+
+    def lookup_by_cuid(uid)
+        return @bycuid[uid]
+    end
+
+    def lookup_by_addr(addr)
+        return @byaddr[addr]
+    end
+
+    def build_cuid
+        # build config unique id
+        label = @uid
+        if @uid =~ /APPLICATION/ then
+            label = "APP #{@attrs["desc"]}"
+        elsif @uid =~ /MODULE/ then
+            label = "MOD #{@attrs["desc"]}"
+        elsif @uid =~ /FUNC/ then
+            label = "FUNC #{@attrs["desc"]}"
+        elsif @uid =~ /BBLK/ then
+            label = "BBLK #{@attrs["addr"]}"
+        elsif @uid =~ /INSN/ then
+            label = "INSN #{@attrs["addr"]}"
+        end
+        return label
+    end
+
+    def build_label
+        # build human-readable label
+        label = @uid
+        if @uid =~ /APPLICATION/ then
+            label = "APP #{@attrs["desc"]}"
+        elsif @uid =~ /MODULE/ then
+            label = "MOD #{@attrs["desc"]}"
+        elsif @uid =~ /FUNC/ then
+            label = "FUNC #{@attrs["desc"]}"
+        elsif @uid =~ /BBLK/ then
+            label = "BBLK #{@attrs["addr"]}"
+        elsif @uid =~ /INSN/ then
+            label = "INSN #{@attrs["addr"]} \"#{@attrs["desc"]}\""
+        end
+        return label
+    end
+
+
+    def output (config, fout, overload)
+        fout.print("^")
+        if type == $TYPE_INSTRUCTION then
+            if not overload.nil? then
+                # status overridden by something higher up the tree
+                fout.print(overload)
+            else
+                if config.exceptions.has_key?(@uid) then
+                    # status overridden by current config
+                    fout.print(config.exceptions[@uid])
+                else
+                    # no override; output configuration default
+                    fout.print(config.default)
+                end
+            end
+        else
+            if overload.nil? then
+                if config.exceptions.has_key?(@uid) then
+                    # children status overridden by current config
+                    overload = config.exceptions[@uid]
+                elsif not @orig_status == $STATUS_NONE then
+                    # children status overridden by original config
+                    overload = @orig_status
+                end
+            end
+        end
+        fout.print("  ")
+        fout.print($TYPE_SPACES[@type])     # indentation
+        fout.print(@uid)
+        if @attrs.has_key?("desc") then
+            fout.print(" \"")
+            fout.print(@attrs["desc"])
+            fout.print("\"")
+        end
+        fout.print("\n")
+        @children.each do |pt|
+            pt.output(config, fout, overload)
+        end
+    end
+end # }}}
+
+
+# Config
+#
+# Represents a particular replacement configuration. To save space, an
+# exception-based scheme is used; it keeps a "default" replacement status for
+# all instructions that are not covered by an exception. Any exceptions at a
+# level higher than an instruction (module, function, etc.) propogate to
+# lower levels.
+#
+# {{{ Config
+class Config
+    attr_accessor :cuid             # unique identifier (string)
+    attr_accessor :label            # human-readable description; e.g. "MODULE #1: boxes.c; MODULE #2: spheres.c"
+    attr_accessor :default          # status
+    attr_accessor :exceptions       # cuid -> status
+    attr_accessor :attrs            # string => string
+
+    def initialize (cuid, label, default)
+        @cuid = cuid
+        @label = label
+        @default = default
+        @exceptions = Hash.new
+        @attrs = Hash.new
+    end
+
+    def filename
+        # sanitize cuid
+        fn = ""
+        @cuid.each_char do |c|
+            if c =~ /[0-9a-zA-Z_]/ then
+                fn << c.downcase
+            elsif c == ' ' then
+                fn << "_"
+            end
+        end
+        fn << ".cfg"
+        return fn
+    end
+end # }}}
+
+
+# Strategy
+#
+# Provides rules and procedures governing the search process. This class is
+# intended to be inherited and overloaded; this particular implementation does a
+# very simple, naive, breadth-first search through the application. It also has
+# two simple optimizations:
+#
+#   1) Ignore program control branches that do not contain any FP instructions
+#   2) Ignore program control branches that only have a single child (just do
+#      that one instead)
+#
+# {{{ Strategy
+class Strategy
+    attr_accessor :program
+    attr_accessor :preferred
+    attr_accessor :alternate
+
+    def initialize(program, pref, alt)
+        @preferred = pref
+        @alternate = alt
+        @program = program
+        update_icount(@program)
+    end
+
+    def update_icount(point)
+        # allow us to ignore branches of the program that don't actually contain
+        # any FP instructions
+        total = 0
+        point.children.each do |child|
+            update_icount(child)
+            total += child.attrs["icount"].to_i
+        end
+        if point.type == $TYPE_INSTRUCTION and point.orig_status == $STATUS_CANDIDATE then
+            total += 1
+        end
+        point.attrs["icount"] = total.to_s
+    end
+
+    def build_initial_configs
+        # try to replace the entire program
+        configs = Array.new
+        cfg = Config.new(@program.build_cuid, @program.build_label, @alternate)
+        cfg.exceptions[@program.uid] = @preferred
+        configs << cfg
+        return configs
+    end
+
+    def split_config(config)
+        # add a config for each child node of each exception
+        configs = Array.new
+        config.exceptions.each_pair do |k,v|
+            pt = @program.lookup_by_cuid(k)
+            pt.children.each do |child|
+
+                # skip nodes with no FP instructions
+                if child.attrs["icount"].to_i > 0 then
+                    cnode = child
+
+                    # skip single-child nodes
+                    if child.children.size == 1 then
+                        cnode = child.children.first
+                    end
+
+                    cfg = Config.new(cnode.build_cuid, cnode.build_label, config.default)
+                    cfg.exceptions[cnode.uid] = v
+                    configs << cfg
+                end
+            end
+        end
+        return configs
+    end
+
+    def build_final_config(results)
+        # simple union of all passing configs
+        cfg = Config.new("FINAL", "Final Configuration", @alternate)
+        results.each do |r|
+            if r.attrs.has_key?("result") and r.attrs["result"] == $RESULT_PASS then
+                r.exceptions.each_pair do |k,v|
+                    if cfg.exceptions.has_key?(k) and not (cfg.exceptions[k] == v) then
+                        puts "WARNING: Conflicting results for #{cfg.cuid}: #{cfg.exceptions[k]} and #{v}"
+                    end
+                    cfg.exceptions[k] = v
+                end
+            end
+        end
+        return cfg
+    end
+end # }}}
+# {{{ BinaryStrategy
+class BinaryStrategy < Strategy
+    def split_config(config)
+        configs = Array.new
+
+        # build list of new configurations
+        if config.exceptions.size > 1 then
+
+            # last config tried multiple exceptions;
+            # add a config for each exception and try again
+            config.exceptions.each_pair do |k,v|
+                pt = @program.lookup_by_cuid(k)
+                cfg = Config.new(pt.build_cuid, pt.build_label, config.default)
+                cfg.exceptions[pt.uid] = v
+                if pt.attrs.has_key?("cinst") then
+                    cfg.attrs["cinst"] = pt.attrs["cinst"]
+                else
+                    cfg.attrs["cinst"] = 0
+                end
+                configs << cfg
+            end
+        else
+
+            # add a config for each child node of the current exception
+            config.exceptions.each_pair do |k,v|
+                pt = @program.lookup_by_cuid(k)
+                pt.children.each do |child|
+
+                    # skip nodes with no FP instructions
+                    if child.attrs["icount"].to_i > 0 then
+                        child_pt = child
+
+                        # skip single-child nodes
+                        if child.children.size == 1 then
+                            child_pt = child.children.first
+                        end
+
+                        cfg = Config.new(child_pt.build_cuid, child_pt.build_label, config.default)
+                        cfg.exceptions[child_pt.uid] = v
+                        if child_pt.attrs.has_key?("cinst") then
+                            cfg.attrs["cinst"] = child_pt.attrs["cinst"]
+                        else
+                            cfg.attrs["cinst"] = 0
+                        end
+                        configs << cfg
+                    end
+                end
+            end
+        end
+
+        # sort in descending order of instruction executions
+        configs.sort! { |c1, c2| c2.attrs["cinst"].to_i <=> c1.attrs["cinst"].to_i }
+
+        # merge into two (binary search) if we have a lot of new configs
+        if configs.size > 5 then
+            pivot = configs.size / 2
+            left_cfg  = Config.new(config.cuid + " LEFT",  config.label + " LEFT",  config.default)
+            right_cfg = Config.new(config.cuid + " RIGHT", config.label + " RIGHT", config.default)
+            left_cfg.attrs["cinst"] = "0"
+            right_cfg.attrs["cinst"] = "0"
+            configs.each do |cfg|
+                cfg.exceptions.each_pair do |k,v|
+                    if pivot > 0 then
+                        left_cfg.exceptions[k] = v
+                        if cfg.attrs.has_key?("cinst") then
+                            left_cfg.attrs["cinst"] = (left_cfg.attrs["cinst"].to_i + cfg.attrs["cinst"].to_i).to_s
+                        end
+                    else
+                        right_cfg.exceptions[k] = v
+                        if cfg.attrs.has_key?("cinst") then
+                            right_cfg.attrs["cinst"] = (right_cfg.attrs["cinst"].to_i + cfg.attrs["cinst"].to_i).to_s
+                        end
+                    end
+                end
+                pivot -= 1
+            end
+            configs = Array.new
+            configs << left_cfg
+            configs << right_cfg
+        end
+        return configs
+    end
+end # }}}
+
+# App entry point
+
+# {{{ main method
+def main
+    srand
+
+    # initialize global variables
+    $autoconf_tag = "craft"                 # filename tag
+    $craft_driver = "craft_driver"          # standard driver program name
+    $status_preferred = $STATUS_SINGLE      # preferred replacement status
+    $status_alternate = $STATUS_DOUBLE      # replacement status if cannot be preferred
+    $status_ignored = $STATUS_IGNORE        # "cannot instrument" replacement status
+    $status_blank = " "                     # "no result" replacement status
+    $fortran_mode = false                   # pass "-N" to mutator
+    $initial_cfg_fn = ""                    # initial config filename (may be blank)
+    $max_queue_length = 0                   # track largest queue size (approximate)
+    $is_status = false                      # is this just a status thread?
+    $is_worker = false                      # is this the parent process or a worker?
+    $num_workers = 1                        # number of worker threads
+    $workers = Hash.new                     # worker proc info (pid => dirname)
+    $status_buffer = ""                     # buffer for output (keeps multiprocess output clean)
+    $strategy_name = "bin_simple"           # desired search strategy
+    $self_invoke = File.basename($0)        # used to spawn worker threads
+    $fpconf_invoke = "fpconf"               # invoke configuration generator
+    $fpinst_invoke = "fpinst"               # invoke mutator
+
+    # check command-line options
+    if ARGV.size == 0 or ARGV.include?("-h") then
+        print_usage
+        exit
+    end
+
+    # cleaning mode
+    if ARGV.size == 1 and ARGV[0] == "clean" then
+        puts "Cleaning..."
+        clean_everything
+        puts "Done."
+        exit
+    end
+
+    # status mode
+    if ARGV.size == 1 and ARGV[0] == "status" then
+        $is_status = true;
+        ARGV.shift
+    end
+
+    parse_command_line
+
+    # set up environment and filenames
+    if !$is_worker then
+        $autoconf_path = Dir.getwd + "/"
+    end
+
+    # plain text info files
+    $settings_fn = "#{$autoconf_path}#{$autoconf_tag}.settings"
+    $program_fn = "#{$autoconf_path}#{$autoconf_tag}.program"
+    $mainlog_fn = "#{$autoconf_path}#{$autoconf_tag}.mainlog"
+    $walltime_fn = "#{$autoconf_path}#{$autoconf_tag}.walltime"
+
+    # files containing lists of Config objects
+    $workqueue_fn = "#{$autoconf_path}#{$autoconf_tag}.workqueue"     # waiting to be tested
+    $inproc_fn = "#{$autoconf_path}#{$autoconf_tag}.inproc"           # currently running
+    $tested_fn = "#{$autoconf_path}#{$autoconf_tag}.tested"           # finished (passed, failed, or aborted)
+
+    # important single configuration files
+    $orig_config_fn = "#{$autoconf_path}craft_orig.cfg"
+    $final_config_fn = "#{$autoconf_path}craft_final.cfg"
+
+    # configuration file directories
+    $prof_path = "#{$autoconf_path}profile/"           # profiler run
+    $final_path = "#{$autoconf_path}final/"         # single final "best" config (cfg file + mutant)
+    $best_path = "#{$autoconf_path}best/"           # top 10 "best" individual configs (cfg files only)
+    $passed_path = "#{$autoconf_path}passed/"       # all successful configs (cfg files only)
+    $failed_path = "#{$autoconf_path}failed/"       # all failed configs (cfg files only)
+    $aborted_path = "#{$autoconf_path}aborted/"     # all aborted configs (cfg files only)
+
+    if $is_status then
+        print_status
+        exit
+    end
+
+    # check for driver script
+    if !File.exist?("#{$autoconf_path}#{$craft_driver}") then
+        puts "No driver program \"craft_driver\" found."
+        puts "Aborting."
+        exit
+    end
+
+    if $is_worker then
+
+        # this is just a worker process
+        
+        load_settings
+        initialize_program
+        read_profiler_data
+        initialize_strategy
+        run_main_autoconf_loop                      # main loop
+        #puts "Worker finished.  [Empty queue]"
+
+    else
+
+        # this is a supervisor process
+
+        puts ""
+        puts "CRAFT"
+        puts "Autoconfiguring #{$binary_name} ..."
+        puts "Working dir: #{$autoconf_path}"
+
+        if !File.exist?($workqueue_fn) then
+            # this is the first invocation of this analysis; initialize everything
+            initialize_search
+        else
+            # we're resuming a pre-existing analysis
+            puts "Resuming previous analysis ..."
+            load_settings
+            initialize_program
+            read_profiler_data
+            initialize_strategy
+        end
+
+        # set up worker thread folders
+        $num_workers.times do |id|
+            worker_dir = "#{$autoconf_path + $binary_name}_#{Process.pid}_worker#{id}"
+            if File.exist?(worker_dir) then
+                FileUtils.rm_rf(worker_dir)
+            end
+            Dir.mkdir(worker_dir)
+            $workers[id] = worker_dir
+        end
+
+        # spawn worker threads (don't spawn more than we need right now, though)
+        [get_workqueue_length, $num_workers].min.times do |id|
+            worker_dir = "#{$autoconf_path + $binary_name}_#{Process.pid}_worker#{id}"
+            job = fork do
+                exec "cd #{worker_dir} && #{$self_invoke} -w #{id} #{$autoconf_path}"
+            end
+            $workers.delete(id)
+            $workers[job] = worker_dir
+            #puts "Spawned worker thread #{id} (pid=#{job})."
+        end
+
+        # main loop
+        puts "Initialization complete. Starting main search routine."
+        puts ""
+        run_main_supervisor_loop
+
+        # test final config, assemble results, etc.
+        finalize_autoconf
+
+    end
+end # }}}
+
+
+# Search management routines:
+
+# {{{ initialize_search
+def initialize_search
+    # parent initialization
+    
+    $start_time = Time.now
+
+    # create search config files
+    File.new($settings_fn, "w").close
+    File.new($workqueue_fn, "w").close
+    File.new($inproc_fn, "w").close
+    File.new($tested_fn, "w").close
+    File.new($mainlog_fn, "w").close
+
+    # initial performance run
+    print "Performing baseline performance test ... "
+    $stdout.flush
+    if !run_baseline_performance then
+        puts "Baseline performance test failed verification!"
+        puts "Aborting search."
+        exit
+    end
+    puts " [Base error: #{$baseline_error}  walltime: #{format_time($baseline_runtime.to_f)}]"
+
+    # generate initial configuration by calling fpconf
+    # and initialize global data structures
+    print "Generating initial configuration ... "
+    $stdout.flush
+    orig_cfg = File.open($orig_config_fn, "w")
+    if $initial_cfg_fn.length > 0 && File.exists?($initial_cfg_fn) then
+        # a base config was given; just read it
+        print "(using base: #{$initial_cfg_fn}) "
+        $stdout.flush
+        IO.foreach($initial_cfg_fn) do |line|
+            orig_cfg.puts line
+        end
+    else
+        # run fpconf to generate config
+        IO.popen("#{$fpconf_invoke} #{$binary_path}") do |io|
+            io.each_line do |line|
+                orig_cfg.puts line
+            end
+        end
+    end
+    Dir.glob("fpconf.log").each do |f| File.delete(f) end
+    orig_cfg.close
+    puts "done."
+
+    # read all program control points and baseline performance data
+    # depends on initial configuration being present
+    initialize_program
+
+    # initial profiling run
+    # depends on $program being initialized
+    print "Performing profiling test ... "
+    $stdout.flush
+    if !run_profiler then
+        puts "Baseline profiling test failed verification!"
+        puts "Aborting search."
+        exit
+    end
+    read_profiler_data
+    puts "done."
+
+    # initialize strategy object
+    # depends on $program being initialized
+    initialize_strategy
+
+    # save project settings to file (for workers to load)
+    save_settings
+
+    # initialize work queue
+    configSet = $strategy.build_initial_configs
+    configSet.each do |cfg|
+        puts "Added config #{cfg.label} to workqueue."
+        add_to_workqueue(cfg)
+    end
+    $max_queue_length = get_workqueue_length
+
+    # create folders for saving configurations
+    FileUtils.rm_rf($best_path)
+    Dir.mkdir($best_path)
+    FileUtils.rm_rf($passed_path)
+    Dir.mkdir($passed_path)
+    FileUtils.rm_rf($failed_path)
+    Dir.mkdir($failed_path)
+    FileUtils.rm_rf($aborted_path)
+    Dir.mkdir($aborted_path)
+
+end # }}}
+# {{{ run_main_autoconf_loop
+def run_main_autoconf_loop
+    cfg = get_next_workqueue_item
+
+    # main search loop
+    while !cfg.nil? do
+
+        add_to_inproc(cfg)
+
+        # queue status output
+        queue_length = get_workqueue_length
+        $status_buffer += "[Queue length: #{"%3d" % (queue_length+1)}]  "
+        $max_queue_length = queue_length if queue_length > $max_queue_length
+
+        puts "Testing config #{cfg.label} ..."
+
+        if run_config(cfg) == $RESULT_PASS then
+
+            # this config passed
+
+        else
+
+            # add any children we need to test
+            configSet = $strategy.split_config(cfg)
+            configSet.each do |child|
+                puts "Added config #{child.label} to workqueue."
+                add_to_workqueue(child)
+            end
+
+        end
+
+        add_tested_config(cfg)
+        remove_from_inproc(cfg)
+        rebuild_final_config
+
+        cfg = get_next_workqueue_item
+    end
+end # }}}
+# {{{ run_main_supervisor_loop
+def run_main_supervisor_loop
+
+    # keep going until there are no more configs to test
+    while get_workqueue_length > 0 or get_inproc_length > 0 do
+
+        keep_running = true
+        while keep_running do
+
+            $max_queue_length = get_workqueue_length if get_workqueue_length > $max_queue_length
+
+            # check for dead worker processes
+            #print "Checking for dead workers ... "
+            dead_workers = Array.new
+            $workers.each_pair do |job, dir|
+                if job < $num_workers then
+                    # this job has never actually been started
+                    # (pid < $num_workers)
+                    dead_workers << [job, dir]
+                else
+                    cmd = "ps -o s= p #{job.to_i}"
+                    stat = `#{cmd}`
+                    stat.chomp!
+                    if stat != "S" then
+                        dead_workers << [job, dir]
+                    end
+                end
+            end
+            #puts "#{dead_workers.size} dead worker(s) found."
+
+            if dead_workers.size == $num_workers and get_workqueue_length == 0 then
+
+                # everyone's done and there's nothing else in the queue
+                keep_running = false
+
+            elsif get_workqueue_length > 0 then
+
+                # there's still stuff to do; restart dead workers
+                [get_workqueue_length, dead_workers.size].min.times do |i|
+                #dead_workers.each do |job, dir|
+                    job,dir = dead_workers.pop
+                    $workers.delete(job)
+                    id = File.basename(dir)
+                    if id =~ /worker(\d+)/ then
+                        id = $1
+                    else
+                        id = id[$binary_name.length+1,id.length-$binary_name.length-1]
+                    end
+                    FileUtils.rm_rf(dir)
+                    Dir.mkdir(dir)
+                    job = fork do
+                        exec "cd #{dir} && #{$self_invoke} -w #{id} #{$autoconf_path}"
+                    end
+                    #puts "Respawned worker thread #{id} (pid=#{job})."
+                    $workers[job] = dir
+                end
+            end
+
+            # wait a while
+            sleep 5
+        end
+
+        # clean up any workers and directories
+        $workers.each_pair do |job, dir|
+            Process.wait(job.to_i)
+            FileUtils.rm_rf(dir)
+        end
+
+        # if the workqueue is empty and all the workers are dead but there
+        # are still configs in the inproc queue, then something was aborted;
+        # move any unfinished configs back to the workqueue and restart
+        if get_inproc_length > 0 then
+            puts "Unfinished jobs; restarting workers ..."
+            move_all_inproc_to_workqueue
+        end
+    end
+end # }}}
+# {{{ finalize_autoconf
+def finalize_autoconf
+
+    if File.exist?($final_path) then
+        # another process is already finalizing
+        puts "Finalization already underway."
+        return
+    else
+        Dir.mkdir($final_path)
+    end
+
+    # queue status output
+    puts ""
+    puts "Candidate queue exhausted.  [Max queue length: ~#{$max_queue_length} item(s)]"
+
+    # generate final config file
+    print "Generating final configuration ... "
+    $stdout.flush
+    rebuild_final_config
+    FileUtils.cp($final_config_fn, $final_path)
+    puts "done."
+
+    # try the final config (and keep results)
+    puts "Testing final configuration ... "
+    Dir.chdir($final_path)
+    run_config_file($final_config_fn, true, $final_config.cuid)
+    Dir.chdir($autoconf_path)
+
+    # start generating final report
+    report = build_best_report(true)
+
+    # clean temporary files
+    File.delete($workqueue_fn)
+    File.delete($inproc_fn)
+
+    # finalize report
+    elapsed = Time.now.to_f - $start_time.to_f
+    summary = get_tested_configs_summary
+    report << "Total configs tested:      #{"%11d" % summary["total"]}"
+    report << "  Total passed:            #{"%11d" % summary["pass"]}"
+    report << "  Total failed:            #{"%11d" % summary["fail"]}"
+    report << "  Total aborted:           #{"%11d" % summary["error"]}"
+    report << "Done.  [Total elapsed walltime: #{format_time(elapsed)}]"
+    report << " "
+    add_to_mainlog(report.join("\n"))
+    puts report.join("\n")
+
+    # wtf = wall time file
+    # what did *you* think it meant?!?!?
+    #
+    wtf = File.new($walltime_fn,"w")
+    wtf.puts elapsed.to_s
+    wtf.close
+
+end # }}}
+
+
+# Helper routines:
+
+# {{{ initialization
+
+
+def parse_command_line
+    begin
+        opt = ARGV.shift
+        if opt == "-r" then
+        elsif opt == "-w" then
+            # worker process
+            $is_worker = true
+            $worker_id = ARGV.shift
+            $autoconf_path = ARGV.shift
+        elsif opt == "-j" then
+            # parallel: "-j 4" variant
+            $num_workers = ARGV.shift.to_i
+        elsif opt =~ /^-j/ then
+            # parallel: "-j4" variant
+            $num_workers = opt[2,opt.length-2].to_i
+        elsif opt == "-d" then
+            # debug mode (double precision)
+            $status_preferred = $STATUS_DOUBLE
+            $status_alternate = $STATUS_IGNORE
+        elsif opt == "-D" then
+            # debug mode (single precision)
+            $status_preferred = $STATUS_SINGLE
+            $status_alternate = $STATUS_IGNORE
+        elsif opt == "-c" then
+            # initial configuration
+            $initial_cfg_fn = ARGV.shift
+        elsif opt == '-N' then
+            # fortran mode
+            $fortran_mode = true
+        elsif opt == '-s' then
+            # strategy
+            $strategy_name = ARGV.shift
+        end
+    end while ARGV.size > 0
+    if not opt.nil? then
+        $binary_name = File.basename(opt)
+        $binary_path = File.expand_path(opt)
+    end
+end
+
+
+def initialize_program
+    $program = nil
+    mod = nil
+    func = nil
+    bblk = nil
+    prolog = ""
+    IO.foreach($orig_config_fn) do |line|
+        if line =~ /(APPLICATION #\d+: [x0-9A-Fa-f]+) \"(.+)\"/ then
+            $program = PPoint.new($1, $TYPE_APPLICATION, line[1,1])
+            $program.attrs["desc"] = $2
+        elsif line =~ /(MODULE #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
+            mod = PPoint.new($1, $TYPE_MODULE, line[1,1])
+            mod.attrs["desc"] = $2
+            $program.children << mod if $program != nil
+        elsif line =~ /(FUNC #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
+            func = PPoint.new($1, $TYPE_FUNCTION, line[1,1])
+            func.attrs["desc"] = $2
+            mod.children << func if mod != nil
+        elsif line =~ /(BBLK #\d+: (0x[0-9A-Fa-f]+))/ then
+            bblk = PPoint.new($1, $TYPE_BASICBLOCK, line[1,1])
+            bblk.attrs["addr"] = $2
+            func.children << bblk if func != nil
+        elsif line =~ /(INSN #\d+: (0x[0-9A-Fa-f]+)) \"(.+)\"/ then
+            insn = PPoint.new($1, $TYPE_INSTRUCTION, line[1,1])
+            insn.attrs["addr"] = $2
+            insn.attrs["desc"] = $3
+            bblk.children << insn if bblk != nil
+        else
+            prolog << line.chomp
+            prolog << "\n"
+        end
+    end
+    $program.build_lookup_hash if $program != nil
+    $program.attrs["prolog"] = prolog
+    if $program.nil? then
+        puts "Unable to initialize program control structure."
+        puts "Aborting search."
+        exit
+    end
+end
+
+def initialize_strategy
+    if $strategy_name == "simple" then
+        $strategy = Strategy.new($program, $status_preferred, $status_alternate)
+    elsif $strategy_name == "bin_simple" then
+        $strategy = BinaryStrategy.new($program, $status_preferred, $status_alternate)
+    else
+        puts "Unrecognized search strategy \"#{$strategy_name}\""
+        puts "Aborting search."
+        exit
+    end
+end
+
+
+def run_baseline_performance
+    passed = false
+    $baseline_error = 0.0
+    $baseline_runtime = 0
+    cmd = "#{$autoconf_path}#{$craft_driver} #{$binary_path}"
+    io_in, io_out, io_err = Open3.popen3(cmd)
+    io_err.each_line do |line| end
+    io_out.each_line do |line|
+        if line =~ /status:\s*(pass|fail)/i then
+            if $1 =~ /pass/i then
+                passed = true
+            end
+        end
+        if line =~ /error:\s*(.+)/i then
+            $baseline_error = $1.to_f
+        end
+        if line =~ /time:\s*(.+)/i then
+            $baseline_runtime = $1.to_i
+        end
+    end
+    return passed
+end
+
+
+def run_profiler
+    passed = false
+    if not File.exist?($prof_path) then
+        Dir.mkdir($prof_path)
+    end
+    Dir.chdir($prof_path)
+
+    # run mutator
+    cmd = "#{$fpinst_invoke} -i --cinst #{$binary_path}"
+    io_in, io_out, io_err = Open3.popen3(cmd)
+    io_err.each_line do |line| end
+    io_out.each_line do |line| end
+
+    # run rewritten mutatee
+    cmd = "#{$autoconf_path}#{$craft_driver} #{Dir.getwd}/mutant"
+    io_in, io_out, io_err = Open3.popen3(cmd)
+    io_err.each_line do |line| end
+    io_out.each_line do |line|
+        if line =~ /status:\s*(pass|fail)/i then
+            if $1 =~ /pass/i then
+                passed = true
+            end
+        end
+    end
+
+    # extract log file name
+    if passed then
+        $perf_log_fn = "#{Dir.getwd}/#{Dir.glob("*-c_inst*.log").first}"
+    end
+
+    Dir.chdir($autoconf_path)
+    return passed
+end
+
+
+def read_profiler_data
+    pt_by_id = Hash.new
+
+    # read individual instruction counts from log file
+
+    # pass 1: extract ID => point mappings
+    IO.foreach($perf_log_fn) do |line|
+        if line =~ /instruction id="(\d+)" address="([x0-9a-zA-Z]+)"/ then
+            pt_by_id[$1] = $program.lookup_by_addr($2)
+        end
+    end
+
+    # pass 2: read counts
+    cur_count = ""
+    IO.foreach($perf_log_fn) do |line|
+        if line =~ /priority="(\d+)" type="InstCount"/ then
+            cur_count = $1
+        end
+        if line=~ /<inst_id>(\d+)<\/inst_id>/ then
+            cur_id = $1
+            cur_pt = pt_by_id[cur_id]
+            if not cur_pt.nil? then
+                cur_pt.attrs["cinst"] = cur_count
+                #puts "read count for #{cur_pt.uid} :: #{cur_count}"
+            end
+        end
+    end
+
+    # propogate instruction counts up to the root
+    update_cinst($program)
+end
+
+def update_cinst (pt)
+    if not pt.attrs.has_key?("cinst") then
+        total_cinst = 0
+        pt.children.each do |child|
+            update_cinst(child)
+            total_cinst += child.attrs["cinst"].to_i
+        end
+        pt.attrs["cinst"] = total_cinst.to_s
+    end
+end
+
+
+# }}}
+# {{{ configuration testing
+
+
+def run_config (cfg)
+
+    # write actual configuration file
+    cfg_path = $autoconf_path + cfg.filename
+    $program.build_config_file(cfg, cfg_path)
+
+    # pass off to filename version
+    result = run_config_file(cfg_path, false, cfg.cuid)
+
+    # save result
+    cfg.attrs["result"] = result
+
+    # delete actual configuration file
+    FileUtils.rm_rf(cfg_path)
+
+    return result
+end
+
+def run_config_file (fn, keep, cuid)
+
+    # status updates
+    basename = File.basename(fn)
+    if basename =~ /^#{$binary_name}(.*)/ then
+        basename = $1
+    end
+    #puts "  Testing #{basename} ..."
+    $status_buffer = "    Finished testing #{cuid}:\n"
+
+    # build rewritten mutatee
+    cmd = "#{$fpinst_invoke} -i #{$fortran_mode ? "-N" : ""}"
+    cmd += " -c #{fn}"
+    cmd += " #{$binary_path}"
+    #add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
+    io_in, io_out, io_err = Open3.popen3(cmd)
+    io_err.each_line do |line| end
+    io_out.each_line do |line|
+        if line =~ /Inplace: (.*)$/ then
+            $status_buffer += "        #{$1}\n"
+        end
+    end
+
+    # execute rewritten mutatee and check for success
+    result = $RESULT_ERROR
+    runtime = 0
+    error = 0.0
+    cmd = "#{$autoconf_path}#{$craft_driver} #{Dir.getwd}/mutant"
+    #add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
+    io_in, io_out, io_err = Open3.popen3(cmd)
+    io_err.each_line do |line| end
+    io_out.each_line do |line|
+        if line =~ /status:\s*(pass|fail)/i then
+            tmp = $1
+            if tmp =~ /pass/i then
+                result = $RESULT_PASS
+            elsif tmp =~ /fail/i then
+                result = $RESULT_FAIL
+            end
+        elsif line =~ /error:\s*(.+)/i then
+            error = $1.to_f
+        elsif line =~ /time:\s*(.+)/i then
+            runtime = $1.to_i
+        end
+    end
+
+    # scan log file(s) for info
+    Dir.glob("*.log").each do |lfn|
+        if lfn != "fpinst.log" then
+            IO.foreach(lfn) do |line|
+                if line =~ /Inplace: (.*)$/ then
+                    $status_buffer += "        #{$1.gsub(/<.*>/, "")}\n"
+                end
+            end
+        end
+    end
+
+    # print output
+    $status_buffer += "        #{result}"
+    $status_buffer += "  [Walltime: #{format_time(runtime.to_f)}"
+    $status_buffer += " %.1fX"%[runtime / $baseline_runtime.to_f]
+    $status_buffer += " Error: %g]"%[error]
+    puts $status_buffer
+    add_to_mainlog($status_buffer)
+    $status_buffer = ""
+
+    # clean out mutant, logs, and rewritten library files
+    if !keep then
+        begin
+            Dir.glob("*").each do |lfn|
+                if lfn =~ /mutant/ || lfn =~ /\.log/ || lfn =~ /lib(c|m)\.so\.6/ then
+                    File.delete(lfn)
+                end
+            end
+        rescue
+            puts "Error clearing old files"
+        end
+    end
+
+    # copy config to appropriate folder and delete the original
+    if result == $RESULT_PASS then
+        FileUtils.cp(fn, $passed_path)
+    elsif result == $RESULT_FAIL then
+        FileUtils.cp(fn, $failed_path)
+    elsif result == $RESULT_ERROR then
+        FileUtils.cp(fn, $aborted_path)
+    end
+    if !keep then
+        FileUtils.rm_rf(fn)
+    end
+
+    return result
+end
+
+
+# }}}
+# {{{ file manipulation
+
+def save_settings
+    f = File.new($settings_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    f.puts $start_time.to_i
+    f.puts $binary_name
+    f.puts $binary_path
+    f.puts $strategy_name
+    f.puts $stat_preferred
+    f.puts $stat_alternate
+    f.puts $baseline_runtime
+    f.puts($fortran_mode ? "fortran" : "other")
+    f.puts $initial_cfg_fn
+    f.puts $perf_log_fn
+    f.close
+end
+def load_settings
+    # could probably be read-only
+    f = File.new($settings_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    $start_time = Time.at(f.gets.to_i)
+    $binary_name = f.gets.chomp
+    $binary_path = f.gets.chomp
+    $strategy_name = f.gets.chomp
+    $stat_preferred = f.gets.chomp
+    $stat_alternate = f.gets.chomp
+    $baseline_runtime = f.gets.chomp.to_i
+    lang = f.gets.chomp
+    if lang == "fortran" then
+        $fortran_mode = true
+    else
+        $fortran_mode = false
+    end
+    $initial_cfg_fn = f.gets.chomp
+    $perf_log_fn = f.gets.chomp
+    f.close
+end
+
+
+def add_to_workqueue(cfg)
+    f = File.new($workqueue_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    f.seek(0,IO::SEEK_END)
+    YAML.dump(cfg, f)
+    f.close
+end
+def get_next_workqueue_item
+    next_cfg = nil
+    workqueue = Array.new
+    f = File.new($workqueue_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    YAML.each_document(f) do |doc|
+        workqueue << doc
+    end
+    next_cfg = workqueue.shift
+    f.pos = 0
+    workqueue.each do |cfg|
+        YAML.dump(cfg, f)
+    end
+    f.truncate(f.pos)
+    f.close
+    return next_cfg
+end
+def get_workqueue_length
+    # could probably be read-only
+    len = 0
+    begin
+        f = File.new($workqueue_fn, File::RDWR)
+        f.flock File::LOCK_EX
+        YAML.each_document(f) do |doc|
+            len += 1
+        end
+        f.close
+    rescue
+        return 0
+    end
+    return len
+end
+
+
+def add_to_inproc(cfg)
+    f = File.new($inproc_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    f.seek(0,IO::SEEK_END)
+    YAML.dump(cfg, f)
+    f.close
+end
+def remove_from_inproc(cfg)
+    inproc = Array.new
+    f = File.new($inproc_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    YAML.each_document(f) do |doc|
+        inproc << doc if not (cfg.cuid == doc.cuid)
+    end
+    f.pos = 0
+    inproc.each do |cfg|
+        YAML.dump(cfg, f)
+    end
+    f.truncate(f.pos)
+    f.close
+end
+def get_inproc_length
+    # could probably be read-only
+    len = 0
+    begin
+        f = File.new($inproc_fn, File::RDWR)
+        f.flock File::LOCK_EX
+        YAML.each_document(f) do |doc|
+            len += 1
+        end
+        f.close
+    rescue
+        return 0
+    end
+    return len
+end
+def move_all_inproc_to_workqueue
+    inproc = Array.new
+    f = File.new($inproc_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    YAML.each_document(f) do |doc|
+        inproc << doc
+    end
+    f.close
+    inproc.each do |cfg|
+        remove_from_inproc(cfg)
+        add_to_workqueue(cfg)
+    end
+end
+
+
+def add_tested_config(cfg)
+    f = File.new("#{$tested_fn}", File::RDWR)
+    f.flock File::LOCK_EX
+    f.seek(0,IO::SEEK_END)
+    YAML.dump(cfg, f)
+    f.close
+end
+def get_tested_configs
+    # could probably be read-only
+    configs = Array.new
+    f = File.new("#{$tested_fn}",  File::RDWR)
+    f.flock File::LOCK_EX
+    YAML.each_document(f) do |doc|
+        configs << doc
+    end
+    f.close
+    return configs
+end
+def get_tested_config_count
+    # could probably be read-only
+    len = 0
+    f = File.new("#{$tested_fn}",  File::RDWR)
+    f.flock File::LOCK_EX
+    YAML.each_document(f) do |doc|
+        len += 1
+    end
+    f.close
+    return len
+end
+
+
+def add_to_mainlog(reg)
+    f = File.new($mainlog_fn, File::RDWR)
+    f.flock File::LOCK_EX
+    f.seek(0,IO::SEEK_END)
+    f.puts(reg.to_s)
+    f.close
+end
+def load_mainlog
+    # could probably be read-only
+    f = File.new($mainlog_fn,  File::RDWR)
+    f.flock File::LOCK_EX
+    lines = f.readlines
+    f.close
+    return lines
+end
+
+
+# }}}
+# {{{ output
+
+
+def print_usage
+    puts "Usage:  #{$self_invoke} [options] <binary>       (parent process)"
+    puts "          or"
+    puts "        #{$self_invoke} -r                       (resume parent process)"
+    puts "          or"
+    puts "        #{$self_invoke} -w <id> <dir>            (worker process)"
+    puts "          or"
+    puts "        #{$self_invoke} clean                    (reset search)"
+    puts "Valid options:"
+    puts "   -c <file>      use <file> as initial base configuration"
+    puts "   -d             debug mode (ignore->double instead of double->single)"
+    puts "   -D             debug mode (ignore->single instead of double->single)"
+    puts "   -j <np>        spawn <np> worker threads"
+    puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
+    puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
+    puts "                    valid strategies:  \"simple\" and \"bin_simple\""
+end
+
+
+def print_status
+    overall_status = "not running"
+    full = false
+    if File.exist?($settings_fn) then
+        begin
+            load_settings
+            cmd = "ps -C #{$self_invoke} -o s="
+            psr = `#{cmd}`
+            $num_workers = [0,psr.lines.count - ($is_status ? 2 : 1)].max
+            elapsed = Time.now.to_f - $start_time.to_f
+            overall_status = "initializing"
+            overall_status = "running" if (get_workqueue_length > 0 or get_inproc_length > 0)
+            overall_status = "finalizing" if File.exist?($final_path)
+            if File.exist?($walltime_fn) then
+                overall_status = "DONE"
+                elapsed = IO.readlines($walltime_fn)[0].to_f
+            end
+            full = true
+        rescue
+            overall_status = "initializing"
+        end
+    end
+
+    puts "==============================================="
+    puts "                    CRAFT"
+    if full then
+        puts "    Application: #{"%26s" % $binary_name}"
+        #puts "    Fortran mode:  #{"%23s" % ($fortran_mode ? "Y" : "N")}"
+        puts "    Worker threads:            #{"%12d" % $num_workers}"
+        summary = get_tested_configs_summary
+        puts "    Total configs tested:      #{"%12d" % summary["total"]}"
+        puts "      Total passed:            #{"%12d" % summary["pass"]}"
+        puts "      Total failed:            #{"%12d" % summary["fail"]}"
+        puts "      Total aborted:           #{"%12d" % summary["error"]}"
+        puts "    Current in-proc length:    #{"%12d" % get_inproc_length}"
+        puts "    Current workqueue length:  #{"%12d" % get_workqueue_length}"
+        puts "    Total elapsed walltime: #{"%15s" % format_time(elapsed)}"
+    end
+    puts "    Overall status:         #{"%15s" % overall_status}"
+    puts "==============================================="
+    if full then
+        puts build_best_report.join("\n")
+        puts "==============================================="
+    end
+end
+
+
+def format_time (elapsed)
+    mins, secs = elapsed.divmod 60.0
+    hrs, mins = mins.divmod 60.0
+    #return "%d:%02d:%05.2f"%[hrs.to_i, mins.to_i, secs]
+    return "%d:%02d:%02d"%[hrs.to_i, mins.to_i, secs.to_i]
+end
+
+
+# }}}
+# {{{ finalization and cleanup
+
+
+def rebuild_final_config
+    $final_config = $strategy.build_final_config(get_tested_configs)
+    $program.build_config_file($final_config, $final_config_fn)
+end
+
+
+def build_best_report(copy_files=false)
+    # find best individual configs
+    mainlog = load_mainlog
+    results = get_tested_configs
+    cur_cuid = ""
+    cur_cfg = nil
+    inst_item = ["",0.0]
+    exec_item = ["",0.0]
+    inst_hash = Array.new
+    exec_hash = Array.new
+    inst_passed = 0.0
+    exec_passed = 0.0
+    inst_failed = 0.0
+    exec_failed = 0.0
+    mainlog.each do |line|
+        if line =~ /Finished testing (.*):/ then
+            cur_cuid = $1
+            results.each do |r|
+                if r.cuid == cur_cuid then
+                    cur_cfg = r
+                end
+            end
+            inst_item = ["",0.0]
+            exec_item = ["",0.0]
+            has_exec = false
+        end
+        if line =~ /instrumented .* \[([\d.]*)%\] single/ then
+            #inst_item = [cur_cfg, inst_item[1]+$1.to_f]
+            inst_item = [cur_cfg, $1.to_f]
+        end
+        if line =~ /executed .* \[([\d.]*)%\] single/ then
+            #exec_item = [cur_cfg, exec_item[1]+$1.to_f]
+            exec_item = [cur_cfg, $1.to_f]
+        end
+        if (not cur_cuid == "FINAL") then
+            if line.include?($RESULT_PASS) then
+                inst_hash << inst_item
+                exec_hash << exec_item
+                inst_passed += inst_item[1]
+                exec_passed += exec_item[1]
+            elsif line.include?($RESULT_FAIL) then
+                # this is probably not a reliable test; we need to only count
+                # single-instruction configurations because these are the only
+                # configs that won't possibly spawn others; we can't poll
+                # $program here because it may not be loaded; another
+                # alternative is to add a "base" tag or similar whenever we
+                # create a config
+                if cur_cfg.cuid =~ /INSN/ then
+                    inst_failed += inst_item[1]
+                    exec_failed += exec_item[1]
+                end
+            end
+        end
+    end
+    inst_hash = inst_hash.sort_by { |cfg,pct| -pct }
+    exec_hash = exec_hash.sort_by { |cfg,pct| -pct }
+    report = Array.new
+    report << " "
+    report << " Top %-14s%15s  %s"%["instrumented:","CONFIG","% REPLACED"]
+    10.times do
+        entry = inst_hash.shift
+        if !entry.nil? then
+            cfg = entry[0]
+            if !cfg.nil? then
+                FileUtils.cp($passed_path + cfg.filename, $best_path) if copy_files
+                report << "    %30s  %4.1f"%[cfg.cuid,entry[1]]
+            else
+                report << "    %30s  %4.1f"%[entry[0],entry[1]]
+            end
+        end
+    end
+    report << " "
+    report << "    %30s  %4.1f"%["TOTAL PASSED",inst_passed]
+    report << "    %30s  %4.1f"%["TOTAL FAILED",inst_failed]
+    report << "    %30s  %4.1f"%["TOTAL",inst_passed+inst_failed]
+    report << " "
+    report << " Top %-14s%15s  %s"%["executed:","CONFIG","% REPLACED"]
+    10.times do
+        entry = exec_hash.shift
+        if !entry.nil? then
+            cfg = entry[0]
+            if !cfg.nil? then
+                FileUtils.cp($passed_path + cfg.filename, $best_path) if copy_files
+                report << "    %30s  %4.1f"%[cfg.cuid,entry[1]]
+            else
+                report << "    %30s  %4.1f"%[entry[0],entry[1]]
+            end
+        end
+    end
+    report << " "
+    report << "    %30s  %4.1f"%["TOTAL PASSED",exec_passed]
+    report << "    %30s  %4.1f"%["TOTAL FAILED",exec_failed]
+    report << "    %30s  %4.1f"%["TOTAL",exec_passed+exec_failed]
+    report << " "
+    return report
+end
+
+def get_tested_configs_summary
+    summary = Hash.new(0)
+    tested_cfgs = get_tested_configs
+    tested_cfgs.each do |cfg|
+        if cfg.attrs.has_key?("result") then
+            if cfg.attrs["result"] == $RESULT_PASS then
+                summary["pass"] += 1
+            elsif cfg.attrs["result"] == $RESULT_FAIL then
+                summary["fail"] += 1
+            elsif cfg.attrs["result"] == $RESULT_ERROR then
+                summary["error"] += 1
+            end
+        end
+    end
+    summary["total"] = tested_cfgs.size
+    return summary
+end
+
+
+def clean_everything
+    toDelete = Array.new
+    Dir.glob("#{$autoconf_tag}.*") do |fn| toDelete << fn end
+    Dir.glob("*_worker*") do |fn| toDelete << fn end
+    Dir.glob("*.cfg") do |fn| toDelete << fn end
+    Dir.glob("*.log") do |fn| toDelete << fn end
+    Dir.glob("profile") do |fn| toDelete << fn end
+    Dir.glob("final") do |fn| toDelete << fn end
+    Dir.glob("best") do |fn| toDelete << fn end
+    Dir.glob("passed") do |fn| toDelete << fn end
+    Dir.glob("failed") do |fn| toDelete << fn end
+    Dir.glob("aborted") do |fn| toDelete << fn end
+    toDelete.each do |fn|
+        FileUtils.rm_rf(fn)
+    end
+end
+
+
+# }}}
+
+
+# top-level: call main
+main
+
