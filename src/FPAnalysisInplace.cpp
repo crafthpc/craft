@@ -206,7 +206,7 @@ string FPAnalysisInplace::finalInstReport()
     size_t insnsInstrumentedTotal = insnsInstrumentedSingle + insnsInstrumentedDouble;
     stringstream ss;
     ss << "Inplace: " << insnsInstrumentedTotal << " instrumented";
-    ss << setiosflags(ios::fixed) << setprecision(1);
+    ss << setiosflags(ios::fixed) << setprecision(3);
     ss << "  (" << insnsInstrumentedSingle
        << " [" << (insnsInstrumentedSingle == 0 ? 0 :
                     (double)insnsInstrumentedSingle/
@@ -2404,7 +2404,7 @@ void FPAnalysisInplace::finalOutput()
     stringstream ss;
     ss << "Finished execution:" << endl;
     ss << "  Inplace: " << formatLargeCount(exec_total) << " executed";
-    ss << setiosflags(ios::fixed) << setprecision(1);
+    ss << setiosflags(ios::fixed) << setprecision(3);
     ss << "  (" << formatLargeCount(exec_single)
        << " [" << (exec_single == 0 ? 0 : 
                (double)exec_single/(double)exec_total*100.0) << "%]"
