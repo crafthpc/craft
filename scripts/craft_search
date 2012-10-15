@@ -38,12 +38,21 @@ $TYPE_SPACES[$TYPE_MODULE]      = "  "
 $TYPE_SPACES[$TYPE_FUNCTION]    = "    "
 $TYPE_SPACES[$TYPE_BASICBLOCK]  = "      "
 $TYPE_SPACES[$TYPE_INSTRUCTION] = "        "
+$TYPE_RANK = Hash.new(0)
+$TYPE_RANK[$TYPE_APPLICATION] = 1
+$TYPE_RANK[$TYPE_MODULE]      = 2
+$TYPE_RANK[$TYPE_FUNCTION]    = 3
+$TYPE_RANK[$TYPE_BASICBLOCK]  = 4
+$TYPE_RANK[$TYPE_INSTRUCTION] = 5
+$TYPE_RRANK = $TYPE_RANK.invert
 
 $STATUS_NONE      = " "                             # replacement status posibilities
 $STATUS_SINGLE    = "s"
 $STATUS_DOUBLE    = "d"
 $STATUS_IGNORE    = "i"
 $STATUS_CANDIDATE = "c"
+
+$FINALCFG_CUID = "FINAL"                            # special config; represents "best" final results
 
 # }}}
 
@@ -64,7 +73,7 @@ class PPoint
     attr_accessor :parent           # PPoint
     attr_accessor :children         # array of PPoints
     attr_accessor :attrs            # string => string
-    attr_accessor :bycuid           # uid => PPoint          (for increased lookup speed)
+    attr_accessor :byuid            # uid => PPoint          (for increased lookup speed)
     attr_accessor :byaddr           # addr => insn PPoint    (for increased lookup speed)
 
     def initialize (uid, type, orig_status)
@@ -74,7 +83,7 @@ class PPoint
         @parent = nil
         @children = Array.new
         @attrs = Hash.new
-        @bycuid = Hash.new
+        @byuid = Hash.new
         @byaddr = Hash.new
     end
 
@@ -92,7 +101,7 @@ class PPoint
 
     def build_lookup_hash(pt=nil)
         if pt.nil? then
-            @bycuid[@uid] = self
+            @byuid[@uid] = self
             @children.each do |child|
                 build_lookup_hash(child)
             end
@@ -100,15 +109,15 @@ class PPoint
             if pt.type == $TYPE_INSTRUCTION and pt.attrs.has_key?("addr") then
                 @byaddr[pt.attrs["addr"]] = pt
             end
-            @bycuid[pt.uid] = pt
+            @byuid[pt.uid] = pt
             pt.children.each do |child|
                 build_lookup_hash(child)
             end
         end
     end
 
-    def lookup_by_cuid(uid)
-        return @bycuid[uid]
+    def lookup_by_uid(uid)
+        return @byuid[uid]
     end
 
     def lookup_by_addr(addr)
@@ -216,6 +225,45 @@ class Config
         @attrs = Hash.new
     end
 
+    def <=> (c2)
+        result = nil
+
+        # ascending level rank -> descending executed %
+        if attrs.has_key?("level") and c2.attrs.has_key?("level") then
+            l1 = attrs["level"]
+            l2 = c2.attrs["level"]
+            if l1 == l2 then
+                if attrs.has_key?("orig_cinst") and c2.attrs.has_key?("orig_cinst") then
+                    oc1 = attrs["orig_cinst"].to_f
+                    oc2 = c2.attrs["orig_cinst"].to_f
+                    if oc1 == oc2 then
+                        result = -1
+                    else
+                        result = oc2 <=> oc1
+                    end
+                else
+                    result = -1
+                end
+            else
+                result = $TYPE_RANK[l1] <=> $TYPE_RANK[l2]
+            end
+        else
+            result = -1
+        end
+
+        # descending instrumented % + executed %
+        if attrs.has_key?("orig_icount") and c2.attrs.has_key?("orig_icount") and
+           attrs.has_key?("orig_cinst") and c2.attrs.has_key?("orig_cinst") then
+            oi1 = attrs["orig_icount"].to_f
+            oi2 = c2.attrs["orig_icount"].to_f
+            oc1 = attrs["orig_cinst"].to_f
+            oc2 = c2.attrs["orig_cinst"].to_f
+            result = (oi2+oc2) <=> (oi1+oc1)
+        end
+
+        return result
+    end
+
     def filename
         # sanitize cuid
         fn = ""
@@ -275,6 +323,7 @@ class Strategy
         configs = Array.new
         cfg = Config.new(@program.build_cuid, @program.build_label, @alternate)
         cfg.exceptions[@program.uid] = @preferred
+        cfg.attrs["level"] = $TYPE_APPLICATION
         configs << cfg
         return configs
     end
@@ -283,20 +332,21 @@ class Strategy
         # add a config for each child node of each exception
         configs = Array.new
         config.exceptions.each_pair do |k,v|
-            pt = @program.lookup_by_cuid(k)
+            pt = @program.lookup_by_uid(k)
             pt.children.each do |child|
 
                 # skip nodes with no FP instructions
                 if child.attrs["icount"].to_i > 0 then
-                    cnode = child
+                    child_pt = child
 
                     # skip single-child nodes
                     if child.children.size == 1 then
-                        cnode = child.children.first
+                        child_pt = child.children.first
                     end
 
-                    cfg = Config.new(cnode.build_cuid, cnode.build_label, config.default)
-                    cfg.exceptions[cnode.uid] = v
+                    cfg = Config.new(child_pt.build_cuid, child_pt.build_label, config.default)
+                    cfg.exceptions[child_pt.uid] = v
+                    cfg.attrs["level"] = child_pt.type
                     configs << cfg
                 end
             end
@@ -306,7 +356,7 @@ class Strategy
 
     def build_final_config(results)
         # simple union of all passing configs
-        cfg = Config.new("FINAL", "Final Configuration", @alternate)
+        cfg = Config.new($FINALCFG_CUID, "Final Configuration", @alternate)
         results.each do |r|
             if r.attrs.has_key?("result") and r.attrs["result"] == $RESULT_PASS then
                 r.exceptions.each_pair do |k,v|
@@ -320,10 +370,21 @@ class Strategy
         return cfg
     end
 end # }}}
+
+
+# BinaryStrategy
+#
+# Improved search algorithm that performs a binary search on failed configs
+# rather than immediately adding all subchild configs to the queue. It also
+# prioritizes new configs using the profiling results.
+#
 # {{{ BinaryStrategy
 class BinaryStrategy < Strategy
+    attr_accessor :basetype
+
     def split_config(config)
         configs = Array.new
+        all_insns = true
 
         # build list of new configurations
         if config.exceptions.size > 1 then
@@ -331,7 +392,7 @@ class BinaryStrategy < Strategy
             # last config tried multiple exceptions;
             # add a config for each exception and try again
             config.exceptions.each_pair do |k,v|
-                pt = @program.lookup_by_cuid(k)
+                pt = @program.lookup_by_uid(k)
                 cfg = Config.new(pt.build_cuid, pt.build_label, config.default)
                 cfg.exceptions[pt.uid] = v
                 if pt.attrs.has_key?("cinst") then
@@ -339,31 +400,39 @@ class BinaryStrategy < Strategy
                 else
                     cfg.attrs["cinst"] = 0
                 end
+                cfg.attrs["level"] = pt.type
                 configs << cfg
             end
         else
 
             # add a config for each child node of the current exception
             config.exceptions.each_pair do |k,v|
-                pt = @program.lookup_by_cuid(k)
+                pt = @program.lookup_by_uid(k)
                 pt.children.each do |child|
 
                     # skip nodes with no FP instructions
+                    # stop at basic blocks if that's desired
                     if child.attrs["icount"].to_i > 0 then
                         child_pt = child
 
                         # skip single-child nodes
-                        if child.children.size == 1 then
+                        if child.children.size == 1 and child.type != @basetype then
                             child_pt = child.children.first
                         end
 
+                        if not (child_pt.type == $TYPE_INSTRUCTION) then
+                            all_insns = false
+                        end
+
                         cfg = Config.new(child_pt.build_cuid, child_pt.build_label, config.default)
+                        #puts "ADDING #{cfg.cuid} #{child_pt.type}"
                         cfg.exceptions[child_pt.uid] = v
                         if child_pt.attrs.has_key?("cinst") then
                             cfg.attrs["cinst"] = child_pt.attrs["cinst"]
                         else
                             cfg.attrs["cinst"] = 0
                         end
+                        cfg.attrs["level"] = child_pt.type
                         configs << cfg
                     end
                 end
@@ -371,14 +440,18 @@ class BinaryStrategy < Strategy
         end
 
         # sort in descending order of instruction executions
-        configs.sort! { |c1, c2| c2.attrs["cinst"].to_i <=> c1.attrs["cinst"].to_i }
+        # don't do this if we just have a bunch of instruction configs
+        if not all_insns then
+            configs.sort! { |c1, c2| c2.attrs["cinst"].to_i <=> c1.attrs["cinst"].to_i }
+            #puts "Sorting #{configs.size} at #{config.cuid}"
+        end
 
         # merge into two (binary search) if we have a lot of new configs
         if configs.size > 5 then
             pivot = configs.size / 2
             left_cfg  = Config.new(config.cuid + " LEFT",  config.label + " LEFT",  config.default)
             right_cfg = Config.new(config.cuid + " RIGHT", config.label + " RIGHT", config.default)
-            left_cfg.attrs["cinst"] = "0"
+            left_cfg.attrs["cinst"]  = "0"
             right_cfg.attrs["cinst"] = "0"
             configs.each do |cfg|
                 cfg.exceptions.each_pair do |k,v|
@@ -396,6 +469,8 @@ class BinaryStrategy < Strategy
                 end
                 pivot -= 1
             end
+            left_cfg.attrs["level"]  = config.attrs["level"]
+            right_cfg.attrs["level"] = config.attrs["level"]
             configs = Array.new
             configs << left_cfg
             configs << right_cfg
@@ -404,6 +479,7 @@ class BinaryStrategy < Strategy
     end
 end # }}}
 
+
 # App entry point
 
 # {{{ main method
@@ -411,17 +487,19 @@ def main
     srand
 
     # initialize global variables
-    $autoconf_tag = "craft"                 # filename tag
+    $search_tag = "craft"                   # filename tag
     $craft_driver = "craft_driver"          # standard driver program name
     $status_preferred = $STATUS_SINGLE      # preferred replacement status
     $status_alternate = $STATUS_DOUBLE      # replacement status if cannot be preferred
     $status_ignored = $STATUS_IGNORE        # "cannot instrument" replacement status
     $status_blank = " "                     # "no result" replacement status
     $fortran_mode = false                   # pass "-N" to mutator
+    $base_type = $TYPE_INSTRUCTION          # stop splitting configs at this level
     $initial_cfg_fn = ""                    # initial config filename (may be blank)
     $max_queue_length = 0                   # track largest queue size (approximate)
-    $is_status = false                      # is this just a status thread?
-    $is_worker = false                      # is this the parent process or a worker?
+    $main_mode = "start"                    # main status ("start", "resume", "status", "clean", "worker", "help")
+    $restart_inproc = false                 # resume by restarting all inprocess tests
+    $resume_lower = false                   # resume at a lower level
     $num_workers = 1                        # number of worker threads
     $workers = Hash.new                     # worker proc info (pid => dirname)
     $status_buffer = ""                     # buffer for output (keeps multiprocess output clean)
@@ -432,67 +510,71 @@ def main
 
     # check command-line options
     if ARGV.size == 0 or ARGV.include?("-h") then
+        $main_mode = "help"
         print_usage
         exit
     end
 
+    parse_command_line
+    
     # cleaning mode
-    if ARGV.size == 1 and ARGV[0] == "clean" then
+    if $main_mode == "clean" then
         puts "Cleaning..."
         clean_everything
         puts "Done."
         exit
     end
 
-    # status mode
-    if ARGV.size == 1 and ARGV[0] == "status" then
-        $is_status = true;
-        ARGV.shift
-    end
-
-    parse_command_line
-
     # set up environment and filenames
-    if !$is_worker then
-        $autoconf_path = Dir.getwd + "/"
+    if $main_mode != "worker" then
+        $search_path = Dir.getwd + "/"
+
+        # this really should happen BEFORE parse_command_line so that the
+        # command-line parameters will override the craft_driver options, but
+        # the worker threads shouldn't read the craft_driver since the options
+        # are saved in the settings files, but we don't know if we're a worker
+        # until we parse the command-line options
+        read_craft_driver
     end
 
     # plain text info files
-    $settings_fn = "#{$autoconf_path}#{$autoconf_tag}.settings"
-    $program_fn = "#{$autoconf_path}#{$autoconf_tag}.program"
-    $mainlog_fn = "#{$autoconf_path}#{$autoconf_tag}.mainlog"
-    $walltime_fn = "#{$autoconf_path}#{$autoconf_tag}.walltime"
+    $settings_fn = "#{$search_path}#{$search_tag}.settings"
+    $program_fn = "#{$search_path}#{$search_tag}.program"
+    $mainlog_fn = "#{$search_path}#{$search_tag}.mainlog"
+    $walltime_fn = "#{$search_path}#{$search_tag}.walltime"
 
     # files containing lists of Config objects
-    $workqueue_fn = "#{$autoconf_path}#{$autoconf_tag}.workqueue"     # waiting to be tested
-    $inproc_fn = "#{$autoconf_path}#{$autoconf_tag}.inproc"           # currently running
-    $tested_fn = "#{$autoconf_path}#{$autoconf_tag}.tested"           # finished (passed, failed, or aborted)
+    $workqueue_fn = "#{$search_path}#{$search_tag}.workqueue"     # waiting to be tested
+    $inproc_fn = "#{$search_path}#{$search_tag}.inproc"           # currently running
+    $tested_fn = "#{$search_path}#{$search_tag}.tested"           # finished (passed, failed, or aborted)
 
     # important single configuration files
-    $orig_config_fn = "#{$autoconf_path}craft_orig.cfg"
-    $final_config_fn = "#{$autoconf_path}craft_final.cfg"
+    $orig_config_fn = "#{$search_path}craft_orig.cfg"
+    $final_config_fn = "#{$search_path}craft_final.cfg"
 
     # configuration file directories
-    $prof_path = "#{$autoconf_path}profile/"           # profiler run
-    $final_path = "#{$autoconf_path}final/"         # single final "best" config (cfg file + mutant)
-    $best_path = "#{$autoconf_path}best/"           # top 10 "best" individual configs (cfg files only)
-    $passed_path = "#{$autoconf_path}passed/"       # all successful configs (cfg files only)
-    $failed_path = "#{$autoconf_path}failed/"       # all failed configs (cfg files only)
-    $aborted_path = "#{$autoconf_path}aborted/"     # all aborted configs (cfg files only)
+    $perf_path     = "#{$search_path}baseline/"    # baseline performance test
+    $prof_path     = "#{$search_path}profile/"     # profiler run
+    $final_path    = "#{$search_path}final/"       # single final "best" config (cfg file + mutant)
+    $best_path     = "#{$search_path}best/"        # top 10 "best" individual configs (cfg files only)
+    $passed_path   = "#{$search_path}passed/"      # all successful configs (cfg files only)
+    $failed_path   = "#{$search_path}failed/"      # all failed configs (cfg files only)
+    $aborted_path  = "#{$search_path}aborted/"     # all aborted configs (cfg files only)
+    $snapshot_path = "#{$search_path}snapshots/"   # status printouts
 
-    if $is_status then
+    if $main_mode == "status" then
         print_status
         exit
     end
 
     # check for driver script
-    if !File.exist?("#{$autoconf_path}#{$craft_driver}") then
+    if !File.exist?("#{$search_path}#{$craft_driver}") then
         puts "No driver program \"craft_driver\" found."
         puts "Aborting."
         exit
     end
 
-    if $is_worker then
+    if $main_mode == "worker" then
 
         # this is just a worker process
         
@@ -500,7 +582,7 @@ def main
         initialize_program
         read_profiler_data
         initialize_strategy
-        run_main_autoconf_loop                      # main loop
+        run_main_search_loop                      # main loop
         #puts "Worker finished.  [Empty queue]"
 
     else
@@ -510,23 +592,39 @@ def main
         puts ""
         puts "CRAFT"
         puts "Autoconfiguring #{$binary_name} ..."
-        puts "Working dir: #{$autoconf_path}"
+        puts "Working dir: #{$search_path}"
 
-        if !File.exist?($workqueue_fn) then
+        if $main_mode == "start" then
             # this is the first invocation of this analysis; initialize everything
             initialize_search
         else
-            # we're resuming a pre-existing analysis
-            puts "Resuming previous analysis ..."
+            # we're resuming an analysis
+            puts "Resuming in-process search ..."
+            if File.exist?($final_path) then
+                # clear out any final configuration testing
+                FileUtils.rm_rf($final_path)
+            end
+            if File.exist?($walltime_fn) then
+                # previous search was completed; restart wall timer
+                $start_time = Time.now
+                FileUtils.rm_rf($walltime_fn)
+            end
             load_settings
             initialize_program
             read_profiler_data
             initialize_strategy
+            if $restart_inproc then
+                move_all_inproc_to_workqueue
+            end
+            if $resume_lower then
+                resume_lower_search
+                save_settings
+            end
         end
 
         # set up worker thread folders
         $num_workers.times do |id|
-            worker_dir = "#{$autoconf_path + $binary_name}_#{Process.pid}_worker#{id}"
+            worker_dir = "#{$search_path + $binary_name}_#{Process.pid}_worker#{id}"
             if File.exist?(worker_dir) then
                 FileUtils.rm_rf(worker_dir)
             end
@@ -536,9 +634,9 @@ def main
 
         # spawn worker threads (don't spawn more than we need right now, though)
         [get_workqueue_length, $num_workers].min.times do |id|
-            worker_dir = "#{$autoconf_path + $binary_name}_#{Process.pid}_worker#{id}"
+            worker_dir = "#{$search_path + $binary_name}_#{Process.pid}_worker#{id}"
             job = fork do
-                exec "cd #{worker_dir} && #{$self_invoke} -w #{id} #{$autoconf_path}"
+                exec "cd #{worker_dir} && #{$self_invoke} worker #{id} #{$search_path}"
             end
             $workers.delete(id)
             $workers[job] = worker_dir
@@ -551,17 +649,17 @@ def main
         run_main_supervisor_loop
 
         # test final config, assemble results, etc.
-        finalize_autoconf
+        finalize_search
 
     end
 end # }}}
 
 
-# Search management routines:
+# Search management routines
 
 # {{{ initialize_search
 def initialize_search
-    # parent initialization
+    # supervisor initialization
     
     $start_time = Time.now
 
@@ -630,10 +728,10 @@ def initialize_search
     save_settings
 
     # initialize work queue
-    configSet = $strategy.build_initial_configs
-    configSet.each do |cfg|
-        puts "Added config #{cfg.label} to workqueue."
+    configs = $strategy.build_initial_configs
+    configs.each do |cfg|
         add_to_workqueue(cfg)
+        puts "Added config #{cfg.label} to workqueue."
     end
     $max_queue_length = get_workqueue_length
 
@@ -648,8 +746,43 @@ def initialize_search
     Dir.mkdir($aborted_path)
 
 end # }}}
-# {{{ run_main_autoconf_loop
-def run_main_autoconf_loop
+# {{{ resume_lower_search
+def resume_lower_search
+
+    # figure out new base type
+    old_base_type = $base_type
+    new_base_rank = $TYPE_RANK[old_base_type]+1
+    if !$TYPE_RRANK.has_key?(new_base_rank) then
+        puts "Already at lowest base type."
+    else
+        puts "Lowering base type from #{$base_type} to #{$TYPE_RRANK[new_base_rank]}."
+        $base_type = $TYPE_RRANK[new_base_rank]
+        if $strategy_name == "bin_simple" then
+            $strategy.basetype = $base_type
+        end
+    end
+
+    # look for new configurations
+    configs = Array.new
+    old_configs = get_tested_configs
+    old_configs.each do |cfg|
+        if cfg.attrs["result"] == $RESULT_FAIL and is_single_base(cfg, old_base_type) then
+            $strategy.split_config(cfg).each do |c|
+                configs << c
+            end
+        end
+    end
+
+    # initialize work queue
+    configs.each do |cfg|
+        add_to_workqueue(cfg)
+        puts "Added config #{cfg.label} to workqueue."
+    end
+    $max_queue_length = get_workqueue_length
+
+end # }}}
+# {{{ run_main_search_loop
+def run_main_search_loop
     cfg = get_next_workqueue_item
 
     # main search loop
@@ -670,11 +803,28 @@ def run_main_autoconf_loop
 
         else
 
+            # check to see if we're at the base type; stop if so
+            add_children = true
+            if is_single_base(cfg, $base_type) then
+                add_children = false
+            end
+
             # add any children we need to test
-            configSet = $strategy.split_config(cfg)
-            configSet.each do |child|
-                puts "Added config #{child.label} to workqueue."
-                add_to_workqueue(child)
+            if add_children then
+                configs = $strategy.split_config(cfg)
+                configs.each do |child|
+                    add_child = true
+                    if child.exceptions.keys.size == 1 then
+                        pt = $program.lookup_by_uid(child.exceptions.keys.first)
+                        if !pt.nil? and $TYPE_RANK[pt.type] > $TYPE_RANK[$base_type] then
+                            add_child = false
+                        end
+                    end
+                    if add_child then
+                        add_to_workqueue(child)
+                        puts "Added config #{child.label} to workqueue."
+                    end
+                end
             end
 
         end
@@ -725,7 +875,6 @@ def run_main_supervisor_loop
 
                 # there's still stuff to do; restart dead workers
                 [get_workqueue_length, dead_workers.size].min.times do |i|
-                #dead_workers.each do |job, dir|
                     job,dir = dead_workers.pop
                     $workers.delete(job)
                     id = File.basename(dir)
@@ -737,7 +886,7 @@ def run_main_supervisor_loop
                     FileUtils.rm_rf(dir)
                     Dir.mkdir(dir)
                     job = fork do
-                        exec "cd #{dir} && #{$self_invoke} -w #{id} #{$autoconf_path}"
+                        exec "cd #{dir} && #{$self_invoke} worker #{id} #{$search_path}"
                     end
                     #puts "Respawned worker thread #{id} (pid=#{job})."
                     $workers[job] = dir
@@ -750,7 +899,10 @@ def run_main_supervisor_loop
 
         # clean up any workers and directories
         $workers.each_pair do |job, dir|
-            Process.wait(job.to_i)
+            begin
+                Process.wait(job.to_i)
+            rescue
+            end
             FileUtils.rm_rf(dir)
         end
 
@@ -763,8 +915,8 @@ def run_main_supervisor_loop
         end
     end
 end # }}}
-# {{{ finalize_autoconf
-def finalize_autoconf
+# {{{ finalize_search
+def finalize_search
 
     if File.exist?($final_path) then
         # another process is already finalizing
@@ -789,14 +941,10 @@ def finalize_autoconf
     puts "Testing final configuration ... "
     Dir.chdir($final_path)
     run_config_file($final_config_fn, true, $final_config.cuid)
-    Dir.chdir($autoconf_path)
+    Dir.chdir($search_path)
 
     # start generating final report
-    report = build_best_report(true)
-
-    # clean temporary files
-    File.delete($workqueue_fn)
-    File.delete($inproc_fn)
+    report = build_best_report(10, true)
 
     # finalize report
     elapsed = Time.now.to_f - $start_time.to_f
@@ -820,48 +968,133 @@ def finalize_autoconf
 end # }}}
 
 
-# Helper routines:
+# Helper routines
 
 # {{{ initialization
 
 
-def parse_command_line
-    begin
-        opt = ARGV.shift
-        if opt == "-r" then
-        elsif opt == "-w" then
-            # worker process
-            $is_worker = true
-            $worker_id = ARGV.shift
-            $autoconf_path = ARGV.shift
-        elsif opt == "-j" then
-            # parallel: "-j 4" variant
-            $num_workers = ARGV.shift.to_i
-        elsif opt =~ /^-j/ then
-            # parallel: "-j4" variant
-            $num_workers = opt[2,opt.length-2].to_i
-        elsif opt == "-d" then
-            # debug mode (double precision)
-            $status_preferred = $STATUS_DOUBLE
-            $status_alternate = $STATUS_IGNORE
-        elsif opt == "-D" then
-            # debug mode (single precision)
-            $status_preferred = $STATUS_SINGLE
-            $status_alternate = $STATUS_IGNORE
-        elsif opt == "-c" then
-            # initial configuration
-            $initial_cfg_fn = ARGV.shift
-        elsif opt == '-N' then
-            # fortran mode
-            $fortran_mode = true
-        elsif opt == '-s' then
-            # strategy
-            $strategy_name = ARGV.shift
+def read_craft_driver
+    IO.foreach("#{$search_path}#{$craft_driver}") do |line|
+        if line =~ /^#\s*BINARY\s*=\s*(.*)/ then
+            $binary_name = File.basename($1)
+            $binary_path = File.expand_path($1)
+        elsif line =~ /^#\s*NUM_WORKERS\s*=\s*(\d+)/ then
+            $num_workers = $1.to_i
+        elsif line =~ /^#\s*DEBUG_MODE\s*=\s*(\w+)/ then
+            if $1 == "single" then
+                $status_preferred = $STATUS_SINGLE
+                $status_alternate = $STATUS_IGNORE
+            elsif $1 == "double" then
+                $status_preferred = $STATUS_DOUBLE
+                $status_alternate = $STATUS_IGNORE
+            end
+        elsif line =~ /^#\s*INITIAL_CFG\s*=\s*(\w+)/ then
+            $initial_cfg_fn = $1
+        elsif line =~ /^#\s*FORTRAN_MODE\s*=\s*(\w+)/ then
+            if $1 == "yes" then
+                $fortran_mode = true
+            end
+        elsif line =~ /^#\s*BASE_TYPE\s*=\s*(\w*)/ then
+            type = $1.chomp.downcase
+            if type =~ /ins/ then
+                $base_type = $TYPE_INSTRUCTION
+            elsif type =~ /block/ then
+                $base_type = $TYPE_BASICBLOCK
+            elsif type =~ /func/ then
+                $base_type = $TYPE_FUNCTION
+            elsif type =~ /mod/ then
+                $base_type = $TYPE_MODULE
+            elsif type =~ /app/ then
+                $base_type = $TYPE_APPLICATION
+            end
+        elsif line =~ /^#\s*SEARCH_STRAT\s*=\s*(\w+)/ then
+            if not ($1 == "default") then
+                $strategy_name = $1
+            end
         end
-    end while ARGV.size > 0
-    if not opt.nil? then
-        $binary_name = File.basename(opt)
-        $binary_path = File.expand_path(opt)
+    end
+end
+
+
+def parse_command_line
+    $main_mode = ARGV.shift.strip.downcase
+    if not ["start","resume","worker","status","help","clean"].include?($main_mode) then
+        puts "Invalid mode: #{$main_mode}"
+        exit
+    end
+    if $main_mode == "worker" then
+        $worker_id = ARGV.shift
+        $search_path = ARGV.shift
+    end
+    parsed_binary = false
+    while ARGV.size > 0 do
+        opt = ARGV.shift
+        if $main_mode == "start" then
+            if opt == "-j" then
+                # parallel: "-j 4" variant
+                $num_workers = ARGV.shift.to_i
+            elsif opt =~ /^-j/ then
+                # parallel: "-j4" variant
+                $num_workers = opt[2,opt.length-2].to_i
+            elsif opt == "-d" then
+                # debug mode (double precision)
+                $status_preferred = $STATUS_DOUBLE
+                $status_alternate = $STATUS_IGNORE
+            elsif opt == "-D" then
+                # debug mode (single precision)
+                $status_preferred = $STATUS_SINGLE
+                $status_alternate = $STATUS_IGNORE
+            elsif opt == "-c" then
+                # initial configuration
+                $initial_cfg_fn = ARGV.shift
+            elsif opt == '-N' then
+                # fortran mode
+                $fortran_mode = true
+            elsif opt == '-b' then
+                # stop splitting at basic blocks
+                $base_type = $TYPE_BASICBLOCK
+            elsif opt == '-f' then
+                # stop splitting at functions
+                $base_type = $TYPE_FUNCTION
+            elsif opt == '-s' then
+                # strategy
+                $strategy_name = ARGV.shift
+            elsif !parsed_binary then
+                $binary_name = File.basename(opt)
+                $binary_path = File.expand_path(opt)
+                parsed_binary = true
+            else
+                if parsed_binary then
+                    puts "Invalid parameter after binary: #{opt}"
+                    exit
+                else
+                    puts "Invalid resume parameter: #{opt}"
+                    exit
+                end
+            end
+        elsif $main_mode == "resume" then
+            if opt == "-j" then
+                # parallel: "-j 4" variant
+                $num_workers = ARGV.shift.to_i
+            elsif opt =~ /^-j/ then
+                # parallel: "-j4" variant
+                $num_workers = opt[2,opt.length-2].to_i
+            elsif opt == "-l" then
+                $resume_lower = true
+            elsif opt == "-n" then
+                $restart_inproc = true
+            else
+                puts "Invalid resume option: #{opt}"
+                exit
+            end
+        else
+            puts "Invalid parameter: #{opt}"
+            exit
+        end
+    end
+    if $main_mode == "start" and !parsed_binary then
+        puts "No binary included on command-line."
+        exit
     end
 end
 
@@ -912,6 +1145,7 @@ def initialize_strategy
         $strategy = Strategy.new($program, $status_preferred, $status_alternate)
     elsif $strategy_name == "bin_simple" then
         $strategy = BinaryStrategy.new($program, $status_preferred, $status_alternate)
+        $strategy.basetype = $base_type
     else
         puts "Unrecognized search strategy \"#{$strategy_name}\""
         puts "Aborting search."
@@ -922,9 +1156,13 @@ end
 
 def run_baseline_performance
     passed = false
+    if not File.exist?($perf_path) then
+        Dir.mkdir($perf_path)
+    end
+    Dir.chdir($perf_path)
     $baseline_error = 0.0
     $baseline_runtime = 0
-    cmd = "#{$autoconf_path}#{$craft_driver} #{$binary_path}"
+    cmd = "#{$search_path}#{$craft_driver} #{$binary_path}"
     io_in, io_out, io_err = Open3.popen3(cmd)
     io_err.each_line do |line| end
     io_out.each_line do |line|
@@ -940,6 +1178,7 @@ def run_baseline_performance
             $baseline_runtime = $1.to_i
         end
     end
+    Dir.chdir($search_path)
     return passed
 end
 
@@ -958,7 +1197,7 @@ def run_profiler
     io_out.each_line do |line| end
 
     # run rewritten mutatee
-    cmd = "#{$autoconf_path}#{$craft_driver} #{Dir.getwd}/mutant"
+    cmd = "#{$search_path}#{$craft_driver} #{Dir.getwd}/mutant"
     io_in, io_out, io_err = Open3.popen3(cmd)
     io_err.each_line do |line| end
     io_out.each_line do |line|
@@ -974,7 +1213,7 @@ def run_profiler
         $perf_log_fn = "#{Dir.getwd}/#{Dir.glob("*-c_inst*.log").first}"
     end
 
-    Dir.chdir($autoconf_path)
+    Dir.chdir($search_path)
     return passed
 end
 
@@ -1002,7 +1241,6 @@ def read_profiler_data
             cur_pt = pt_by_id[cur_id]
             if not cur_pt.nil? then
                 cur_pt.attrs["cinst"] = cur_count
-                #puts "read count for #{cur_pt.uid} :: #{cur_count}"
             end
         end
     end
@@ -1027,10 +1265,29 @@ end
 # {{{ configuration testing
 
 
+def calculate_orig_stats (cfg)
+    orig_icount = 0
+    orig_cinst = 0
+    cfg.exceptions.keys.each do |k|
+        pt = $program.lookup_by_uid(k)
+        if !pt.nil? then
+            orig_icount += pt.attrs["icount"].to_i
+            orig_cinst += pt.attrs["cinst"].to_i
+            if cfg.exceptions.keys.size == 1 then
+                cfg.attrs["single_type"] = pt.type
+            end
+        end
+    end
+    orig_icount = (orig_icount.to_f / $program.attrs["icount"].to_f * 100.0).to_s
+    orig_cinst = (orig_cinst.to_f / $program.attrs["cinst"].to_f * 100.0).to_s
+    cfg.attrs["orig_icount"] = orig_icount.to_s
+    cfg.attrs["orig_cinst"] = orig_cinst.to_s
+end
+
 def run_config (cfg)
 
     # write actual configuration file
-    cfg_path = $autoconf_path + cfg.filename
+    cfg_path = $search_path + cfg.filename
     $program.build_config_file(cfg, cfg_path)
 
     # pass off to filename version
@@ -1072,7 +1329,7 @@ def run_config_file (fn, keep, cuid)
     result = $RESULT_ERROR
     runtime = 0
     error = 0.0
-    cmd = "#{$autoconf_path}#{$craft_driver} #{Dir.getwd}/mutant"
+    cmd = "#{$search_path}#{$craft_driver} #{Dir.getwd}/mutant"
     #add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
     io_in, io_out, io_err = Open3.popen3(cmd)
     io_err.each_line do |line| end
@@ -1109,6 +1366,11 @@ def run_config_file (fn, keep, cuid)
     $status_buffer += " Error: %g]"%[error]
     puts $status_buffer
     add_to_mainlog($status_buffer)
+    if keep then
+        f = File.new("result.txt", "w")
+        f.puts $status_buffer
+        f.close
+    end
     $status_buffer = ""
 
     # clean out mutant, logs, and rewritten library files
@@ -1143,9 +1405,17 @@ end
 # }}}
 # {{{ file manipulation
 
+
+# FOR THE SYSTEM TO WORK, ALL OF THESE I/O ROUTINES *MUST* BE ATOMIC!
+# None should be able to interrupt or starve another. This means that
+# we need to lock the file in each function, and no function should
+# call another.
+
+
 def save_settings
-    f = File.new($settings_fn, File::RDWR)
+    f = File.new($settings_fn, "r+")
     f.flock File::LOCK_EX
+    f.truncate(0)
     f.puts $start_time.to_i
     f.puts $binary_name
     f.puts $binary_path
@@ -1154,13 +1424,14 @@ def save_settings
     f.puts $stat_alternate
     f.puts $baseline_runtime
     f.puts($fortran_mode ? "fortran" : "other")
+    f.puts $base_type
     f.puts $initial_cfg_fn
     f.puts $perf_log_fn
     f.close
 end
 def load_settings
     # could probably be read-only
-    f = File.new($settings_fn, File::RDWR)
+    f = File.new($settings_fn, "r")
     f.flock File::LOCK_EX
     $start_time = Time.at(f.gets.to_i)
     $binary_name = f.gets.chomp
@@ -1175,6 +1446,7 @@ def load_settings
     else
         $fortran_mode = false
     end
+    $base_type = f.gets.chomp
     $initial_cfg_fn = f.gets.chomp
     $perf_log_fn = f.gets.chomp
     f.close
@@ -1182,34 +1454,62 @@ end
 
 
 def add_to_workqueue(cfg)
-    f = File.new($workqueue_fn, File::RDWR)
+    calculate_orig_stats(cfg)
+
+    queue = Array.new
+    f = File.new("#{$workqueue_fn}", "r+")
     f.flock File::LOCK_EX
-    f.seek(0,IO::SEEK_END)
-    YAML.dump(cfg, f)
+    YAML.each_document(f) do |doc|
+        queue << doc
+    end
+
+    queue << cfg
+    queue.sort!
+    
+    # debug output
+    #puts "Current workqueue:"
+    #queue.each do |c|
+        #puts "  - #{c.label}"
+    #end
+    
+    f.truncate(0)
+    f.pos = 0
+    queue.each do |cfg|
+        YAML.dump(cfg, f)
+    end
     f.close
 end
 def get_next_workqueue_item
     next_cfg = nil
-    workqueue = Array.new
-    f = File.new($workqueue_fn, File::RDWR)
+    queue = Array.new
+    f = File.new($workqueue_fn, "r+")
     f.flock File::LOCK_EX
     YAML.each_document(f) do |doc|
-        workqueue << doc
+        queue << doc
     end
-    next_cfg = workqueue.shift
+    next_cfg = queue.shift
     f.pos = 0
-    workqueue.each do |cfg|
+    queue.each do |cfg|
         YAML.dump(cfg, f)
     end
     f.truncate(f.pos)
     f.close
     return next_cfg
 end
+def get_workqueue_configs
+    queue = Array.new
+    f = File.new("#{$workqueue_fn}", "r")
+    f.flock File::LOCK_EX
+    YAML.each_document(f) do |doc|
+        queue << doc
+    end
+    f.close
+    return queue
+end
 def get_workqueue_length
-    # could probably be read-only
     len = 0
     begin
-        f = File.new($workqueue_fn, File::RDWR)
+        f = File.new($workqueue_fn, "r")
         f.flock File::LOCK_EX
         YAML.each_document(f) do |doc|
             len += 1
@@ -1223,15 +1523,14 @@ end
 
 
 def add_to_inproc(cfg)
-    f = File.new($inproc_fn, File::RDWR)
+    f = File.new($inproc_fn, "a")
     f.flock File::LOCK_EX
-    f.seek(0,IO::SEEK_END)
     YAML.dump(cfg, f)
     f.close
 end
 def remove_from_inproc(cfg)
     inproc = Array.new
-    f = File.new($inproc_fn, File::RDWR)
+    f = File.new($inproc_fn, "r+")
     f.flock File::LOCK_EX
     YAML.each_document(f) do |doc|
         inproc << doc if not (cfg.cuid == doc.cuid)
@@ -1243,11 +1542,20 @@ def remove_from_inproc(cfg)
     f.truncate(f.pos)
     f.close
 end
+def get_inproc_configs
+    inproc = Array.new
+    f = File.new("#{$inproc_fn}", "r")
+    f.flock File::LOCK_EX
+    YAML.each_document(f) do |doc|
+        inproc << doc
+    end
+    f.close
+    return inproc
+end
 def get_inproc_length
-    # could probably be read-only
     len = 0
     begin
-        f = File.new($inproc_fn, File::RDWR)
+        f = File.new($inproc_fn, "r")
         f.flock File::LOCK_EX
         YAML.each_document(f) do |doc|
             len += 1
@@ -1260,7 +1568,7 @@ def get_inproc_length
 end
 def move_all_inproc_to_workqueue
     inproc = Array.new
-    f = File.new($inproc_fn, File::RDWR)
+    f = File.new($inproc_fn, "r")
     f.flock File::LOCK_EX
     YAML.each_document(f) do |doc|
         inproc << doc
@@ -1274,27 +1582,24 @@ end
 
 
 def add_tested_config(cfg)
-    f = File.new("#{$tested_fn}", File::RDWR)
+    f = File.new("#{$tested_fn}", "a")
     f.flock File::LOCK_EX
-    f.seek(0,IO::SEEK_END)
     YAML.dump(cfg, f)
     f.close
 end
 def get_tested_configs
-    # could probably be read-only
-    configs = Array.new
-    f = File.new("#{$tested_fn}",  File::RDWR)
+    tested = Array.new
+    f = File.new("#{$tested_fn}", "r")
     f.flock File::LOCK_EX
     YAML.each_document(f) do |doc|
-        configs << doc
+        tested << doc
     end
     f.close
-    return configs
+    return tested
 end
 def get_tested_config_count
-    # could probably be read-only
     len = 0
-    f = File.new("#{$tested_fn}",  File::RDWR)
+    f = File.new("#{$tested_fn}", "r")
     f.flock File::LOCK_EX
     YAML.each_document(f) do |doc|
         len += 1
@@ -1305,15 +1610,13 @@ end
 
 
 def add_to_mainlog(reg)
-    f = File.new($mainlog_fn, File::RDWR)
+    f = File.new($mainlog_fn, "a")
     f.flock File::LOCK_EX
-    f.seek(0,IO::SEEK_END)
     f.puts(reg.to_s)
     f.close
 end
 def load_mainlog
-    # could probably be read-only
-    f = File.new($mainlog_fn,  File::RDWR)
+    f = File.new($mainlog_fn, "r")
     f.flock File::LOCK_EX
     lines = f.readlines
     f.close
@@ -1326,67 +1629,158 @@ end
 
 
 def print_usage
-    puts "Usage:  #{$self_invoke} [options] <binary>       (parent process)"
+    puts " "
+    puts "Usage:  #{$self_invoke} start [start-options] <binary>    (supervisor process)"
     puts "          or"
-    puts "        #{$self_invoke} -r                       (resume parent process)"
+    puts "        #{$self_invoke} resume [resume-options]           (resume supervisor process)"
     puts "          or"
-    puts "        #{$self_invoke} -w <id> <dir>            (worker process)"
+    puts "        #{$self_invoke} status                            (display search status)"
     puts "          or"
-    puts "        #{$self_invoke} clean                    (reset search)"
-    puts "Valid options:"
+    puts "        #{$self_invoke} clean                             (reset search)"
+    puts "          or"
+    puts "        #{$self_invoke} worker <id> <dir>                 (worker process; used internally)"
+    puts " "
+    puts "Valid initial options:"
+    puts "   -b             stop splitting configs at the basic block level"
     puts "   -c <file>      use <file> as initial base configuration"
     puts "   -d             debug mode (ignore->double instead of double->single)"
     puts "   -D             debug mode (ignore->single instead of double->single)"
+    puts "   -f             stop splitting configs at the function level"
     puts "   -j <np>        spawn <np> worker threads"
     puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
     puts "                    valid strategies:  \"simple\" and \"bin_simple\""
+    puts " "
+    puts "Valid resumption options:"
+    puts "   -j <np>        spawn <np> worker threads"
+    puts "   -l             resume search at lower level (e.g., INSN instead of BBLK)"
+    puts "   -n             resume search and restart in-process tests"
+    puts " "
 end
 
 
-def print_status
+def get_worker_thread_count
+    cmd = "ps -C #{$self_invoke} -o s="
+    psr = `#{cmd}`
+    num_workers = [0,psr.lines.count - ($main_mode == "status" ? 2 : 1)].max
+    return num_workers
+end
+
+
+def get_status
     overall_status = "not running"
-    full = false
     if File.exist?($settings_fn) then
         begin
             load_settings
-            cmd = "ps -C #{$self_invoke} -o s="
-            psr = `#{cmd}`
-            $num_workers = [0,psr.lines.count - ($is_status ? 2 : 1)].max
-            elapsed = Time.now.to_f - $start_time.to_f
             overall_status = "initializing"
+            overall_status = "waiting" if File.exist?($workqueue_fn)
             overall_status = "running" if (get_workqueue_length > 0 or get_inproc_length > 0)
             overall_status = "finalizing" if File.exist?($final_path)
-            if File.exist?($walltime_fn) then
-                overall_status = "DONE"
-                elapsed = IO.readlines($walltime_fn)[0].to_f
-            end
-            full = true
+            overall_status = "DONE" if File.exist?($walltime_fn)
         rescue
             overall_status = "initializing"
         end
     end
+    return overall_status
+end
 
-    puts "==============================================="
-    puts "                    CRAFT"
-    if full then
-        puts "    Application: #{"%26s" % $binary_name}"
-        #puts "    Fortran mode:  #{"%23s" % ($fortran_mode ? "Y" : "N")}"
-        puts "    Worker threads:            #{"%12d" % $num_workers}"
+
+def print_status
+
+    hbar   = "===================================================================================================="
+    indent = "                            "
+    ptag = Time.now.strftime("%Y-%m-%d %H:%M:%S %z")
+    ftag = Time.now.strftime("status_%Y_%m_%d_%H_%M_%S_%z.txt")
+    overall_status = get_status     # calls load_settings
+    full_output = (overall_status == "waiting" or overall_status == "running" or
+                   overall_status == "finalizing" or overall_status == "DONE")
+    nworkers = get_worker_thread_count
+
+    status_text = Array.new
+    status_text << "Snapshot taken at #{ptag}"
+    status_text << " "
+    status_text << hbar
+    status_text << "#{indent}                  CRAFT"
+
+    # basic statistics (app, config count, queue size, etc.)
+    if full_output then
+        elapsed = Time.now.to_f - $start_time.to_f
+        if File.exist?($walltime_fn) then
+            elapsed = IO.readlines($walltime_fn)[0].to_f
+        end
+        status_text << "#{indent}Application: #{"%27s" % $binary_name}"
+        #status_text << "#{indent}Fortran mode:  #{"%24s" % ($fortran_mode ? "Y" : "N")}"
+        status_text << "#{indent}Base type:  #{"%28s" % $base_type}"
+        status_text << "#{indent}Worker threads:            #{"%13d" % nworkers}"
         summary = get_tested_configs_summary
-        puts "    Total configs tested:      #{"%12d" % summary["total"]}"
-        puts "      Total passed:            #{"%12d" % summary["pass"]}"
-        puts "      Total failed:            #{"%12d" % summary["fail"]}"
-        puts "      Total aborted:           #{"%12d" % summary["error"]}"
-        puts "    Current in-proc length:    #{"%12d" % get_inproc_length}"
-        puts "    Current workqueue length:  #{"%12d" % get_workqueue_length}"
-        puts "    Total elapsed walltime: #{"%15s" % format_time(elapsed)}"
+        status_text << "#{indent}Total configs tested:      #{"%13d" % summary["total"]}"
+        status_text << "#{indent}   Total passed:           #{"%13d" % summary["pass"]}"
+        status_text << "#{indent}   Total failed:           #{"%13d" % summary["fail"]}"
+        status_text << "#{indent}   Total aborted:          #{"%13d" % summary["error"]}"
+        status_text << "#{indent}Current in-proc length:    #{"%13d" % get_inproc_length}"
+        status_text << "#{indent}Current workqueue length:  #{"%13d" % get_workqueue_length}"
+        status_text << "#{indent}Total elapsed walltime: #{"%16s" % format_time(elapsed)}"
     end
-    puts "    Overall status:         #{"%15s" % overall_status}"
-    puts "==============================================="
-    if full then
-        puts build_best_report.join("\n")
-        puts "==============================================="
+    status_text << "#{indent}Overall status:         #{"%16s" % overall_status}"
+    status_text << hbar
+
+    # best results so far and current in-process configs
+    if full_output then
+        build_best_report(8).each do |rl|
+            status_text << rl
+        end
+        status_text << hbar
+        if get_inproc_length > 0 or get_workqueue_length > 0 then
+            inproc = get_inproc_configs
+            queue = get_workqueue_configs
+            status_text << ""
+            progress = "Current workqueue (" + (queue.size > nworkers ? nworkers : queue.size).to_s + "/" + queue.size.to_s + "):"
+            status_text << "  Currently testing:                  STA\%   DYN\%   #{"%-33s"%progress}   STA\%   DYN\%"
+            0.upto(nworkers-1) do |i|
+                line = ""
+                if i < inproc.size then
+                    icfg = inproc[i]
+                    line += "    - %-30s %5.1f  %5.1f "%[format_text(icfg.cuid,30),icfg.attrs["orig_icount"],icfg.attrs["orig_cinst"]]
+                else
+                    line += "%50s"%" "
+                end
+                if i < queue.size then
+                    qcfg = queue[i]
+                    line += "    - %-30s %5.1f  %5.1f "%[format_text(qcfg.cuid,30),qcfg.attrs["orig_icount"],qcfg.attrs["orig_cinst"]]
+                end
+                status_text << line if line.strip != ""
+            end
+            if queue.size > nworkers then
+                status_text << "%50s      ..."%" "
+            end
+            status_text << ""
+            status_text << hbar
+        end
+    end
+
+    # print to stdout
+    puts status_text
+
+    # create snapshot file
+    if !File.exist?($snapshot_path) then
+        Dir.mkdir($snapshot_path)
+    end
+    f = File.new("#{$snapshot_path}#{ftag}", "w")
+    f.puts status_text
+    f.close
+
+    # remove latest snapshot if it's a duplicate of the previous one
+    all_snapshots = Dir.glob("#{$snapshot_path}status*.txt").sort { |f1,f2| File.mtime(f2) <=> File.mtime(f1) }
+    if all_snapshots.size > 1 then
+        newest_fn = all_snapshots.at(0)
+        older_fn = all_snapshots.at(1)
+        diff = `diff #{older_fn} #{newest_fn}`.split("\n")
+
+        # 2 always-changing snapshot lines (timestamp + elapse walltime)
+        # 4 diff lines per snapshot line (assumes default diff output)
+        if diff.size <= 2*4 then
+            File.delete(newest_fn)
+        end
     end
 end
 
@@ -1399,6 +1793,14 @@ def format_time (elapsed)
 end
 
 
+def format_text (str, width)
+    if str.size > width then
+        str = str[0,width-3] + "..."
+    end
+    return str
+end
+
+
 # }}}
 # {{{ finalization and cleanup
 
@@ -1406,102 +1808,98 @@ end
 def rebuild_final_config
     $final_config = $strategy.build_final_config(get_tested_configs)
     $program.build_config_file($final_config, $final_config_fn)
+    calculate_orig_stats($final_config)
 end
 
 
-def build_best_report(copy_files=false)
+def is_single_base (cfg, type)
+    isb = false
+    if cfg.exceptions.keys.size == 1 then
+        pt = $program.lookup_by_uid(cfg.exceptions.keys.first)
+        if !pt.nil? and pt.type == type then
+            isb = true
+        end
+    end
+    return isb
+end
+
+
+def build_best_report(num,copy_files=false)
     # find best individual configs
-    mainlog = load_mainlog
     results = get_tested_configs
-    cur_cuid = ""
-    cur_cfg = nil
-    inst_item = ["",0.0]
-    exec_item = ["",0.0]
-    inst_hash = Array.new
-    exec_hash = Array.new
+    inst_passed_cfgs = Array.new
+    exec_passed_cfgs = Array.new
+    exec_passed_cfgs = Array.new
     inst_passed = 0.0
     exec_passed = 0.0
+    inst_failed_cfgs = Array.new
+    exec_failed_cfgs = Array.new
     inst_failed = 0.0
     exec_failed = 0.0
-    mainlog.each do |line|
-        if line =~ /Finished testing (.*):/ then
-            cur_cuid = $1
-            results.each do |r|
-                if r.cuid == cur_cuid then
-                    cur_cfg = r
-                end
-            end
-            inst_item = ["",0.0]
-            exec_item = ["",0.0]
-            has_exec = false
-        end
-        if line =~ /instrumented .* \[([\d.]*)%\] single/ then
-            #inst_item = [cur_cfg, inst_item[1]+$1.to_f]
-            inst_item = [cur_cfg, $1.to_f]
-        end
-        if line =~ /executed .* \[([\d.]*)%\] single/ then
-            #exec_item = [cur_cfg, exec_item[1]+$1.to_f]
-            exec_item = [cur_cfg, $1.to_f]
-        end
-        if (not cur_cuid == "FINAL") then
-            if line.include?($RESULT_PASS) then
-                inst_hash << inst_item
-                exec_hash << exec_item
-                inst_passed += inst_item[1]
-                exec_passed += exec_item[1]
-            elsif line.include?($RESULT_FAIL) then
-                # this is probably not a reliable test; we need to only count
-                # single-instruction configurations because these are the only
-                # configs that won't possibly spawn others; we can't poll
-                # $program here because it may not be loaded; another
-                # alternative is to add a "base" tag or similar whenever we
-                # create a config
-                if cur_cfg.cuid =~ /INSN/ then
-                    inst_failed += inst_item[1]
-                    exec_failed += exec_item[1]
+    results.each do |cfg|
+        if not (cfg.cuid == $FINALCFG_CUID) then
+            if cfg.attrs["result"] == $RESULT_PASS then
+                inst_passed_cfgs << [cfg, cfg.attrs["orig_icount"].to_f]
+                exec_passed_cfgs << [cfg, cfg.attrs["orig_cinst"].to_f]
+                inst_passed += cfg.attrs["orig_icount"].to_f
+                exec_passed += cfg.attrs["orig_cinst"].to_f
+            elsif cfg.attrs["result"] == $RESULT_FAIL then
+                if cfg.attrs.has_key?("single_type") and cfg.attrs["single_type"] == $base_type then
+                    inst_failed_cfgs << [cfg, cfg.attrs["orig_icount"].to_f]
+                    exec_failed_cfgs << [cfg, cfg.attrs["orig_cinst"].to_f]
+                    inst_failed += cfg.attrs["orig_icount"].to_f
+                    exec_failed += cfg.attrs["orig_cinst"].to_f
                 end
             end
         end
     end
-    inst_hash = inst_hash.sort_by { |cfg,pct| -pct }
-    exec_hash = exec_hash.sort_by { |cfg,pct| -pct }
     report = Array.new
     report << " "
-    report << " Top %-14s%15s  %s"%["instrumented:","CONFIG","% REPLACED"]
-    10.times do
-        entry = inst_hash.shift
-        if !entry.nil? then
-            cfg = entry[0]
-            if !cfg.nil? then
-                FileUtils.cp($passed_path + cfg.filename, $best_path) if copy_files
-                report << "    %30s  %4.1f"%[cfg.cuid,entry[1]]
-            else
-                report << "    %30s  %4.1f"%[entry[0],entry[1]]
-            end
+    report << "  Top instrumented (passed):                STA\%    Top instrumented (FAILED):                STA\%"
+    inst_passed_cfgs = inst_passed_cfgs.sort_by { |cfg,pct| -pct }
+    inst_failed_cfgs = inst_failed_cfgs.sort_by { |cfg,pct| -pct }
+    0.upto(num-1).each do |i|
+        line = ""
+        if i < inst_passed_cfgs.size then
+            pcfg,ppct = inst_passed_cfgs[i]
+            FileUtils.cp($passed_path + pcfg.filename, $best_path) if copy_files
+            line += "    - %-35s  %5.1f  "%[format_text(pcfg.cuid,35),ppct]
+        else
+            line += "%50s"%" "
         end
+        if i < inst_failed_cfgs.size then
+            fcfg,fpct = inst_failed_cfgs[i]
+            line += "    - %-35s  %5.1f  "%[format_text(fcfg.cuid,35),fpct]
+        end
+        report << line if line.strip != ""
     end
     report << " "
-    report << "    %30s  %4.1f"%["TOTAL PASSED",inst_passed]
-    report << "    %30s  %4.1f"%["TOTAL FAILED",inst_failed]
-    report << "    %30s  %4.1f"%["TOTAL",inst_passed+inst_failed]
+    report << "      %35s  %5.1f  "%["TOTAL PASSED",inst_passed] +
+              "      %35s  %5.1f  "%["TOTAL FAILED",inst_failed]
+    report << "%50s      %35s  %5.1f"%[" ","TOTAL",inst_passed+inst_failed]
     report << " "
-    report << " Top %-14s%15s  %s"%["executed:","CONFIG","% REPLACED"]
-    10.times do
-        entry = exec_hash.shift
-        if !entry.nil? then
-            cfg = entry[0]
-            if !cfg.nil? then
-                FileUtils.cp($passed_path + cfg.filename, $best_path) if copy_files
-                report << "    %30s  %4.1f"%[cfg.cuid,entry[1]]
-            else
-                report << "    %30s  %4.1f"%[entry[0],entry[1]]
-            end
+    report << "  Top executed (passed):                    STA\%    Top executed (FAILED):                    STA\%"
+    exec_passed_cfgs = exec_passed_cfgs.sort_by { |cfg,pct| -pct }
+    exec_failed_cfgs = exec_failed_cfgs.sort_by { |cfg,pct| -pct }
+    0.upto(num-1).each do |i|
+        line = ""
+        if i < exec_passed_cfgs.size then
+            pcfg,ppct = exec_passed_cfgs[i]
+            FileUtils.cp($passed_path + pcfg.filename, $best_path) if copy_files
+            line += "    - %-35s  %5.1f  "%[format_text(pcfg.cuid,35),ppct]
+        else
+            line += "%50s"%" " 
         end
+        if i < exec_failed_cfgs.size then
+            fcfg,fpct = exec_failed_cfgs[i]
+            line += "    - %-35s  %5.1f  "%[format_text(fcfg.cuid,35),fpct]
+        end
+        report << line if line.strip != ""
     end
     report << " "
-    report << "    %30s  %4.1f"%["TOTAL PASSED",exec_passed]
-    report << "    %30s  %4.1f"%["TOTAL FAILED",exec_failed]
-    report << "    %30s  %4.1f"%["TOTAL",exec_passed+exec_failed]
+    report << "      %35s  %5.1f  "%["TOTAL PASSED",exec_passed] +
+              "      %35s  %5.1f  "%["TOTAL FAILED",exec_failed]
+    report << "%50s      %35s  %5.1f"%[" ","TOTAL",exec_passed+exec_failed]
     report << " "
     return report
 end
@@ -1527,16 +1925,18 @@ end
 
 def clean_everything
     toDelete = Array.new
-    Dir.glob("#{$autoconf_tag}.*") do |fn| toDelete << fn end
+    Dir.glob("#{$search_tag}.*") do |fn| toDelete << fn end
     Dir.glob("*_worker*") do |fn| toDelete << fn end
     Dir.glob("*.cfg") do |fn| toDelete << fn end
     Dir.glob("*.log") do |fn| toDelete << fn end
+    Dir.glob("baseline") do |fn| toDelete << fn end
     Dir.glob("profile") do |fn| toDelete << fn end
     Dir.glob("final") do |fn| toDelete << fn end
     Dir.glob("best") do |fn| toDelete << fn end
     Dir.glob("passed") do |fn| toDelete << fn end
     Dir.glob("failed") do |fn| toDelete << fn end
     Dir.glob("aborted") do |fn| toDelete << fn end
+    Dir.glob("snapshots") do |fn| toDelete << fn end
     toDelete.each do |fn|
         FileUtils.rm_rf(fn)
     end
