@@ -1,6 +1,6 @@
 #!/usr/bin/ruby
 #
-# craft_search
+# craft
 #
 # Generate floating-point precision configurations for a target binary, and test
 # them. Assemble a final recommended configuration. Based on "fpautoconf" and
