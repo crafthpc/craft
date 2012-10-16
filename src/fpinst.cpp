@@ -1371,7 +1371,7 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
                 edges.push_back(*i);
 
                 if (patchAPI_debug) {
-                    printf("checking incoming edge of type %s\n", ParseAPI::format((*i)->type()).c_str());
+                    printf("        checking incoming edge of type %s\n", ParseAPI::format((*i)->type()).c_str());
                 }
 
                 // we can only redirect these types of edges
@@ -1415,9 +1415,10 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
                 // redirect from src/pre to newBlock (skip insnBlock)
                 for (j = edges.begin(); j != edges.end(); j++) {
                     if (patchAPI_debug) {
-                        printf("        redirecting incoming edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
+                        printf("        redirecting incoming edge [%p-%p] -> [%p-%p] of type %s to [%p-%p]\n",
                                (void*)((*j)->src()->start()), (void*)((*j)->src()->end()),
                                (void*)((*j)->trg()->start()), (void*)((*j)->trg()->end()),
+                               ParseAPI::format((*j)->type()).c_str(),
                                (void*)(newBlock->start()), (void*)(newBlock->end()));
                     }
                     success = PatchModifier::redirect(*j, newBlock);
@@ -1429,11 +1430,12 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
             // (should only be one of them)
             assert(icode->exits().size() == 1);
             if (patchAPI_debug) {
-                printf("        redirecting outgoing edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
+                printf("        redirecting outgoing edge [%p-%p] -> [%p-%p] of type %s to [%p-%p]\n",
                        (void*)((*icode->exits().begin())->src()->start()),
                        (void*)((*icode->exits().begin())->src()->end()),
                        (void*)((*icode->exits().begin())->trg()->start()),
                        (void*)((*icode->exits().begin())->trg()->end()),
+                       ParseAPI::format((*icode->exits().begin())->type()).c_str(),
                        (void*)(postBlock->start()), (void*)(postBlock->end()));
             }
             success = PatchModifier::redirect(*icode->exits().begin(), postBlock);
