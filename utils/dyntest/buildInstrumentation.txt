@@ -1,0 +1,217 @@
+bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, PatchBlock *block)
+{
+    Snippet::Ptr handler;
+    vector<Snippet::Ptr> preHandlers;
+    vector<Snippet::Ptr> postHandlers;
+    bool preNeedsRegisters = false;
+    bool postNeedsRegisters = false;
+    bool replaceNeedsRegisters = false;
+    Point *prePoint  = mainMgr->findPoint(
+                        Location::InstructionInstance(func, block, (Address)addr),
+                        Point::PreInsn, true);
+    Point *postPoint = mainMgr->findPoint(
+                        Location::InstructionInstance(func, block, (Address)addr),
+                        Point::PostInsn, true);
+    bool replaced = false;
+    bool success = false;
+
+    if (listFuncs) {
+        printf("Instrumenting instruction at %p: %s\n", addr, inst->getDisassembly().c_str());
+        printf("  in block %p-%p\n", (void*)block->start(), (void*)block->end());
+    }
+
+    // for each analysis
+    vector<FPAnalysis*>::iterator a;
+    for (a = allAnalyses.begin(); a != allAnalyses.end(); a++) {
+
+        if ((*a)->shouldReplace(inst)) {
+
+            // can only replace once
+            assert(!replaced);
+
+            // build snippet
+            bool needsRegisters = false;
+            Snippet::Ptr handler = (*a)->buildReplacementCode(inst, mainApp, needsRegisters);
+            if (!handler) {
+                handler = buildDefaultReplacementCode(*a, inst);
+            }
+            assert(!needsRegisters);    // not currently supported
+            replaceNeedsRegisters |= needsRegisters;
+
+            // CFG surgery (remove the old instruction and insert the new snippet)
+            //
+            //
+
+            PatchBlock *insnBlock = block;   // block with old instruction
+            void *preSplitAddr = addr;
+            void *postSplitAddr = (void*)((unsigned long)preSplitAddr + inst->getNumBytes());
+
+            // split before instruction
+            if ((unsigned long)preSplitAddr > (unsigned long)insnBlock->start()) {
+                if (patchAPI_debug) {
+                    printf("        splitting block [%p-%p] at %p\n",
+                            (void*)insnBlock->start(), (void*)insnBlock->end(), preSplitAddr);
+                }
+                insnBlock = PatchModifier::split(insnBlock, (Address)preSplitAddr);
+                if (!insnBlock) {
+                    printf("ERROR: could not split block [%p-%p] at %p\n",
+                            (void*)block->start(), (void*)block->end(), preSplitAddr);
+                    assert(0);
+                }
+            } else {
+                // instruction is at the beginning of a block; no need to split
+                // pre-block
+                if (patchAPI_debug) {
+                    printf("        insn is at beginning of block\n");
+                }
+                insnBlock = block;
+            }
+
+            // split after instruction
+            PatchBlock *postBlock = NULL;
+            if ((unsigned long)postSplitAddr < (unsigned long)insnBlock->end()) {
+                if (patchAPI_debug) {
+                    printf("        splitting block [%p-%p] at %p\n",
+                            (void*)insnBlock->start(), (void*)insnBlock->end(), postSplitAddr);
+                }
+                postBlock = PatchModifier::split(insnBlock, (Address)postSplitAddr);
+                if (!postBlock) {
+                    printf("ERROR: could not split block [%p-%p] at %p\n",
+                            (void*)insnBlock->start(), (void*)block->end(), postSplitAddr);
+                    assert(0);
+                }
+            } else {
+                // instruction is at the end of a block; no need to split
+                // post-block
+                if (patchAPI_debug) {
+                    printf("        insn is at end of block\n");
+                }
+                assert(block->targets().size() == 1);
+                PatchEdge *postEdge = *(insnBlock->targets().begin());
+                assert(postEdge->type() == ParseAPI::FALLTHROUGH);
+                postBlock = postEdge->trg();
+            }
+
+            // insert new code
+            InsertedCode::Ptr icode = PatchModifier::insert(block->object(), handler, NULL);
+            assert(icode->blocks().size() >= 1);
+            PatchBlock *newBlock = icode->entry();
+            assert(newBlock != NULL);
+ 
+            vector<PatchEdge*> edges;
+            vector<PatchEdge*>::const_iterator i;
+            vector<PatchEdge*>::iterator j;
+            bool keepInsnBlock = false;
+
+            // grab all incoming edges to insnBlock
+            edges.clear();
+            for (i = insnBlock->sources().begin(); i != insnBlock->sources().end(); i++) {
+                edges.push_back(*i);
+
+                // we can't redirect these types of edges
+                if ((*i)->type() == ParseAPI::INDIRECT || 
+                    (*i)->type() == ParseAPI::CATCH ||
+                    (*i)->type() == ParseAPI::RET) {
+                    keepInsnBlock = true;
+                }
+            }
+
+            if (keepInsnBlock) {
+
+                // overwrite insnBlock with nops
+                if (patchAPI_debug) {
+                    printf("        overwriting block [%p-%p]\n",
+                            (void*)insnBlock->start(), (void*)insnBlock->end());
+                }
+                success = PatchModifier::overwrite(insnBlock, 0x90);    // nop
+                assert(success);
+
+                // redirect from insnBlock to newBlock
+                edges.clear();
+                for (i = insnBlock->targets().begin(); i != insnBlock->targets().end(); i++) {
+                    edges.push_back(*i);
+                }
+                for (j = edges.begin(); j != edges.end(); j++) {
+                    if (patchAPI_debug) {
+                        printf("        redirecting insn outgoing edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
+                               (void*)((*j)->src()->start()), (void*)((*j)->src()->end()),
+                               (void*)((*j)->trg()->start()), (void*)((*j)->trg()->end()),
+                               (void*)(newBlock->start()), (void*)(newBlock->end()));
+                    }
+                    success = PatchModifier::redirect(*j, newBlock);
+                    assert(success);
+                }
+
+            } else {
+
+                // redirect from src/pre to newBlock (skip insnBlock)
+                for (j = edges.begin(); j != edges.end(); j++) {
+                    if (patchAPI_debug) {
+                        printf("        redirecting incoming edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
+                               (void*)((*j)->src()->start()), (void*)((*j)->src()->end()),
+                               (void*)((*j)->trg()->start()), (void*)((*j)->trg()->end()),
+                               (void*)(newBlock->start()), (void*)(newBlock->end()));
+                    }
+                    success = PatchModifier::redirect(*j, newBlock);
+                    assert(success);
+                }
+            }
+
+            // redirect icode's exit to postBlock
+            // (should only be one of them)
+            assert(icode->exits().size() == 1);
+            if (patchAPI_debug) {
+                printf("        redirecting outgoing edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
+                       (void*)((*icode->exits().begin())->src()->start()),
+                       (void*)((*icode->exits().begin())->src()->end()),
+                       (void*)((*icode->exits().begin())->trg()->start()),
+                       (void*)((*icode->exits().begin())->trg()->end()),
+                       (void*)(postBlock->start()), (void*)(postBlock->end()));
+            }
+            success = PatchModifier::redirect(*icode->exits().begin(), postBlock);
+            assert(success);
+
+            // should be single entry and exit now
+            PatchBlock *newEntry = icode->entry();
+            PatchBlock *newExit = (*icode->exits().begin())->src();
+
+            if (patchAPI_debug) {
+                // debug output
+                printf("    new sequence: => ");
+                if ((unsigned long)preSplitAddr > (unsigned long)block->start()) {
+                   printf("[%p-%p] -> ", (void*)block->start(),
+                                         (void*)block->end());
+                } else if (keepInsnBlock) {
+                   printf("[%p-%p] -> ", (void*)insnBlock->start(),
+                                         (void*)insnBlock->end());
+                }
+                printf("{ [%p-%p] ... [%p-%p] } ", 
+                      (void*)newEntry->start(), (void*)newEntry->end(),
+                      (void*)newExit->start(),  (void*)newExit->end());
+                printf(" -> [%p-%p] ", (void*)postBlock->start(),
+                                      (void*)postBlock->end());
+                printf("=> \n");
+            }
+
+            // disassemble for log
+            set<PatchBlock*>::iterator k;
+            string disassembly("");
+            disassembly.append(disassembleBlock(newEntry));
+            disassembly.append("\n");
+            for (k = icode->blocks().begin(); k != icode->blocks().end(); k++) {
+                if (((*k) != newEntry) && ((*k) != newExit)) {
+                    disassembly.append(disassembleBlock(*k));
+                    disassembly.append("\n");
+                }
+            }
+            disassembly.append(disassembleBlock(newExit));
+            disassembly.append("\n");
+
+            replaced = true;
+
+            // debug output
+            logfile->addMessage(STATUS, 0, "Inserted " + (*a)->getTag() + " replacement instrumentation.",
+                    disassembly, "", inst);
+        }
+    }
+
