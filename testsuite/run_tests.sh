@@ -111,7 +111,7 @@ do
             else
 
                 # run test
-                $mutant >$dir/$tag.out
+                $mutant &>$dir/$tag.out
 
                 # clean up any rewritten libraries
                 if [ -e libm.so.6 ]
