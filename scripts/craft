@@ -1430,9 +1430,8 @@ def save_settings
     f.close
 end
 def load_settings
-    # could probably be read-only
     f = File.new($settings_fn, "r")
-    f.flock File::LOCK_EX
+    #f.flock File::LOCK_EX
     $start_time = Time.at(f.gets.to_i)
     $binary_name = f.gets.chomp
     $binary_path = f.gets.chomp
@@ -1499,7 +1498,7 @@ end
 def get_workqueue_configs
     queue = Array.new
     f = File.new("#{$workqueue_fn}", "r")
-    f.flock File::LOCK_EX
+    #f.flock File::LOCK_EX
     YAML.each_document(f) do |doc|
         queue << doc
     end
@@ -1508,16 +1507,12 @@ def get_workqueue_configs
 end
 def get_workqueue_length
     len = 0
-    begin
-        f = File.new($workqueue_fn, "r")
-        f.flock File::LOCK_EX
-        YAML.each_document(f) do |doc|
-            len += 1
-        end
-        f.close
-    rescue
-        return 0
+    f = File.new($workqueue_fn, "r")
+    #f.flock File::LOCK_EX
+    YAML.each_document(f) do |doc|
+        len += 1
     end
+    f.close
     return len
 end
 
@@ -1545,7 +1540,7 @@ end
 def get_inproc_configs
     inproc = Array.new
     f = File.new("#{$inproc_fn}", "r")
-    f.flock File::LOCK_EX
+    #f.flock File::LOCK_EX
     YAML.each_document(f) do |doc|
         inproc << doc
     end
@@ -1554,30 +1549,22 @@ def get_inproc_configs
 end
 def get_inproc_length
     len = 0
-    begin
-        f = File.new($inproc_fn, "r")
-        f.flock File::LOCK_EX
-        YAML.each_document(f) do |doc|
-            len += 1
-        end
-        f.close
-    rescue
-        return 0
+    f = File.new($inproc_fn, "r")
+    #f.flock File::LOCK_EX
+    YAML.each_document(f) do |doc|
+        len += 1
     end
+    f.close
     return len
 end
 def move_all_inproc_to_workqueue
-    inproc = Array.new
-    f = File.new($inproc_fn, "r")
+    f = File.new($inproc_fn, "r+")
     f.flock File::LOCK_EX
     YAML.each_document(f) do |doc|
-        inproc << doc
+        add_to_workqueue(doc)
     end
+    f.truncate(0)
     f.close
-    inproc.each do |cfg|
-        remove_from_inproc(cfg)
-        add_to_workqueue(cfg)
-    end
 end
 
 
@@ -1590,7 +1577,7 @@ end
 def get_tested_configs
     tested = Array.new
     f = File.new("#{$tested_fn}", "r")
-    f.flock File::LOCK_EX
+    #f.flock File::LOCK_EX
     YAML.each_document(f) do |doc|
         tested << doc
     end
@@ -1600,7 +1587,7 @@ end
 def get_tested_config_count
     len = 0
     f = File.new("#{$tested_fn}", "r")
-    f.flock File::LOCK_EX
+    #f.flock File::LOCK_EX
     YAML.each_document(f) do |doc|
         len += 1
     end
@@ -1617,7 +1604,7 @@ def add_to_mainlog(reg)
 end
 def load_mainlog
     f = File.new($mainlog_fn, "r")
-    f.flock File::LOCK_EX
+    #f.flock File::LOCK_EX
     lines = f.readlines
     f.close
     return lines
@@ -1734,9 +1721,9 @@ def print_status
             inproc = get_inproc_configs
             queue = get_workqueue_configs
             status_text << ""
-            progress = "Current workqueue (" + (queue.size > nworkers ? nworkers : queue.size).to_s + "/" + queue.size.to_s + "):"
+            progress = "Current workqueue (" + (queue.size > inproc.size ? inproc.size : queue.size).to_s + "/" + queue.size.to_s + "):"
             status_text << "  Currently testing:                  STA\%   DYN\%   #{"%-33s"%progress}   STA\%   DYN\%"
-            0.upto(nworkers-1) do |i|
+            0.upto(inproc.size-1) do |i|
                 line = ""
                 if i < inproc.size then
                     icfg = inproc[i]
@@ -1750,7 +1737,7 @@ def print_status
                 end
                 status_text << line if line.strip != ""
             end
-            if queue.size > nworkers then
+            if queue.size > inproc.size then
                 status_text << "%50s      ..."%" "
             end
             status_text << ""
