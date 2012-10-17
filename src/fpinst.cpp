@@ -2280,7 +2280,6 @@ int main(int argc, char *argv[])
     } else {
 
         printf("Writing new binary to \"%s\" ...\n", outFile);
-        ((BPatch_binaryEdit*)app)->addIgnoredLibrary("libfpanalysis.so");
         ((BPatch_binaryEdit*)app)->writeFile(outFile);
         printf("Done.\n");
         if (!instOnly) {
