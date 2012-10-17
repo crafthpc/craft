@@ -1,0 +1,21 @@
+commit cdd4442763a0a3d4e82e62cdcf2458e4b59c6e4a
+Author: Mike Lam <lam@cs.umd.edu>
+Date:   Fri Mar 2 09:43:32 2012 -0500
+
+    Disabled "overzealous" assert in PatchAPI
+
+diff --git a/patchAPI/src/PatchBlock.C b/patchAPI/src/PatchBlock.C
+index b2ae524..0fc4541 100644
+--- a/patchAPI/src/PatchBlock.C
++++ b/patchAPI/src/PatchBlock.C
+@@ -529,8 +529,8 @@ bool PatchBlock::consistency() const {
+              srclist_[i]->type() != ParseAPI::COND_TAKEN && 
+              srclist_[i]->type() != ParseAPI::COND_NOT_TAKEN) 
+          {
+-            cerr << "Error: multiple source edges to same block" << endl;
+-            CONSIST_FAIL;
++            //cerr << "Error: multiple source edges to same block" << endl;
++            //CONSIST_FAIL;
+          }
+          srcs.insert(srclist_[i]->src());
+          if (!srclist_[i]->consistency()) {
