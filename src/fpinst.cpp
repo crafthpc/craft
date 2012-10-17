@@ -536,7 +536,7 @@ void buildRegHandlers(FPSemantics *inst, vector<Snippet::Ptr> &handlers)
     // {{{ initialize arguments for the value of registers EAX-EDX, EBP and ESP
     if (eaxExpr == NULL) {
         vector<BPatch_register> tempRegs;
-        mainApp->getRegisters(tempRegs, true);
+        mainApp->getRegisters(tempRegs);
         //printf("%d register(s):\n", (int)tempRegs.size());
         for (unsigned k = 0; k < tempRegs.size(); k++) {
             //printf("%s \n", tempRegs[k].name().c_str());
