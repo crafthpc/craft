@@ -194,7 +194,7 @@ FPBinaryBlobTRange::FPBinaryBlobTRange(FPSemantics *inst,
 bool FPBinaryBlobTRange::generate(Point * /*pt*/, Buffer &buf)
 {
     size_t origNumBytes = inst->getNumBytes();
-    unsigned char *orig_code, *pos, *last_pos, *opos;
+    unsigned char *orig_code, *pos, *opos;
     FPRegister temp_gpr1, temp_xmm1, temp_xmm2;
 
     initialize();
@@ -205,7 +205,6 @@ bool FPBinaryBlobTRange::generate(Point * /*pt*/, Buffer &buf)
 
     setBlobAddress((void*)buf.curAddr());
     pos = getBlobCode();
-    last_pos = pos;
 
     // set up some class-wide variables
     temp_gpr1 = getUnusedGPR();

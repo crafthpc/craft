@@ -2,8 +2,16 @@
 CC = g++
 MPICC = mpicc
 MACHINE = $(shell hostname)
-UTILDIR = /fs/dyninst/utils
-ULIBDIR = $(UTILDIR)/machines/$(MACHINE)/64/lib64
+
+LOCAL_INC_DIRS =
+LOCAL_LIB_DIRS =
+
+# local testing machine
+#LOCAL_INC_DIRS = -I/fs/maxfli/lam/opt/boost_1_50_0
+#LOCAL_LIB_DIRS = -L/fs/dyninst/utils/machines/$(MACHINE)/64/lib64
+
+# Ubuntu demo machine
+#LOCAL_LIB_DIRS = -L/usr/lib/x86_64-linux-gnu
 
 ifeq ($(PLATFORM),x86_64-unknown-linux2.4)
     CC += -D__X86_64__ -Darch_x86_64 -Dos_linux
@@ -11,16 +19,15 @@ endif
 
 DEBUG_FLAGS = -g -DINCLUDE_DEBUG=1
 #DEBUG_FLAGS = -g
-#WARN_FLAGS = -Wall -W -Wcast-align
-WARN_FLAGS = -Wall -Werror -W -Wcast-align
+#WARN_FLAGS = -Wall -Werror -W
+WARN_FLAGS = -Wall -W -Wcast-align -Wno-deprecated-declarations
 #WARN_FLAGS = -Wall -Werror -W -falign-functions=16
 #WARN_FLAGS = -Wall -Werror -W -mpreferred-stack-boundary=4
 #WARN_FLAGS = -Wall -Werror -W -Wpointer-arith -Wwrite-strings -fno-common
-COMMON_LIBS = -lrt -rdynamic -lxed -lgmp -lmpfr -lgc -lelf
-COMMON_INCLUDES = -I./h -I/fs/maxfli/lam/opt/boost_1_50_0 -Iextern -Iextern/xed/include -Iextern/mpfr/include -Iextern/gc/include -I
+COMMON_LIBS = -lrt -lxed -lgmp -lmpfr -lgc -lelf
+COMMON_INCLUDES = -I./h -Iextern -Iextern/xed/include -Iextern/mpfr/include -Iextern/gc/include -I
 
-DYNINST_CFLAGS = -I$(DYNINST_ROOT)/$(PLATFORM)/include \
-				 -I$(DYNINST_ROOT)/dyninst
+DYNINST_CFLAGS = -I$(DYNINST_ROOT)/$(PLATFORM)/include -I$(DYNINST_ROOT)/dyninst $(LOCAL_INC_DIRS)
 
 # this mess enables me to use Dyninst internals;
 # hopefully I'll never have to use it for real
@@ -45,15 +52,15 @@ DYNINST_CFLAGS = -I$(DYNINST_ROOT)/$(PLATFORM)/include \
 				  #-DHAVE_STRINGS_H=1 -DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1 \
 				  #-DHAVE_LIBELF=1 -DHAVE_LIBDWARF=1 -Dcap_have_libxml=1 -DHAVE_LIBXML2=1
 
-DYNINST_LDFLAGS = -L$(DYNINST_ROOT)/$(PLATFORM)/lib -L$(ULIBDIR) \
-                  -lcommon -ldyninstAPI -lsymtabAPI -linstructionAPI -lstackwalk
+DYNINST_LDFLAGS = -L$(DYNINST_ROOT)/$(PLATFORM)/lib $(LOCAL_LIB_DIRS) \
+                  -ldyninstAPI -lstackwalk -lpcontrol -lpatchAPI -lparseAPI -linstructionAPI -lsymtabAPI -lsymLite -ldynDwarf -ldynElf -lcommon -pthread -ldl
 
 LIB_CFLAGS    = $(DEBUG_FLAGS) $(WARN_FLAGS) $(DYNINST_CFLAGS) $(COMMON_INCLUDES) -msse2 -mfpmath=sse -O1
 LIB_LDFLAGS   = $(DEBUG_FLAGS) $(WARN_FLAGS) $(DYNINST_LDFLAGS) -L./$(PLATFORM) $(COMMON_LIBS)
 CONF_CFLAGS   = $(DEBUG_FLAGS) $(WARN_FLAGS) $(DYNINST_CFLAGS) $(COMMON_INCLUDES) -msse2
-CONF_LDFLAGS  = $(DEBUG_FLAGS) $(WARN_FLAGS) $(DYNINST_LDFLAGS) -L./$(PLATFORM) $(COMMON_LIBS) -lfpanalysis
+CONF_LDFLAGS  = $(DEBUG_FLAGS) $(WARN_FLAGS) -L./$(PLATFORM) -lfpanalysis $(DYNINST_LDFLAGS) $(COMMON_LIBS)
 PROF_CFLAGS   = $(DEBUG_FLAGS) $(WARN_FLAGS) $(DYNINST_CFLAGS) $(COMMON_INCLUDES) -msse2
-PROF_LDFLAGS  = $(DEBUG_FLAGS) $(WARN_FLAGS) $(DYNINST_LDFLAGS) -L./$(PLATFORM) $(COMMON_LIBS) -lfpanalysis
+PROF_LDFLAGS  = $(DEBUG_FLAGS) $(WARN_FLAGS) -L./$(PLATFORM) -lfpanalysis $(DYNINST_LDFLAGS) $(COMMON_LIBS)
 DEPEND_CFLAGS = $(DEBUG_FLAGS) $(WARN_FLAGS) $(DYNINST_CFLAGS) $(COMMON_INCLUDES) -msse2 -mfpmath=sse -O1
 
 
@@ -78,8 +85,8 @@ PROF_MODULE_FILES = $(foreach module, $(PROF_MODULES), $(PLATFORM)/$(module).o)
 LIB_MODULE_FILES = $(foreach module, $(LIB_MODULES), $(PLATFORM)/$(module).o)
 DEPEND_MODULES = $(CONF_MODULES) $(PROF_MODULES) $(LIB_MODULES)
 DEPEND_FILES = $(foreach file, $(DEPEND_MODULES), src/$(file).depends)
-#EXTERN_LIBS = $(PLATFORM)/libxed.so $(PLATFORM)/libmpfr.so $(PLATFORM)/libgc.so
-EXTERN_LIBS = $(PLATFORM)/libxed.so $(PLATFORM)/libgc.so
+EXTERN_LIBS = $(PLATFORM)/libxed.so $(PLATFORM)/libmpfr.so $(PLATFORM)/libgc.so
+#EXTERN_LIBS = $(PLATFORM)/libxed.so $(PLATFORM)/libgc.so
 
 all: $(TARGETS) fpviewer
 	@echo -e "Build of FPAnalysis complete."
@@ -91,7 +98,7 @@ $(PLATFORM)/:
 	mkdir -p $(PLATFORM)
 
 $(PLATFORM)/libfpanalysis.so: $(PLATFORM)/ $(EXTERN_LIBS) $(LIB_MODULE_FILES)
-	$(CC) $(LIB_LDFLAGS) -shared -o $@ $(LIB_MODULE_FILES)
+	$(CC) $(LIB_MODULE_FILES) $(LIB_LDFLAGS) -shared -o $@ 
 
 $(PLATFORM)/libfpshift.so: src/libfpshift.c
 	$(MPICC) -fPIC -DPIC -shared -o $(PLATFORM)/libfpshift.so src/libfpshift.c
@@ -100,10 +107,10 @@ src/libfpshift.c: src/libfpshift.w
 	extern/wrap/wrap.py -f -i pmpi_init_ -o src/libfpshift.c src/libfpshift.w
 
 $(PLATFORM)/fpconf: $(CONF_MODULE_FILES) $(PLATFORM)/libfpanalysis.so
-	$(CC) $(CONF_CFLAGS) $(CONF_LDFLAGS) -o $@ $(CONF_MODULE_FILES)
+	$(CC) $(CONF_MODULE_FILES) $(CONF_LDFLAGS) -o $@
 
 $(PLATFORM)/fpinst: $(PROF_MODULE_FILES) $(PLATFORM)/libfpanalysis.so
-	$(CC) $(PROF_CFLAGS) $(PROF_LDFLAGS) -o $@ $(PROF_MODULE_FILES)
+	$(CC) $(PROF_MODULE_FILES) $(PROF_LDFLAGS) -o $@
 
 $(PLATFORM)/libxed.so:
 	cp extern/xed/lib/$(PLATFORM)/libxed.so $(PLATFORM)/libxed.so

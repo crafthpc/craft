@@ -63,7 +63,7 @@ $FINALCFG_CUID = "FINAL"                            # special config; represents
 # PPoint at the root, and then it branches into modules, functions, etc. This
 # keeps the entire program's structure in memory while only requiring a single
 # copy (as older versions of this script did). The PPoint knows how to output
-# actual configuration files (given a Config object) that the mutator can use.
+# actual configuration files (given a AppConfig object) that the mutator can use.
 #
 # {{{ PPoint
 class PPoint
@@ -201,7 +201,7 @@ class PPoint
 end # }}}
 
 
-# Config
+# AppConfig
 #
 # Represents a particular replacement configuration. To save space, an
 # exception-based scheme is used; it keeps a "default" replacement status for
@@ -209,8 +209,8 @@ end # }}}
 # level higher than an instruction (module, function, etc.) propogate to
 # lower levels.
 #
-# {{{ Config
-class Config
+# {{{ AppConfig
+class AppConfig
     attr_accessor :cuid             # unique identifier (string)
     attr_accessor :label            # human-readable description; e.g. "MODULE #1: boxes.c; MODULE #2: spheres.c"
     attr_accessor :default          # status
@@ -321,7 +321,7 @@ class Strategy
     def build_initial_configs
         # try to replace the entire program
         configs = Array.new
-        cfg = Config.new(@program.build_cuid, @program.build_label, @alternate)
+        cfg = AppConfig.new(@program.build_cuid, @program.build_label, @alternate)
         cfg.exceptions[@program.uid] = @preferred
         cfg.attrs["level"] = $TYPE_APPLICATION
         configs << cfg
@@ -344,7 +344,7 @@ class Strategy
                         child_pt = child.children.first
                     end
 
-                    cfg = Config.new(child_pt.build_cuid, child_pt.build_label, config.default)
+                    cfg = AppConfig.new(child_pt.build_cuid, child_pt.build_label, config.default)
                     cfg.exceptions[child_pt.uid] = v
                     cfg.attrs["level"] = child_pt.type
                     configs << cfg
@@ -356,7 +356,7 @@ class Strategy
 
     def build_final_config(results)
         # simple union of all passing configs
-        cfg = Config.new($FINALCFG_CUID, "Final Configuration", @alternate)
+        cfg = AppConfig.new($FINALCFG_CUID, "Final Configuration", @alternate)
         results.each do |r|
             if r.attrs.has_key?("result") and r.attrs["result"] == $RESULT_PASS then
                 r.exceptions.each_pair do |k,v|
@@ -393,7 +393,7 @@ class BinaryStrategy < Strategy
             # add a config for each exception and try again
             config.exceptions.each_pair do |k,v|
                 pt = @program.lookup_by_uid(k)
-                cfg = Config.new(pt.build_cuid, pt.build_label, config.default)
+                cfg = AppConfig.new(pt.build_cuid, pt.build_label, config.default)
                 cfg.exceptions[pt.uid] = v
                 if pt.attrs.has_key?("cinst") then
                     cfg.attrs["cinst"] = pt.attrs["cinst"]
@@ -424,7 +424,7 @@ class BinaryStrategy < Strategy
                             all_insns = false
                         end
 
-                        cfg = Config.new(child_pt.build_cuid, child_pt.build_label, config.default)
+                        cfg = AppConfig.new(child_pt.build_cuid, child_pt.build_label, config.default)
                         #puts "ADDING #{cfg.cuid} #{child_pt.type}"
                         cfg.exceptions[child_pt.uid] = v
                         if child_pt.attrs.has_key?("cinst") then
@@ -449,8 +449,8 @@ class BinaryStrategy < Strategy
         # merge into two (binary search) if we have a lot of new configs
         if configs.size > 5 then
             pivot = configs.size / 2
-            left_cfg  = Config.new(config.cuid + " LEFT",  config.label + " LEFT",  config.default)
-            right_cfg = Config.new(config.cuid + " RIGHT", config.label + " RIGHT", config.default)
+            left_cfg  = AppConfig.new(config.cuid + " LEFT",  config.label + " LEFT",  config.default)
+            right_cfg = AppConfig.new(config.cuid + " RIGHT", config.label + " RIGHT", config.default)
             left_cfg.attrs["cinst"]  = "0"
             right_cfg.attrs["cinst"] = "0"
             configs.each do |cfg|
@@ -543,7 +543,7 @@ def main
     $mainlog_fn = "#{$search_path}#{$search_tag}.mainlog"
     $walltime_fn = "#{$search_path}#{$search_tag}.walltime"
 
-    # files containing lists of Config objects
+    # files containing lists of AppConfig objects
     $workqueue_fn = "#{$search_path}#{$search_tag}.workqueue"     # waiting to be tested
     $inproc_fn = "#{$search_path}#{$search_tag}.inproc"           # currently running
     $tested_fn = "#{$search_path}#{$search_tag}.tested"           # finished (passed, failed, or aborted)

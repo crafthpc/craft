@@ -21,13 +21,13 @@ blobtest: blobtest.c
 	$(CC) $(CFLAGS) -o blobtest blobtest.c
 
 calllib: util.o calllib.c
-	$(CC) $(CFLAGS) -Wno-implicit-function-declaration -lm -o calllib util.o calllib.c
+	$(CC) $(CFLAGS) -Wno-implicit-function-declaration -o calllib util.o calllib.c -lm
 
 compare: util.o compare.c
 	$(CC) $(CFLAGS) -Wno-div-by-zero -o compare util.o compare.c
 
 convert: util.o convert.c
-	$(CC) $(CFLAGS) -lm -o convert util.o convert.c
+	$(CC) $(CFLAGS) -o convert util.o convert.c -lm
 
 gauss: util.o gauss.c
 	$(CC) $(CFLAGS) -o gauss util.o gauss.c
@@ -39,7 +39,7 @@ lulesh: util.o lulesh.cc
 	$(CXX) $(CFLAGS) -o lulesh util.o lulesh.cc
 
 mgbarsky: mgbarsky.c
-	$(CC) $(CFLAGS) -Wno-unused-variable -lm -o mgbarsky mgbarsky.c
+	$(CC) $(CFLAGS) -Wno-unused-variable -o mgbarsky mgbarsky.c -lm
 
 mixed.cfg: mixed
 	fpconf mixed >mixed.cfg
@@ -51,10 +51,10 @@ modes: util.o modes.c
 	$(CC) $(CFLAGS) -o modes util.o modes.c
 
 packed: util.o packed.c
-	$(CC) $(CFLAGS) -lm -o packed util.o packed.c
+	$(CC) $(CFLAGS) -o packed util.o packed.c -lm
 
 powloop: util.o powloop.c
-	$(CC) $(CFLAGS) -lm -o powloop util.o powloop.c
+	$(CC) $(CFLAGS) -o powloop util.o powloop.c -lm
 
 pushpop: util.o pushpop.c
 	$(CC) $(CFLAGS) -o pushpop util.o pushpop.c
