@@ -497,7 +497,7 @@ def main
     $base_type = $TYPE_INSTRUCTION          # stop splitting configs at this level
     $initial_cfg_fn = ""                    # initial config filename (may be blank)
     $max_queue_length = 0                   # track largest queue size (approximate)
-    $main_mode = "start"                    # main status ("start", "resume", "status", "clean", "worker", "help")
+    $main_mode = "start"                    # main status ("start/search", "resume", "status", "clean", "worker", "help")
     $restart_inproc = false                 # resume by restarting all inprocess tests
     $resume_lower = false                   # resume at a lower level
     $num_workers = 1                        # number of worker threads
@@ -614,6 +614,9 @@ def main
             read_profiler_data
             initialize_strategy
             if $restart_inproc then
+                toDelete = Array.new
+                Dir.glob("*_worker*") do |fn| toDelete << fn end
+                toDelete.each do |f| FileUtils.rm_rf(f) end
                 move_all_inproc_to_workqueue
             end
             if $resume_lower then
@@ -766,7 +769,7 @@ def resume_lower_search
     configs = Array.new
     old_configs = get_tested_configs
     old_configs.each do |cfg|
-        if cfg.attrs["result"] == $RESULT_FAIL and is_single_base(cfg, old_base_type) then
+        if cfg.attrs["result"] != $RESULT_PASS and is_single_base(cfg, old_base_type) then
             $strategy.split_config(cfg).each do |c|
                 configs << c
             end
@@ -1018,6 +1021,9 @@ end
 
 def parse_command_line
     $main_mode = ARGV.shift.strip.downcase
+    if $main_mode == "search" then
+        $main_mode = "start"
+    end
     if not ["start","resume","worker","status","help","clean"].include?($main_mode) then
         puts "Invalid mode: #{$main_mode}"
         exit
@@ -1373,20 +1379,7 @@ def run_config_file (fn, keep, cuid)
     end
     $status_buffer = ""
 
-    # clean out mutant, logs, and rewritten library files
-    if !keep then
-        begin
-            Dir.glob("*").each do |lfn|
-                if lfn =~ /mutant/ || lfn =~ /\.log/ || lfn =~ /lib(c|m)\.so\.6/ then
-                    File.delete(lfn)
-                end
-            end
-        rescue
-            puts "Error clearing old files"
-        end
-    end
-
-    # copy config to appropriate folder and delete the original
+    # copy config to appropriate folder
     if result == $RESULT_PASS then
         FileUtils.cp(fn, $passed_path)
     elsif result == $RESULT_FAIL then
@@ -1394,8 +1387,24 @@ def run_config_file (fn, keep, cuid)
     elsif result == $RESULT_ERROR then
         FileUtils.cp(fn, $aborted_path)
     end
+
+    # clean out mutant, logs, and rewritten library files
     if !keep then
-        FileUtils.rm_rf(fn)
+        begin
+            toDelete = Array.new
+            Dir.glob("*").each do |lfn|
+                toDelete << lfn
+                #if lfn =~ /mutant/ || lfn =~ /\.log/ || lfn =~ /lib(c|m)\.so\.6/ then
+                #if lfn =~ /mutant/ || lfn =~ /\.log/ || lfn =~ /\.so$/ then
+                    #File.delete(lfn)
+                #end
+            end
+            toDelete.each do |fn|
+                File.delete(fn)
+            end
+        rescue
+            puts "Error clearing old files"
+        end
     end
 
     return result
@@ -1431,7 +1440,7 @@ def save_settings
 end
 def load_settings
     f = File.new($settings_fn, "r")
-    #f.flock File::LOCK_EX
+    f.flock File::LOCK_SH
     $start_time = Time.at(f.gets.to_i)
     $binary_name = f.gets.chomp
     $binary_path = f.gets.chomp
@@ -1498,7 +1507,7 @@ end
 def get_workqueue_configs
     queue = Array.new
     f = File.new("#{$workqueue_fn}", "r")
-    #f.flock File::LOCK_EX
+    f.flock File::LOCK_SH
     YAML.each_document(f) do |doc|
         queue << doc
     end
@@ -1508,7 +1517,7 @@ end
 def get_workqueue_length
     len = 0
     f = File.new($workqueue_fn, "r")
-    #f.flock File::LOCK_EX
+    f.flock File::LOCK_SH
     YAML.each_document(f) do |doc|
         len += 1
     end
@@ -1540,7 +1549,7 @@ end
 def get_inproc_configs
     inproc = Array.new
     f = File.new("#{$inproc_fn}", "r")
-    #f.flock File::LOCK_EX
+    f.flock File::LOCK_SH
     YAML.each_document(f) do |doc|
         inproc << doc
     end
@@ -1550,7 +1559,7 @@ end
 def get_inproc_length
     len = 0
     f = File.new($inproc_fn, "r")
-    #f.flock File::LOCK_EX
+    f.flock File::LOCK_SH
     YAML.each_document(f) do |doc|
         len += 1
     end
@@ -1577,7 +1586,7 @@ end
 def get_tested_configs
     tested = Array.new
     f = File.new("#{$tested_fn}", "r")
-    #f.flock File::LOCK_EX
+    f.flock File::LOCK_SH
     YAML.each_document(f) do |doc|
         tested << doc
     end
@@ -1587,7 +1596,7 @@ end
 def get_tested_config_count
     len = 0
     f = File.new("#{$tested_fn}", "r")
-    #f.flock File::LOCK_EX
+    f.flock File::LOCK_SH
     YAML.each_document(f) do |doc|
         len += 1
     end
@@ -1604,7 +1613,7 @@ def add_to_mainlog(reg)
 end
 def load_mainlog
     f = File.new($mainlog_fn, "r")
-    #f.flock File::LOCK_EX
+    f.flock File::LOCK_SH
     lines = f.readlines
     f.close
     return lines
@@ -1830,7 +1839,7 @@ def build_best_report(num,copy_files=false)
                 exec_passed_cfgs << [cfg, cfg.attrs["orig_cinst"].to_f]
                 inst_passed += cfg.attrs["orig_icount"].to_f
                 exec_passed += cfg.attrs["orig_cinst"].to_f
-            elsif cfg.attrs["result"] == $RESULT_FAIL then
+            else
                 if cfg.attrs.has_key?("single_type") and cfg.attrs["single_type"] == $base_type then
                     inst_failed_cfgs << [cfg, cfg.attrs["orig_icount"].to_f]
                     exec_failed_cfgs << [cfg, cfg.attrs["orig_cinst"].to_f]
@@ -1842,7 +1851,7 @@ def build_best_report(num,copy_files=false)
     end
     report = Array.new
     report << " "
-    report << "  Top instrumented (passed):                STA\%    Top instrumented (FAILED):                STA\%"
+    report << "  Top instrumented (passed):                STA\%    Top instrumented (failed/aborted):        STA\%"
     inst_passed_cfgs = inst_passed_cfgs.sort_by { |cfg,pct| -pct }
     inst_failed_cfgs = inst_failed_cfgs.sort_by { |cfg,pct| -pct }
     0.upto(num-1).each do |i|
@@ -1865,7 +1874,7 @@ def build_best_report(num,copy_files=false)
               "      %35s  %5.1f  "%["TOTAL FAILED",inst_failed]
     report << "%50s      %35s  %5.1f"%[" ","TOTAL",inst_passed+inst_failed]
     report << " "
-    report << "  Top executed (passed):                    STA\%    Top executed (FAILED):                    STA\%"
+    report << "  Top executed (passed):                    STA\%    Top executed (failed/aborted):            STA\%"
     exec_passed_cfgs = exec_passed_cfgs.sort_by { |cfg,pct| -pct }
     exec_failed_cfgs = exec_failed_cfgs.sort_by { |cfg,pct| -pct }
     0.upto(num-1).each do |i|
