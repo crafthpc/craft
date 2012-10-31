@@ -420,7 +420,7 @@ BPatch_constExpr* saveStringToBinary(const char *str, size_t nbytes)
 Symbol *findAnalysisLibSymbol(string name) {
     assert(libModule != NULL);
 
-    Symtab *st = SymtabAPI::convert(libModule);
+    Symtab *st = SymtabAPI::convert(libModule->getObject());
     assert(st != NULL);
 
     std::vector<Symbol *> syms;
