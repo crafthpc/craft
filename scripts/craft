@@ -1874,7 +1874,7 @@ def build_best_report(num,copy_files=false)
               "      %35s  %5.1f  "%["TOTAL FAILED",inst_failed]
     report << "%50s      %35s  %5.1f"%[" ","TOTAL",inst_passed+inst_failed]
     report << " "
-    report << "  Top executed (passed):                    STA\%    Top executed (failed/aborted):            STA\%"
+    report << "  Top executed (passed):                    DYN\%    Top executed (failed/aborted):            DYN\%"
     exec_passed_cfgs = exec_passed_cfgs.sort_by { |cfg,pct| -pct }
     exec_failed_cfgs = exec_failed_cfgs.sort_by { |cfg,pct| -pct }
     0.upto(num-1).each do |i|

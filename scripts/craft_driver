@@ -12,6 +12,7 @@ t_start=`date +%s`
 
 # MODIFY THIS: run binary
 $binary >$tmp_file
+exit_code=$?
 
 # stop timing
 t_stop=`date +%s`
@@ -20,11 +21,15 @@ t_stop=`date +%s`
 runtime=$(expr $t_stop - $t_start)
 
 # MODIFY THIS: check verification
-passed=`grep "[^N]SUCCESSFUL" $tmp_file`
-if [ -z "$passed" ]; then
-    status="fail"
+status="pass"
+echo $exit_code
+if [ $exit_code -ne 0 ]; then
+    status="error"
 else
-    status="pass"
+    check=`grep "[^N]SUCCESSFUL" $tmp_file`
+    if [ -z "$check" ]; then
+        status="fail"
+    fi
 fi
 
 # MODIFY THIS: calculate error
