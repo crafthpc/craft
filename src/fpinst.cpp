@@ -17,7 +17,7 @@
 BPatch *bpatch = NULL;
 BPatch_addressSpace *mainApp = NULL;
 BPatch_image *mainImg = NULL;
-BPatch_module *libModule = NULL;
+BPatch_object *libObj = NULL;
 PatchMgr::Ptr mainMgr;
 bool patchAPI_debug = false;
 
@@ -418,9 +418,9 @@ BPatch_constExpr* saveStringToBinary(const char *str, size_t nbytes)
 }
 
 Symbol *findAnalysisLibSymbol(string name) {
-    assert(libModule != NULL);
+    assert(libObj != NULL);
 
-    Symtab *st = SymtabAPI::convert(libModule->getObject());
+    Symtab *st = SymtabAPI::convert(libObj);
     assert(st != NULL);
 
     std::vector<Symbol *> syms;
@@ -2250,8 +2250,8 @@ int main(int argc, char *argv[])
     }
 
     // add the instrumentation library
-    libModule = app->loadLibrary("libfpanalysis.so");
-	if (libModule == NULL) {
+    libObj = app->loadLibrary("libfpanalysis.so");
+	if (libObj == NULL) {
 		printf("ERROR: Unable to open libfpanalysis.so.\n");
         exit(EXIT_FAILURE);
     }
