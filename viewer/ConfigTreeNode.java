@@ -59,9 +59,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         status = CNStatus.NONE;
         number = 1;
         insnCount = -1;
-        insnExecCount = 0;
-        totalExecCount = 0;
-        execCount = new HashMap<CNStatus, Long>();
+        resetExecCounts();
         label = "Default App";
     }
 
@@ -71,9 +69,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         status = s;
         number = num;
         insnCount = -1;
-        insnExecCount = 0;
-        totalExecCount = 0;
-        execCount = new HashMap<CNStatus, Long>();
+        resetExecCounts();
         label = lbl;
     }
 
@@ -133,6 +129,10 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         address = Util.extractRegex(configLine, "(0x[0-9a-fA-F]+)", 0);
 
         insnCount = -1;
+        resetExecCounts();
+    }
+
+    public void resetExecCounts() {
         insnExecCount = 0;
         totalExecCount = 0;
         execCount = new HashMap<CNStatus, Long>();

@@ -5,7 +5,9 @@ FPCONF_CLASSES=ConfigEditorApp.class \
 	ConfigTreeRenderer.class \
 	OpenConfigAction.class \
 	SaveConfigAction.class \
-	BatchConfigAction.class
+	BatchConfigAction.class \
+	RemoveMovementAction.class \
+	RemoveNonExecutedAction.class
 
 FPVIEW_CLASSES=CancellationReport.class \
 	ColumnResizer.class \

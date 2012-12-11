@@ -647,7 +647,12 @@ public class ViewerApp extends JFrame implements ActionListener, DocumentListene
             } else if (args[i].equals("-s")) {
                 summaryOnly = true;
             } else {
-                files.add(new File(args[i]));
+                File f = new File(args[i]);
+                if (f.exists()) {
+                    files.add(f);
+                } else {
+                    JOptionPane.showMessageDialog(null, "File not found: " + f.getName());
+                }
             }
         }
 

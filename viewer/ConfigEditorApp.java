@@ -102,8 +102,9 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         logMenu.add(new OpenConfigAction(this, "Open", null, new Integer(KeyEvent.VK_O)));
         logMenu.add(new SaveConfigAction(this, "Save", null, new Integer(KeyEvent.VK_S)));
         logMenu.add(new JSeparator());
-        logMenu.add(new BatchConfigAction(this, "Batch Config", null, new Integer(KeyEvent.VK_M)));
+        logMenu.add(new BatchConfigAction(this, "Batch Config", null, new Integer(KeyEvent.VK_B)));
         logMenu.add(new RemoveNonExecutedAction(this, "Remove Non-executed Entries", null, new Integer(KeyEvent.VK_N)));
+        logMenu.add(new RemoveMovementAction(this, "Remove Movement Entries", null, new Integer(KeyEvent.VK_M)));
         
         JMenuBar menuBar = new JMenuBar();
         menuBar.add(logMenu);
@@ -511,6 +512,85 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
     }
 
+    public void recalculateExecutionCounts(LLogFile logfile) {
+        // walk the config tree and retrieve/calculate all execution counts
+        ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+        ConfigTreeNode curModuleNode = null;
+        ConfigTreeNode curFuncNode = null;
+        ConfigTreeNode curBlockNode = null;
+        ConfigTreeNode curNode = null;
+        appNode.resetExecCounts();
+        Enumeration<ConfigTreeNode> modules = appNode.children();
+        while (modules.hasMoreElements()) {
+            curModuleNode = modules.nextElement();
+            curModuleNode.resetExecCounts();
+            Enumeration<ConfigTreeNode> funcs = curModuleNode.children();
+            while (funcs.hasMoreElements()) {
+                curFuncNode = funcs.nextElement();
+                curFuncNode.resetExecCounts();
+                Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
+                while (blocks.hasMoreElements()) {
+                    curBlockNode = blocks.nextElement();
+                    curBlockNode.resetExecCounts();
+                    Enumeration<ConfigTreeNode> insns = curBlockNode.children();
+                    while (insns.hasMoreElements()) {
+                        curNode = insns.nextElement();
+                        ConfigTreeNode.CNStatus status = curNode.getEffectiveStatus();
+
+                        long count = curNode.totalExecCount;
+                        if (logfile != null) {
+                            LInstruction insn = logfile.instructionsByAddress.get(curNode.address);
+                            if (insn != null) {
+                                count = insn.count;
+                                curNode.totalExecCount = count;
+                            }
+                        }
+                        curNode.execCount.put(status, new Long(count));
+
+                        // aggregate replacement status statistics
+                        curBlockNode.totalExecCount += count;
+                        if (curBlockNode.execCount.containsKey(status)) {
+                            curBlockNode.execCount.put(status,
+                                    new Long(count) + curBlockNode.execCount.get(status));
+                        } else {
+                            curBlockNode.execCount.put(status, new Long(count));
+                        }
+                        curFuncNode.totalExecCount += count;
+                        if (curFuncNode.execCount.containsKey(status)) {
+                            curFuncNode.execCount.put(status,
+                                    new Long(count) + curFuncNode.execCount.get(status));
+                        } else {
+                            curFuncNode.execCount.put(status, new Long(count));
+                        }
+                        curModuleNode.totalExecCount += count;
+                        if (curModuleNode.execCount.containsKey(status)) {
+                            curModuleNode.execCount.put(status,
+                                    new Long(count) + curModuleNode.execCount.get(status));
+                        } else {
+                            curModuleNode.execCount.put(status, new Long(count));
+                        }
+                        appNode.totalExecCount += count;
+                        if (appNode.execCount.containsKey(status)) {
+                            appNode.execCount.put(status,
+                                    new Long(count) + appNode.execCount.get(status));
+                        } else {
+                            appNode.execCount.put(status, new Long(count));
+                        }
+
+                        // code coverage
+                        if (count > 0) {
+                            curNode.insnExecCount++;
+                            curBlockNode.insnExecCount++;
+                            curFuncNode.insnExecCount++;
+                            curModuleNode.insnExecCount++;
+                            appNode.insnExecCount++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     public void mergeLogFile(File file) {
         if (!file.exists()) {
             JOptionPane.showMessageDialog(null, "I/O error: " + file.getAbsolutePath() + " does not exist!");
@@ -526,76 +606,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             LLogFile logfile = fileLoader.getLogFile();
             InstructionModel im = new InstructionModel(logfile);
             im.refreshData();
-
-            // walk the config tree and retrieve/calculate all execution counts
-            ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
-            ConfigTreeNode curModuleNode = null;
-            ConfigTreeNode curFuncNode = null;
-            ConfigTreeNode curBlockNode = null;
-            ConfigTreeNode curNode = null;
-            Enumeration<ConfigTreeNode> modules = appNode.children();
-            while (modules.hasMoreElements()) {
-                curModuleNode = modules.nextElement();
-                Enumeration<ConfigTreeNode> funcs = curModuleNode.children();
-                while (funcs.hasMoreElements()) {
-                    curFuncNode = funcs.nextElement();
-                    Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
-                    while (blocks.hasMoreElements()) {
-                        curBlockNode = blocks.nextElement();
-                        Enumeration<ConfigTreeNode> insns = curBlockNode.children();
-                        while (insns.hasMoreElements()) {
-                            curNode = insns.nextElement();
-                            LInstruction insn = logfile.instructionsByAddress.get(curNode.address);
-                            if (insn != null) {
-                                ConfigTreeNode.CNStatus status = curNode.getEffectiveStatus();
-                                long count = insn.count;
-                                curNode.totalExecCount = count;
-                                curNode.execCount.put(status, new Long(count));
-
-                                // aggregate replacement status statistics
-                                curBlockNode.totalExecCount += count;
-                                if (curBlockNode.execCount.containsKey(status)) {
-                                    curBlockNode.execCount.put(status,
-                                            new Long(count) + curBlockNode.execCount.get(status));
-                                } else {
-                                    curBlockNode.execCount.put(status, new Long(count));
-                                }
-                                curFuncNode.totalExecCount += count;
-                                if (curFuncNode.execCount.containsKey(status)) {
-                                    curFuncNode.execCount.put(status,
-                                            new Long(count) + curFuncNode.execCount.get(status));
-                                } else {
-                                    curFuncNode.execCount.put(status, new Long(count));
-                                }
-                                curModuleNode.totalExecCount += count;
-                                if (curModuleNode.execCount.containsKey(status)) {
-                                    curModuleNode.execCount.put(status,
-                                            new Long(count) + curModuleNode.execCount.get(status));
-                                } else {
-                                    curModuleNode.execCount.put(status, new Long(count));
-                                }
-                                appNode.totalExecCount += count;
-                                if (appNode.execCount.containsKey(status)) {
-                                    appNode.execCount.put(status,
-                                            new Long(count) + appNode.execCount.get(status));
-                                } else {
-                                    appNode.execCount.put(status, new Long(count));
-                                }
-
-                                // code coverage
-                                if (count > 0) {
-                                    curNode.insnExecCount++;
-                                    curBlockNode.insnExecCount++;
-                                    curFuncNode.insnExecCount++;
-                                    curModuleNode.insnExecCount++;
-                                    appNode.insnExecCount++;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
+            recalculateExecutionCounts(logfile);
         } catch (ParserConfigurationException ex) {
             JOptionPane.showMessageDialog(null, "Parser configuration error: " + ex.getMessage());
             ex.printStackTrace();
@@ -787,6 +798,48 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
 
         refreshTree(appNode);
+        recalculateExecutionCounts(null);
+    }
+
+    public void removeMovementEntries() {
+        if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
+
+        Set<ConfigTreeNode> nodesToRemove = new HashSet<ConfigTreeNode>();
+
+        ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+        ConfigTreeNode curModNode = null;
+        ConfigTreeNode curFuncNode = null;
+        ConfigTreeNode curBlockNode = null;
+        ConfigTreeNode curNode = null;
+        Enumeration<ConfigTreeNode> modules = appNode.children();
+        while (modules.hasMoreElements()) {
+            curModNode = modules.nextElement();
+            Enumeration<ConfigTreeNode> funcs = curModNode.children();
+            while (funcs.hasMoreElements()) {
+                curFuncNode = funcs.nextElement();
+                Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
+                while (blocks.hasMoreElements()) {
+                    curBlockNode = blocks.nextElement();
+                    Enumeration<ConfigTreeNode> insns = curBlockNode.children();
+                    while (insns.hasMoreElements()) {
+                        curNode = insns.nextElement();
+                        if (curNode.label.contains("mov")) {
+                            nodesToRemove.add(curNode);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (ConfigTreeNode node : nodesToRemove) {
+            TreeNode parent = node.getParent();
+            if (parent instanceof ConfigTreeNode) {
+                ((ConfigTreeNode)parent).remove(node);
+            }
+        }
+
+        refreshTree(appNode);
+        recalculateExecutionCounts(null);
     }
 
     public void expandAllRows() {
@@ -1002,7 +1055,12 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             } else if (args[i].equals("-a")) {
                 fpconfOptions += "-a ";
             } else {
-                files.add(new File(args[i]));
+                File f = new File(args[i]);
+                if (f.exists()) {
+                    files.add(f);
+                } else {
+                    JOptionPane.showMessageDialog(null, "File not found: " + f.getName());
+                }
             }
         }
 
