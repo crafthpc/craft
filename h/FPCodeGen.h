@@ -98,6 +98,9 @@ class FPCodeGen {
         size_t buildUnpcklps(unsigned char *pos,
                 FPRegister reg1, FPRegister reg2);
 
+        size_t buildUnpckhps(unsigned char *pos,
+                FPRegister reg1, FPRegister reg2);
+
         size_t buildMovImm32ToGPR32(unsigned char *pos,
                 uint32_t val, FPRegister gpr);
 

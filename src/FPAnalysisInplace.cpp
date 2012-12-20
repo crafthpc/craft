@@ -448,6 +448,7 @@ size_t FPBinaryBlobInplace::buildInitBlobDouble(unsigned char *pos,
 
     if (tag == 2) {
         // convert high value (clobbers low one)
+        pos += mainGen->buildUnpckhps(pos, dest, dest);
         pos += mainGen->buildCvtps2pd(pos, dest, dest);
     } else {
         // convert low value (automatically preserves high one)

@@ -421,6 +421,12 @@ size_t FPCodeGen::buildUnpcklps(unsigned char *pos,
     return buildInstruction(pos, 0, false, true, 0x14, reg1, reg2, false, 0);
 }
 
+size_t FPCodeGen::buildUnpckhps(unsigned char *pos,
+        FPRegister reg1, FPRegister reg2)
+{
+    return buildInstruction(pos, 0, false, true, 0x15, reg1, reg2, false, 0);
+}
+
 size_t FPCodeGen::buildMovImm32ToGPR32(unsigned char *pos,
         uint32_t imm, FPRegister gpr)
 {
