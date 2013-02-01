@@ -53,7 +53,7 @@ char *child_envp[10];
 
 // instrumentation function options
 char mainFuncName[] = "main";
-char *exitFunc = mainFuncName;
+char *exitFuncName = mainFuncName;
 char restrictFuncs = ' ';
 vector<string> funcs;
 FPConfig *configuration = NULL;
@@ -169,14 +169,19 @@ BPatch_variableExpr *r14PtrExpr = NULL;
 BPatch_variableExpr *r15PtrExpr = NULL;
 
 // instrumentation library functions
-BPatch_Vector<BPatch_function*> initFuncs;
-BPatch_Vector<BPatch_function*> enableFuncs;
-BPatch_Vector<BPatch_function*> setFuncs;
-BPatch_Vector<BPatch_function*> setReplaceFuncs;
-BPatch_Vector<BPatch_function*> regFuncs;
-BPatch_Vector<BPatch_function*> disableFuncs;
-BPatch_Vector<BPatch_function*> cleanupFuncs;
-
+BPatch_function* initFunc;
+BPatch_function* enableFunc;
+BPatch_function* setFunc;
+BPatch_function* setReplaceFunc;
+BPatch_function* regFunc;
+BPatch_function* handlePreFunc;
+BPatch_function* handlePostFunc;
+BPatch_function* handleReplFunc;
+BPatch_function* handleUnspFunc;
+BPatch_function* disableFunc;
+BPatch_function* cleanupFunc;
+BPatch_function* mainFunc;
+BPatch_function* exitFunc;
 // }}}
 
 
@@ -342,15 +347,16 @@ void initializeAnalyses() {
     }
 }
 
-void prepareForInstrumentation()
-{
-    mainImg->findFunction("_INST_init_analysis", initFuncs);
-    mainImg->findFunction("_INST_enable_analysis", enableFuncs);
-    mainImg->findFunction("_INST_set_config", setFuncs);
-    mainImg->findFunction("_INST_set_config_replace_entry", setReplaceFuncs);
-    mainImg->findFunction("_INST_register_inst", regFuncs);
-    mainImg->findFunction("_INST_disable_analysis", disableFuncs);
-    mainImg->findFunction("_INST_cleanup_analysis", cleanupFuncs);
+BPatch_function* getMutateeFunction(const char *name) {
+    BPatch_Vector<BPatch_function *> funcs;
+    mainImg->findFunction(name, funcs, true, true, true);
+    assert(funcs.size() == 1);
+    return funcs.at(0);
+}
+
+BPatch_function* getAnalysisFunction(const char *name) {
+    // should this be searching libObj instead of mainImg?
+    return getMutateeFunction(name);
 }
 
 BPatch_module* findInitFiniModule()
@@ -493,36 +499,30 @@ Snippet::Ptr buildDefaultPreInstrumentation(FPAnalysis *analysis, FPSemantics *i
 {
     long iidx = inst->getIndex();
     long aidx = _INST_get_analysis_id(analysis);
-    BPatch_Vector<BPatch_function*> funcs;
-    mainImg->findFunction("_INST_handle_pre_analysis", funcs);
     BPatch_Vector<BPatch_snippet*> *args = new BPatch_Vector<BPatch_snippet*>();
     args->push_back(new BPatch_constExpr(aidx));
     args->push_back(new BPatch_constExpr(iidx));
-    return PatchAPI::convert(new BPatch_funcCallExpr(*funcs[0], *args));
+    return PatchAPI::convert(new BPatch_funcCallExpr(*handlePreFunc, *args));
 }
 
 Snippet::Ptr buildDefaultPostInstrumentation(FPAnalysis *analysis, FPSemantics *inst)
 {
     long iidx = inst->getIndex();
     long aidx = _INST_get_analysis_id(analysis);
-    BPatch_Vector<BPatch_function*> funcs;
-    mainImg->findFunction("_INST_handle_post_analysis", funcs);
     BPatch_Vector<BPatch_snippet*> *args = new BPatch_Vector<BPatch_snippet*>();
     args->push_back(new BPatch_constExpr(aidx));
     args->push_back(new BPatch_constExpr(iidx));
-    return PatchAPI::convert(new BPatch_funcCallExpr(*funcs[0], *args));
+    return PatchAPI::convert(new BPatch_funcCallExpr(*handlePostFunc, *args));
 }
 
 Snippet::Ptr buildDefaultReplacementCode(FPAnalysis *analysis, FPSemantics *inst)
 {
     long iidx = inst->getIndex();
     long aidx = _INST_get_analysis_id(analysis);
-    BPatch_Vector<BPatch_function*> funcs;
-    mainImg->findFunction("_INST_handle_replacement", funcs);
     BPatch_Vector<BPatch_snippet*> *args = new BPatch_Vector<BPatch_snippet*>();
     args->push_back(new BPatch_constExpr(aidx));
     args->push_back(new BPatch_constExpr(iidx));
-    return PatchAPI::convert(new BPatch_funcCallExpr(*funcs[0], *args));
+    return PatchAPI::convert(new BPatch_funcCallExpr(*handleReplFunc, *args));
 }
 
 void buildRegHandlers(FPSemantics *inst, vector<Snippet::Ptr> &handlers)
@@ -866,11 +866,9 @@ void buildRegHandlers(FPSemantics *inst, vector<Snippet::Ptr> &handlers)
 
 Snippet::Ptr buildUnsupportedInstHandler()
 {
-    BPatch_Vector<BPatch_function*> uiFuncs;
-    mainImg->findFunction("_INST_handle_unsupported_inst", uiFuncs);
     BPatch_Vector<BPatch_snippet*> *uiArgs = new BPatch_Vector<BPatch_snippet*>();
     uiArgs->push_back(new BPatch_constExpr(iidx));
-    return PatchAPI::convert(new BPatch_funcCallExpr(*uiFuncs[0], *uiArgs));
+    return PatchAPI::convert(new BPatch_funcCallExpr(*handleUnspFunc, *uiArgs));
 
 }
 
@@ -1619,7 +1617,7 @@ void instrumentInstruction(void* addr, unsigned char *bytes, size_t nbytes,
             regArgs->push_back(new BPatch_constExpr(addr));
             regArgs->push_back(bytesExpr);
             regArgs->push_back(new BPatch_constExpr(nbytes));
-            BPatch_funcCallExpr *regInst = new BPatch_funcCallExpr(*regFuncs[0], *regArgs);
+            BPatch_funcCallExpr *regInst = new BPatch_funcCallExpr(*regFunc, *regArgs);
             initSnippets.push_back(regInst);
 
             if (listFuncs) {
@@ -1752,11 +1750,9 @@ void instrumentModule(BPatch_module *module, BPatch_Vector<BPatch_snippet*> &ini
     }
 }
 
-void instrumentApplication(BPatch_addressSpace *app)
+void instrumentApplication()
 {
 	// lots of vectors...
-	BPatch_Vector<BPatch_function*> mainFuncs;
-	BPatch_Vector<BPatch_function*> funcFuncs;
 	BPatch_Vector<BPatch_point*> *entryMainPoints;
 	BPatch_Vector<BPatch_point*> *exitFuncPoints;
     BPatch_Vector<BPatch_snippet*> emptyArgs;
@@ -1766,11 +1762,6 @@ void instrumentApplication(BPatch_addressSpace *app)
 	BPatch_Vector<BPatch_snippet*> finiSnippets;
     BPatch_snippet *initCode, *finiCode;
     BPatch_snippet *enableCall, *disableCall;
-
-	// get a reference to the application image
-    mainApp = app;
-    mainImg = mainApp->getImage();
-    mainMgr = PatchAPI::convert(mainApp);
 
     // print pertinent warnings
     if (nullInst) {
@@ -1798,15 +1789,26 @@ void instrumentApplication(BPatch_addressSpace *app)
      *}
      */
 
-    // initialize some global data structures
     mainApp->beginInsertionSet();
-    prepareForInstrumentation();
 
-	// grab references to functions
-    mainImg->findFunction("main", mainFuncs);
-    mainImg->findFunction(exitFunc, funcFuncs);
-    entryMainPoints = mainFuncs[0]->findPoint(BPatch_entry);
-    exitFuncPoints = funcFuncs[0]->findPoint(BPatch_exit);
+	// grab references to analysis functions
+    initFunc       = getAnalysisFunction("_INST_init_analysis");
+    enableFunc     = getAnalysisFunction("_INST_enable_analysis");
+    setFunc        = getAnalysisFunction("_INST_set_config");
+    setReplaceFunc = getAnalysisFunction("_INST_set_config_replace_entry");
+    regFunc        = getAnalysisFunction("_INST_register_inst");
+    handlePreFunc  = getAnalysisFunction("_INST_handle_pre_analysis");
+    handlePostFunc = getAnalysisFunction("_INST_handle_post_analysis");
+    handleReplFunc = getAnalysisFunction("_INST_handle_replacement");
+    handleUnspFunc = getAnalysisFunction("_INST_handle_unsupported_inst");
+    disableFunc    = getAnalysisFunction("_INST_disable_analysis");
+    cleanupFunc    = getAnalysisFunction("_INST_cleanup_analysis");
+
+	// grab references to mutatee functions
+    mainFunc = getMutateeFunction("main");
+    exitFunc = getMutateeFunction(exitFuncName);
+    entryMainPoints = mainFunc->findPoint(BPatch_entry);
+    exitFuncPoints = exitFunc->findPoint(BPatch_exit);
 
     // replace some libm/libc functions
     replaceLibmFunctions();
@@ -1821,9 +1823,9 @@ void instrumentApplication(BPatch_addressSpace *app)
     }
 
     // build analysis initialization/enable/disable snippets
-    initSnippets.push_back(new BPatch_funcCallExpr(*initFuncs[0], emptyArgs));
-    enableCall = new BPatch_funcCallExpr(*enableFuncs[0], emptyArgs);
-    //disableCall = new BPatch_funcCallExpr(*disableFuncs[0], emptyArgs);
+    initSnippets.push_back(new BPatch_funcCallExpr(*initFunc, emptyArgs));
+    enableCall = new BPatch_funcCallExpr(*enableFunc, emptyArgs);
+    //disableCall = new BPatch_funcCallExpr(*disableFunc, emptyArgs);
     // NEVER DISABLE -- TODO: fix this? dyninst doesn't seem to support
     // pointAfter very well for main()
     disableCall = new BPatch_nullExpr();
@@ -1910,7 +1912,7 @@ void instrumentApplication(BPatch_addressSpace *app)
         BPatch_Vector<BPatch_snippet*> *initConfigArgs = new BPatch_Vector<BPatch_snippet*>();
         BPatch_constExpr *initNumInstsStr = saveStringToBinary((*cfgi).c_str(), 0);
         initConfigArgs->push_back(initNumInstsStr);
-        BPatch_funcCallExpr *initConfigEntry = new BPatch_funcCallExpr(*setFuncs[0], *initConfigArgs);
+        BPatch_funcCallExpr *initConfigEntry = new BPatch_funcCallExpr(*setFunc, *initConfigArgs);
         initSnippets.insert(initSnippets.begin(), initConfigEntry);
     }
     
@@ -1933,7 +1935,7 @@ void instrumentApplication(BPatch_addressSpace *app)
         initReplaceArgs->push_back(&addrExpr);
         initReplaceArgs->push_back(&typeExpr);
         initReplaceArgs->push_back(&tagExpr);
-        BPatch_funcCallExpr *initReplaceEntry = new BPatch_funcCallExpr(*setReplaceFuncs[0], *initReplaceArgs);
+        BPatch_funcCallExpr *initReplaceEntry = new BPatch_funcCallExpr(*setReplaceFunc, *initReplaceArgs);
         initSnippets.insert(initSnippets.begin(), initReplaceEntry);
     }
 
@@ -1959,11 +1961,11 @@ void instrumentApplication(BPatch_addressSpace *app)
     ss << "num_instructions=" << iidx;
     BPatch_constExpr *initNumInstsStr = saveStringToBinary(ss.str().c_str(), 0);
     initNumInstsArgs.push_back(initNumInstsStr);
-    BPatch_funcCallExpr initNumInsts(*setFuncs[0], initNumInstsArgs);
+    BPatch_funcCallExpr initNumInsts(*setFunc, initNumInstsArgs);
     initSnippets.insert(initSnippets.begin(), &initNumInsts);
 
     // add cleanup call
-    finiSnippets.push_back(new BPatch_funcCallExpr(*cleanupFuncs[0], emptyArgs));
+    finiSnippets.push_back(new BPatch_funcCallExpr(*cleanupFunc, emptyArgs));
 
     if (nullInst) {
 
@@ -1993,7 +1995,7 @@ void instrumentApplication(BPatch_addressSpace *app)
         // add enable/disable around main
         printf("Instrumenting entry of main.\n");
         mainApp->insertSnippet(*enableCall, *entryMainPoints, BPatch_callBefore);
-        printf("Instrumenting exit of %s.\n", exitFunc);
+        printf("Instrumenting exit of %s.\n", exitFuncName);
         mainApp->insertSnippet(*disableCall, *exitFuncPoints, BPatch_callAfter);
 
     } else {
@@ -2009,7 +2011,7 @@ void instrumentApplication(BPatch_addressSpace *app)
         // add at main and specified exit function
         printf("Instrumenting entry of main.\n");
         mainApp->insertSnippet(*initCode, *entryMainPoints, BPatch_callBefore);
-        printf("Instrumenting exit of %s.\n", exitFunc);
+        printf("Instrumenting exit of %s.\n", exitFuncName);
         mainApp->insertSnippet(*finiCode, *exitFuncPoints, BPatch_callAfter);
     }
 
@@ -2156,7 +2158,7 @@ bool parseCommandLine(unsigned argc, char *argv[])
 		} else if (strcmp(argv[i], "-C")==0 && i < argc-1) {
             extraConfigs.push_back(string(argv[++i]));
 		} else if (strcmp(argv[i], "-e")==0 && i < argc-1) {
-            exitFunc = argv[++i];
+            exitFuncName = argv[++i];
 		} else if (strcmp(argv[i], "-f")==0 && i < argc-1) {
             parseFuncFile(argv[++i], funcs);
             restrictFuncs = 'f';
@@ -2243,23 +2245,50 @@ int main(int argc, char *argv[])
         // replace libm/libc functions)
 		app = bpatch->openBinary(binary, true);
 	}
-
 	if (app == NULL) {
 		printf("ERROR: Unable to start/open application.\n");
         exit(EXIT_FAILURE);
     }
 
+	// save references to the application image
+    mainApp = app;
+    mainImg = mainApp->getImage();
+    mainMgr = PatchAPI::convert(mainApp);
+
     // add the instrumentation library
-    libObj = app->loadLibrary("libfpanalysis.so");
+    libObj = ((BPatch_binaryEdit*)app)->loadLibrary("libfpanalysis.so");
 	if (libObj == NULL) {
 		printf("ERROR: Unable to open libfpanalysis.so.\n");
         exit(EXIT_FAILURE);
     }
 
+    // DEBUG: list modules in library
+    /*
+     *vector<BPatch_module *> libMods;
+     *libObj->modules(libMods);
+     *printf("Loaded libfpanalysis with %lu module(s):\n", libMods.size());
+     *char mname[1024];
+     *for (unsigned i=0; i<libMods.size(); i++) {
+     *    BPatch_module *m = libMods.at(i);
+     *    m->getName(mname, 1024);
+     *    printf(" - %s\n", mname);
+     *}
+     */
+
+    // DEBUG: list functions in image
+    /*
+     *vector<BPatch_function *> *libFuncs = app->getImage()->getProcedures(true);
+     *printf("Loaded libfpanalysis with %lu function(s):\n", libFuncs->size());
+     *for (unsigned i=0; i<libFuncs->size(); i++) {
+     *   BPatch_function *f = libFuncs->at(i);
+     *   printf(" - %s\n", f->getName().c_str());
+     *}
+     */
+
     // perform instrumentation (agnostic to process/rewrite status)
     printf("Configuration:\n%s", configuration->getSummary().c_str());
     printf("Instrumenting application ...\n");
-    instrumentApplication(app);
+    instrumentApplication();
     printf("Instrumentation complete!\n");
 
     // finalize log file

@@ -68,19 +68,27 @@ long _INST_get_analysis_id(FPAnalysis *analysis);
 void errorFunc(BPatchErrorLevel level, int num, const char * const *params);
 
 // helper functions
+string strip_to_base_filename(string fname);
 void setup_config_file(FPConfig *configuration);
-void prepareForInstrumentation();
-bool fpFilterFunc(Instruction::Ptr inst);
+void initializeAnalyses();
+BPatch_function* getMutateeFunction(const char *name);
+BPatch_function* getAnalysisFunction(const char *name);
 BPatch_module* findInitFiniModule();
-BPatch_registerExpr* getFlagsRegisterExpr();
 BPatch_constExpr* saveStringToBinary(const char *str, size_t nbytes);
+Symbol *findAnalysisLibSymbol(string name);
+string disassembleBlock(PatchBlock *block);
 
 // snippet builders
+BPatch_snippet* buildIncrementSnippet(const char *varname);
+Snippet::Ptr buildDefaultPreInstrumentation(FPAnalysis *analysis, FPSemantics *inst);
+Snippet::Ptr buildDefaultPostInstrumentation(FPAnalysis *analysis, FPSemantics *inst);
+Snippet::Ptr buildDefaultReplacementCode(FPAnalysis *analysis, FPSemantics *inst);
 void buildRegHandlers(FPSemantics *inst, BPatch_Vector<Snippet::Ptr> &handlers);
 Snippet::Ptr buildUnsupportedInstHandler();
 
 // function replacements
 void replaceFunctionCalls(const char* oldFuncName, const char* newFuncName);
+void wrapFunction(const char* oldFuncName, const char* newFuncName);
 void replaceLibmFunctions();
 
 // instrumenters
@@ -93,7 +101,7 @@ void instrumentFunction(BPatch_function *function, BPatch_Vector<BPatch_snippet*
         const char *name);
 void instrumentModule(BPatch_module *module, BPatch_Vector<BPatch_snippet*> &initSnippets,
         const char *name);
-void instrumentApplication(BPatch_addressSpace *app);
+void instrumentApplication();
 
 // command-line parsing and help text
 void usage();
