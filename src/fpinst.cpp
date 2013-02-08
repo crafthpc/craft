@@ -481,6 +481,22 @@ string disassembleBlock(PatchBlock *block) {
     return str;
 }
 
+bool overwriteBlock(PatchBlock *block, unsigned char val) {
+    ParseAPI::Block *b = block->block();
+    Offset off = b->start();
+    ParseAPI::SymtabCodeRegion *r = 
+        dynamic_cast<ParseAPI::SymtabCodeRegion*>(b->region());
+    if (r == NULL) return false;
+    Offset region_off = (Offset)r->getPtrToInstruction(off) - 
+                        (Offset)r->symRegion()->getPtrToRawData();
+    bool success = false;
+    while (off++ < b->end()) {
+        success = r->symRegion()->patchData(region_off++, (void*)&val, 1);
+        if (!success) return false;
+    }
+    return true;
+}
+
 // }}}
 
 // {{{ snippet builders
@@ -1389,7 +1405,7 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
                     printf("        overwriting block [%p-%p]\n",
                             (void*)insnBlock->start(), (void*)insnBlock->end());
                 }
-                success = PatchModifier::overwrite(insnBlock, 0x90);    // nop
+                success = overwriteBlock(insnBlock, 0x90);    // nop
                 assert(success);
 
                 // redirect from insnBlock to newBlock
