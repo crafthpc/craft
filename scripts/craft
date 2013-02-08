@@ -1297,10 +1297,12 @@ def run_config (cfg)
     $program.build_config_file(cfg, cfg_path)
 
     # pass off to filename version
-    result = run_config_file(cfg_path, false, cfg.cuid)
+    result,error,runtime = run_config_file(cfg_path, false, cfg.cuid)
 
     # save result
     cfg.attrs["result"] = result
+    cfg.attrs["error"] = error
+    cfg.attrs["runtime"] = runtime
 
     # delete actual configuration file
     FileUtils.rm_rf(cfg_path)
@@ -1407,7 +1409,7 @@ def run_config_file (fn, keep, cuid)
         end
     end
 
-    return result
+    return [result,error,runtime]
 end
 
 
