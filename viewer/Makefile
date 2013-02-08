@@ -7,7 +7,10 @@ FPCONF_CLASSES=ConfigEditorApp.class \
 	SaveConfigAction.class \
 	BatchConfigAction.class \
 	RemoveMovementAction.class \
-	RemoveNonExecutedAction.class
+	RemoveNonExecutedAction.class \
+	ExpandRowsAction.class \
+	TestedResult.class \
+	TestedResultFile.class
 
 FPVIEW_CLASSES=CancellationReport.class \
 	ColumnResizer.class \

@@ -58,8 +58,14 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public JButton expandAllButton;
     public JButton expandSingleButton;
     public JButton expandDoubleButton;
+    public JButton expandTestedButton;
     public JButton collapseAllButton;
     public JCheckBox showEffectiveBox;
+    public JCheckBox showCodeCoverageBox;
+    public JCheckBox showErrorBox;
+    public JCheckBoxMenuItem showEffectiveMenu;
+    public JCheckBoxMenuItem showCodeCoverageMenu;
+    public JCheckBoxMenuItem showErrorMenu;
     public JButton toggleButton;
     public JButton setNoneButton;
     public JButton setIgnoreButton;
@@ -101,13 +107,33 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         logMenu.setMnemonic(KeyEvent.VK_A);
         logMenu.add(new OpenConfigAction(this, "Open", null, new Integer(KeyEvent.VK_O)));
         logMenu.add(new SaveConfigAction(this, "Save", null, new Integer(KeyEvent.VK_S)));
+
         logMenu.add(new JSeparator());
         logMenu.add(new BatchConfigAction(this, "Batch Config", null, new Integer(KeyEvent.VK_B)));
         logMenu.add(new RemoveNonExecutedAction(this, "Remove Non-executed Entries", null, new Integer(KeyEvent.VK_N)));
         logMenu.add(new RemoveMovementAction(this, "Remove Movement Entries", null, new Integer(KeyEvent.VK_M)));
         
+        JMenu viewMenu = new JMenu("View");
+        viewMenu.setMnemonic(KeyEvent.VK_V);
+        viewMenu.add(new ExpandRowsAction(this, "Expand All",     null, null, "all"));
+        viewMenu.add(new ExpandRowsAction(this, "Collapse All",   null, null, "none"));
+        viewMenu.add(new ExpandRowsAction(this, "Expand Singles", null, null, "single"));
+        viewMenu.add(new ExpandRowsAction(this, "Expand Doubles", null, null, "double"));
+        viewMenu.add(new ExpandRowsAction(this, "Expand Tested",  null, null, "tested"));
+        viewMenu.add(new JSeparator());
+        showEffectiveMenu = new JCheckBoxMenuItem("View Effective Status");
+        showEffectiveMenu.addActionListener(this);
+        viewMenu.add(showEffectiveMenu);
+        showCodeCoverageMenu = new JCheckBoxMenuItem("View Code Coverage");
+        showCodeCoverageMenu.addActionListener(this);
+        viewMenu.add(showCodeCoverageMenu);
+        showErrorMenu = new JCheckBoxMenuItem("View Reported Error");
+        showErrorMenu.addActionListener(this);
+        viewMenu.add(showErrorMenu);
+
         JMenuBar menuBar = new JMenuBar();
         menuBar.add(logMenu);
+        menuBar.add(viewMenu);
         setJMenuBar(menuBar);
     }
 
@@ -131,14 +157,24 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         topPanel.add(collapseAllButton);
         expandSingleButton = new JButton("View singles");
         expandSingleButton.addActionListener(this);
-        topPanel.add(expandSingleButton);
+        //topPanel.add(expandSingleButton);
         expandDoubleButton = new JButton("View doubles");
         expandDoubleButton.addActionListener(this);
-        topPanel.add(expandDoubleButton);
+        //topPanel.add(expandDoubleButton);
+        expandTestedButton = new JButton("View tested");
+        expandTestedButton.addActionListener(this);
+        topPanel.add(expandTestedButton);
+        topPanel.add(new JLabel("   "));
         topPanel.add(new JLabel("   "));
         showEffectiveBox = new JCheckBox("Show effective status");
         showEffectiveBox.addActionListener(this);
-        topPanel.add(showEffectiveBox);
+        //topPanel.add(showEffectiveBox);
+        showCodeCoverageBox = new JCheckBox("Show code coverage");
+        showCodeCoverageBox.addActionListener(this);
+        topPanel.add(showCodeCoverageBox);
+        showErrorBox = new JCheckBox("Show error");
+        showErrorBox.addActionListener(this);
+        //topPanel.add(showErrorBox);
         topPanel.add(new JLabel("   "));
         saveButton = new JButton("Save");
         saveButton.addActionListener(this);
@@ -147,6 +183,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         mainTree = new JTree();
         mainRenderer = new ConfigTreeRenderer();
         showEffectiveBox.setSelected(mainRenderer.getShowEffectiveStatus());
+        showEffectiveMenu.setSelected(mainRenderer.getShowEffectiveStatus());
         mainTree.setCellRenderer(mainRenderer);
         ConfigTreeListener ctl = new ConfigTreeListener(this, mainTree);
         mainTree.addMouseListener(ctl);
@@ -217,7 +254,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         mainPanel.add(bottomPanel, BorderLayout.SOUTH);
 
         getContentPane().add(mainPanel);
-        setSize(1200,900);
+        setSize(1400,900);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setTitle(DEFAULT_TITLE);
@@ -591,6 +628,49 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
     }
 
+    public void addTestedResults(TestedResultFile rfile) {
+
+        // walk the config tree and save all regexTags into a lookup table
+        ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+        ConfigTreeNode curModuleNode = null;
+        ConfigTreeNode curFuncNode = null;
+        ConfigTreeNode curBlockNode = null;
+        ConfigTreeNode curNode = null;
+        Map<String,ConfigTreeNode> lookup = new HashMap<String,ConfigTreeNode>();
+        lookup.put(appNode.regexTag, appNode);
+        Enumeration<ConfigTreeNode> modules = appNode.children();
+        while (modules.hasMoreElements()) {
+            curModuleNode = modules.nextElement();
+            lookup.put(curModuleNode.regexTag, curModuleNode);
+            Enumeration<ConfigTreeNode> funcs = curModuleNode.children();
+            while (funcs.hasMoreElements()) {
+                curFuncNode = funcs.nextElement();
+                lookup.put(curFuncNode.regexTag, curFuncNode);
+                Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
+                while (blocks.hasMoreElements()) {
+                    curBlockNode = blocks.nextElement();
+                    lookup.put(curBlockNode.regexTag, curBlockNode);
+                    Enumeration<ConfigTreeNode> insns = curBlockNode.children();
+                    while (insns.hasMoreElements()) {
+                        curNode = insns.nextElement();
+                        lookup.put(curNode.regexTag, curNode);
+                    }
+                }
+            }
+        }
+
+        // iterate over the results and add them to the tree
+        for (TestedResult r : rfile.allResults) {
+            for (String k : r.exceptions.keySet()) {
+                if (lookup.containsKey(k)) {
+                    ConfigTreeNode node = lookup.get(k);
+                    node.setTested(true);
+                    node.setError(r.error);
+                }
+            }
+        }
+    }
+
     public void mergeLogFile(File file) {
         if (!file.exists()) {
             JOptionPane.showMessageDialog(null, "I/O error: " + file.getAbsolutePath() + " does not exist!");
@@ -607,6 +687,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             InstructionModel im = new InstructionModel(logfile);
             im.refreshData();
             recalculateExecutionCounts(logfile);
+            setShowCodeCoverage(true);
         } catch (ParserConfigurationException ex) {
             JOptionPane.showMessageDialog(null, "Parser configuration error: " + ex.getMessage());
             ex.printStackTrace();
@@ -620,6 +701,24 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             JOptionPane.showMessageDialog(null, "Error: " + ex.getMessage());
             ex.printStackTrace();
         }
+    }
+
+    public void mergeTestedFile(File file) {
+        if (!file.exists()) {
+            JOptionPane.showMessageDialog(null, "I/O error: " + file.getAbsolutePath() + " does not exist!");
+            return;
+        }
+        TestedResultFile rfile = new TestedResultFile(file);
+        addTestedResults(rfile);
+        setShowError(true);
+    }
+
+    public void refreshTreeLabels() {
+        for (int i = 0; i < mainTree.getRowCount(); i++) {
+            ConfigTreeNode curNode = (ConfigTreeNode)mainTree.getPathForRow(i).getLastPathComponent();
+            ((DefaultTreeModel)mainTree.getModel()).nodeChanged(curNode);
+        }
+        mainTree.repaint();
     }
 
     public void refreshKeyLabels() {
@@ -863,6 +962,17 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
     }
 
+    public void expandTestedRows() {
+        for (int i = 0; i < mainTree.getRowCount(); i++) {
+            ConfigTreeNode curNode = (ConfigTreeNode)mainTree.getPathForRow(i).getLastPathComponent();
+            if (curNode.tested) {
+                mainTree.expandRow(i);
+            } else if (curNode.type != ConfigTreeNode.CNType.APPLICATION) {
+                mainTree.collapseRow(i);
+            }
+        }
+    }
+
     public boolean shouldExpandRow(TreeNode parent, ConfigTreeNode.CNStatus status) {
         if (parent == null || !(parent instanceof ConfigTreeNode)) return false;
         ConfigTreeNode child = null;
@@ -988,6 +1098,30 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         sourceWindow.setVisible(true);
     }
 
+    void setShowEffectiveStatus(boolean value) {
+        mainRenderer.setShowEffectiveStatus(value);
+        refreshTreeLabels();
+        refreshKeyLabels();
+        showEffectiveBox.setSelected(value);
+        showEffectiveMenu.setSelected(value);
+    }
+
+    void setShowCodeCoverage(boolean value) {
+        mainRenderer.setShowCodeCoverage(value);
+        refreshTreeLabels();
+        refreshKeyLabels();
+        showCodeCoverageBox.setSelected(value);
+        showCodeCoverageMenu.setSelected(value);
+    }
+
+    void setShowError(boolean value) {
+        mainRenderer.setShowError(value);
+        refreshTreeLabels();
+        refreshKeyLabels();
+        showErrorBox.setSelected(value);
+        showErrorMenu.setSelected(value);
+    }
+
     // }}}
 
     // {{{ event listeners
@@ -1013,12 +1147,22 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             expandRows(ConfigTreeNode.CNStatus.SINGLE);
         } else if (e.getSource() == expandDoubleButton) {
             expandRows(ConfigTreeNode.CNStatus.DOUBLE);
+        } else if (e.getSource() == expandTestedButton) {
+            expandTestedRows();
         } else if (e.getSource() == collapseAllButton) {
             collapseAllRows();
         } else if (e.getSource() == showEffectiveBox) {
-            mainRenderer.setShowEffectiveStatus(showEffectiveBox.isSelected());
-            mainTree.repaint();
-            refreshKeyLabels();
+            setShowEffectiveStatus(showEffectiveBox.isSelected());
+        } else if (e.getSource() == showEffectiveMenu) {
+            setShowEffectiveStatus(showEffectiveMenu.isSelected());
+        } else if (e.getSource() == showCodeCoverageBox) {
+            setShowCodeCoverage(showCodeCoverageBox.isSelected());
+        } else if (e.getSource() == showCodeCoverageMenu) {
+            setShowCodeCoverage(showCodeCoverageMenu.isSelected());
+        } else if (e.getSource() == showErrorBox) {
+            setShowError(showErrorBox.isSelected());
+        } else if (e.getSource() == showErrorMenu) {
+            setShowError(showErrorMenu.isSelected());
         } else if (e.getSource() == toggleButton) {
             toggleSelection();
         } else if (e.getSource() == setNoneButton) {
@@ -1074,6 +1218,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     app.mergeConfigFile(f);
                 } else if (Util.getExtension(f).equals("log")) {
                     app.mergeLogFile(f);
+                } else if (Util.getExtension(f).equals("tested")) {
+                    app.mergeTestedFile(f);
                 } else {
                     JOptionPane.showMessageDialog(null, "Invalid file extension: " + f.getName());
                 }

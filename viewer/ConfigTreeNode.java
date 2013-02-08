@@ -52,6 +52,9 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     public Map<CNStatus, Long> execCount;
     public String label;
     public String address;
+    public String regexTag;     // type, id, and address
+    public double error;        // from searches
+    public boolean tested;      // from searches
 
     public ConfigTreeNode() {
         super();
@@ -61,6 +64,10 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         insnCount = -1;
         resetExecCounts();
         label = "Default App";
+        address = "";
+        regexTag = "";
+        error = 0.0;
+        tested = false;
     }
 
     public ConfigTreeNode(CNType t, CNStatus s, int num, String lbl) {
@@ -71,6 +78,10 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         insnCount = -1;
         resetExecCounts();
         label = lbl;
+        address = "";
+        regexTag = "";
+        error = 0.0;
+        tested = false;
     }
 
     public ConfigTreeNode(String configLine) {
@@ -80,16 +91,22 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
 
         if (configLine.contains("APPLICATION")) {
             type = CNType.APPLICATION;
+            regexTag = "APPLICATION";
         } else if (configLine.contains("MODULE")) {
             type = CNType.MODULE;
+            regexTag = "MODULE";
         } else if (configLine.contains("FUNC")) {
             type = CNType.FUNCTION;
+            regexTag = "FUNC";
         } else if (configLine.contains("BBLK")) {
             type = CNType.BASIC_BLOCK;
+            regexTag = "BBLK";
         } else if (configLine.contains("INSN")) {
             type = CNType.INSTRUCTION;
+            regexTag = "INSN";
         } else {
             type = CNType.NONE;
+            regexTag = "";
         }
 
         if (configLine.length() > 1) {
@@ -116,6 +133,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
                 }
             }
         }
+        regexTag += " #" + number;
 
         if (configLine.length() > 2) {
             pos = configLine.indexOf(':');
@@ -127,9 +145,12 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         }
 
         address = Util.extractRegex(configLine, "(0x[0-9a-fA-F]+)", 0);
+        regexTag += ": " + address;
 
         insnCount = -1;
         resetExecCounts();
+        error = 0.0;
+        tested = false;
     }
 
     public void resetExecCounts() {
@@ -250,7 +271,25 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         return str.toString();
     }
 
+    public void setError(double err) {
+        error = err;
+        Enumeration<ConfigTreeNode> childNodes = children();
+        ConfigTreeNode child = null;
+        while (childNodes.hasMoreElements()) {
+            child = childNodes.nextElement();
+            child.setError(err);
+        }
+    }
+
+    public void setTested(boolean value) {
+        tested = value;
+    }
+
     public String toString() {
+        return toString(false, false);
+    }
+
+    public String toString(boolean showCodeCoverage, boolean showError) {
         StringBuffer str = new StringBuffer();
         switch (type) {
             case APPLICATION:       str.append("APPLICATION");    break;
@@ -310,32 +349,32 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             str.append(" [");
             str.append(getInsnCount());
             str.append(" instruction(s)]");
-            while (str.length() < 80) {
-                str.append(' ');
-            }
-            if (type == CNType.MODULE) {
-                str.append("   ");
-            }
-            str.append("  [global: ");
-            str.append(String.format("%3d", gsgl));
-            str.append("%/");
-            str.append(String.format("%3d", gdbl));
-            str.append("%/");
-            str.append(String.format("%3d", gign));
-            str.append("; local: ");
-            str.append(String.format("%3d", coverage));
-            str.append("% cov, ");
-            str.append(String.format("%3d", sgl));
-            str.append("%/");
-            str.append(String.format("%3d", dbl));
-            str.append("%/");
-            str.append(String.format("%3d", ign));
-            str.append("% of ");
-            str.append(totalExecCount);
-            //str.append(" execution(s)");
-            str.append("]");
-            while (str.length() < 160) {
-                str.append(' ');
+
+            if (showCodeCoverage) {
+                while (str.length() < 80) {
+                    str.append(' ');
+                }
+                if (type == CNType.MODULE) {
+                    str.append("   ");
+                }
+                str.append("  [global: ");
+                str.append(String.format("%3d", gsgl));
+                str.append("%/");
+                str.append(String.format("%3d", gdbl));
+                str.append("%/");
+                str.append(String.format("%3d", gign));
+                str.append("; local: ");
+                str.append(String.format("%3d", coverage));
+                str.append("% cov, ");
+                str.append(String.format("%3d", sgl));
+                str.append("%/");
+                str.append(String.format("%3d", dbl));
+                str.append("%/");
+                str.append(String.format("%3d", ign));
+                str.append("% of ");
+                str.append(totalExecCount);
+                //str.append(" execution(s)");
+                str.append("]");
             }
         } else if (type == CNType.INSTRUCTION) {
             while (str.length() < 50) {
@@ -346,6 +385,12 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             str.append(" execution(s)");
             str.append("]");
         }
+
+        if (showError) {
+            str.append("  Err=");
+            str.append(error);
+        }
+        
         return str.toString();
     }
 
