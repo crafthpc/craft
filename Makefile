@@ -69,7 +69,8 @@ LIB_MODULES = libfpanalysis fpflag FPAnalysis \
 			  FPAnalysisDCancel FPAnalysisDNan \
 			  FPAnalysisInplace FPAnalysisPointer \
 			  FPSVPolicy FPSV FPSVSingle FPSVDouble \
-			  FPConfig FPSVConfigPolicy FPShadowEntry FPReplaceEntry \
+			  FPSVConfigPolicy FPSVMemPolicy \
+			  FPConfig FPShadowEntry FPReplaceEntry \
               FPBinaryBlob FPCodeGen FPContext FPLog \
 			  FPDecoderXED FPDecoderIAPI FPFilterFunc \
 			  FPOperand FPOperation FPSemantics
@@ -93,6 +94,11 @@ all: $(TARGETS) fpviewer
 
 fpviewer: viewer/*.java
 	cd viewer && make
+
+tags: 
+	ctags --no-members src/*.cpp
+	ctags --no-members -a h/*.h
+	ctags --no-members -a viewer/*.java
 
 $(PLATFORM)/:
 	mkdir -p $(PLATFORM)
@@ -135,13 +141,13 @@ $(PROF_MODULE_FILES): $(PLATFORM)/%.o: src/%.cpp
 $(DEPEND_FILES): src/%.depends: src/%.cpp
 	$(CC) -MM -MF $@ $(DEPEND_CFLAGS) $<
 
-$(PLATFORM)/libfpanalysis.o: src/libfpanalysis.cpp h/fprintf.cpp
+#$(PLATFORM)/libfpanalysis.o: src/libfpanalysis.cpp h/fprintf.cpp
 	#cpp $(LIB_CFLAGS) -o processed_libfpanalysis.cpp $<
-	$(CC) $(LIB_CFLAGS) -fPIC -c -o $@ $<
+	#$(CC) $(LIB_CFLAGS) -fPIC -c -o $@ $<
 
-$(PLATFORM)/FPDecoderXED.o: src/FPDecoderXED.cpp
+#$(PLATFORM)/FPDecoderXED.o: src/FPDecoderXED.cpp
 	#cpp $(LIB_CFLAGS) -o processed_decoderXED.cpp $<
-	$(CC) $(LIB_CFLAGS) -fPIC -c -o $@ $<
+	#$(CC) $(LIB_CFLAGS) -fPIC -c -o $@ $<
 
 clean:
 	rm -f $(CONF_MODULE_FILES) $(PROF_MODULE_FILES) $(LIB_MODULE_FILES) $(TARGETS)
@@ -149,7 +155,7 @@ clean:
 cleandepend:
 	rm -f $(DEPEND_FILES)
 
-.PHONY: clean all fpviewer
+.PHONY: clean cleandepend all fpviewer tags
 
 -include $(DEPEND_FILES)
 

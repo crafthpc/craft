@@ -96,6 +96,10 @@ void FPAnalysisInplace::configure(FPConfig *config, FPDecoder *decoder,
             mainPolicy = new FPSVPolicy(SVT_IEEE_Single);
         } else if (type == "double") {
             mainPolicy = new FPSVPolicy(SVT_IEEE_Double);
+        } else if (type == "mem_single") {
+            mainPolicy = new FPSVMemPolicy(SVT_IEEE_Single);
+        } else if (type == "mem_double") {
+            mainPolicy = new FPSVMemPolicy(SVT_IEEE_Double);
         } else if (type == "config") {
             mainPolicy = new FPSVConfigPolicy(config);
         } else {
@@ -189,16 +193,12 @@ bool FPAnalysisInplace::shouldPostInstrument(FPSemantics * /*inst*/)
 
 bool FPAnalysisInplace::shouldReplace(FPSemantics *inst)
 {
-    bool decision = mainPolicy->shouldInstrument(inst);
-    // override policy in the case of long doubles or non-floating-point
-    // operations
-    if (!(inst->hasOperandOfType(IEEE_Double) || inst->hasOperandOfType(SSE_Quad)) 
-            || inst->hasOperandOfType(C99_LongDouble)) {
-        decision = false;
-    }
-    //printf("FPAnalysisInplace::shouldReplace(%s) = %s\n",
-            //inst->getDisassembly().c_str(), (decision ? "yes" : "no"));
-    return decision;
+    return mainPolicy->shouldInstrument(inst);
+}
+
+FPReplaceEntryTag FPAnalysisInplace::getDefaultRETag(FPSemantics *inst)
+{
+    return mainPolicy->getDefaultRETag(inst);
 }
 
 string FPAnalysisInplace::finalInstReport()
@@ -515,6 +515,14 @@ size_t FPBinaryBlobInplace::buildOperandInitBlob(unsigned char *pos,
     FPOperand *operand = entry.input;
     FPRegister dest = entry.reg;
     bool packed = entry.packed;
+
+    /*
+     *printf("buildOperandInitBlob: %s  %s  reg=%s packed=%s\n",
+     *        operand->toString().c_str(),
+     *        FPContext::FPReg2Str(operand->getRegister()).c_str(),
+     *        FPContext::FPReg2Str(dest).c_str(),
+     *        (packed ? "yes" : "no"));
+     */
     
     unsigned char *old_pos = pos;
     if (isSSE(dest)) {
@@ -532,6 +540,9 @@ size_t FPBinaryBlobInplace::buildOperandInitBlob(unsigned char *pos,
     } else {
         assert(!"Unsupported temporary register");
     }
+
+    //printf("       loading operand: %s\n", operand->toString().c_str());
+    //printf("         disassembly: %s\n", debug_assembly.c_str());
 
     if (operand->getType() == IEEE_Double) {
         assert(isSSE(dest));
@@ -571,8 +582,12 @@ inline bool isSegmentRegister(unsigned char prefix) {
 }
 
 size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
-        FPSemantics *inst, unsigned char *orig_code, FPRegister replacementRM)
+        FPSemantics *inst, unsigned char *orig_code, FPRegister replacementRM, bool changePrecision)
 {
+    // emits a replaced version of an instruction that replaces any memory
+    // operands with registers, and does the operation in the analysis-desired
+    // precision (if the changePrecision flag is set)
+    //
     unsigned char *old_pos = pos;
     unsigned char prefix, rex, modrm, opcode;
     int i;
@@ -601,7 +616,7 @@ size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
     for (i=0; i<loc.num_prefixes; i++) {
         //printf("  prefix 0x%02x %s\n", orig_code[i], (i == loc.rex_position ? "[rex]" : ""));
         if (i != loc.rex_position) {
-            if (orig_code[i] == 0xf2 && mainPolicy->getSVType(inst) == SVT_IEEE_Single) {
+            if (orig_code[i] == 0xf2 && mainPolicy->getSVType(inst) == SVT_IEEE_Single && changePrecision) {
                 (*pos++) = 0xf3;
             } else if (!isSegmentRegister(orig_code[i])) {
                 (*pos++) = orig_code[i];
@@ -613,6 +628,7 @@ size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
     // there are a couple of exceptions
     if (orig_code[i] == 0x66) {
         if (mainPolicy->getSVType(inst) != SVT_IEEE_Single ||
+            changePrecision == false ||
             opcode == 0xdb ||      // pand
             opcode == 0xeb ||      // por
             opcode == 0xef) {      // pxor
@@ -644,7 +660,7 @@ size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
     // copy/modify the opcode, 
     for ( ; i<loc.num_prefixes+(int)loc.opcode_size; i++) {
         //printf("  opcode 0x%02x\n", orig_code[i]);
-        if (orig_code[i] == 0x5a && mainPolicy->getSVType(inst) == SVT_IEEE_Single) {
+        if (orig_code[i] == 0x5a && mainPolicy->getSVType(inst) == SVT_IEEE_Single && changePrecision) {
             (*pos++) = 0x10;        // cvt ->  mov
         } else {
             (*pos++) = orig_code[i];
@@ -661,26 +677,29 @@ size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
         // preserve r/m
         modrm |= (loc.modrm_rm & 0x7);
     }
-    (*pos++) = modrm;
+    (*pos++) = modrm; i++;
     
     // immediate(s)
     for (j=0; j<loc.imm_size[0]; j++) {
-        (*pos++) = orig_code[loc.imm_position[0] + j];
+        (*pos++) = orig_code[loc.imm_position[0] + j]; i++;
     }
     for (j=0; j<loc.imm_size[1]; j++) {
-        (*pos++) = orig_code[loc.imm_position[1] + j];
+        (*pos++) = orig_code[loc.imm_position[1] + j]; i++;
     }
+
+    // if this was a real instruction emitter, we would nee
+    // TODO: do we need to adjust displacements for EIP-relative
 
     // debug output
     /*
      *unsigned char *tc;
      *printf("  new instruction for %s: ", inst->getDisassembly().c_str());
      *for (tc = orig_code; tc < (orig_code+i); tc++) {
-     *    printf("%02x ", (unsigned)*tc);
+     *   printf("%02x ", (unsigned)*tc);
      *}
      *printf(" => ");
      *for (tc = old_pos; tc < pos; tc++) {
-     *    printf("%02x ", (unsigned)*tc);
+     *   printf("%02x ", (unsigned)*tc);
      *}
      *printf("\n");
      */
@@ -976,7 +995,12 @@ size_t FPBinaryBlobInplace::buildSpecialZero(unsigned char *pos,
     FPRegister dest_xmm = dest->getRegister();
     long dest_tag = dest->getTag();
 
-    pos += mainGen->buildPushReg(pos, temp_gpr1);
+    pos += buildHeader(pos);
+
+    // save one temporary register
+    if (temp_gpr1 != REG_EAX) {         // $rax is already saved in buildHeader()
+        pos += buildFakeStackPushGPR64(pos, temp_gpr1);
+    }
 
     switch (dest->type) {
         case IEEE_Double:
@@ -988,14 +1012,28 @@ size_t FPBinaryBlobInplace::buildSpecialZero(unsigned char *pos,
         case IEEE_Single:
         case SignedInt32:
         case UnsignedInt32:
+            // need an extra temp register for this (bit fiddling b/c of lack of PINSR)
+            pos += buildFakeStackPushGPR64(pos, temp_gpr3);
             pos += mainGen->buildMovImm32ToGPR32(pos, 0, temp_gpr1);
             pos += buildInsertGPR32IntoXMM(pos, temp_gpr1, dest_xmm, dest_tag, temp_gpr3);
+            pos += buildFakeStackPopGPR64(pos, temp_gpr3);
             break;
         default:
             assert(!"Unhandled operand type in special zero");
     }
 
-    pos += mainGen->buildPopReg(pos, temp_gpr1);
+    if (temp_gpr1 != REG_EAX) {
+        pos += buildFakeStackPopGPR64(pos, temp_gpr1);
+    }
+    pos += buildFooter(pos);
+
+    return (size_t)(pos-old_pos);
+}
+
+size_t FPBinaryBlobInplace::buildSpecialMove(unsigned char *pos,
+        FPOperand * /*src*/, FPOperand * /*dest*/)
+{
+    unsigned char *old_pos = pos;
 
     return (size_t)(pos-old_pos);
 }
@@ -1024,7 +1062,7 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
     temp_gpr3 = getUnusedGPR();
     debug_assembly = string("");
 
-    //printf("    building binary blob for %p: %s\n",
+    //printf("\n    building binary blob for %p: %s\n",
             //inst->getAddress(), inst->getDisassembly().c_str());
 
 //#if 0
@@ -1035,6 +1073,8 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
     size_t spec_code = 0, pre_code = 0, rep_code = 0, post_code = 0;
     FPOperation *op;
     FPOperand *input, *output = NULL;
+    bool mem_output = false;
+    bool only_movement = true;
     size_t i, j, k;
 
     bool special = false;           // exception case w/ special handling
@@ -1043,6 +1083,13 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
     for (i=0; /*!replaced &&*/ i<inst->numOps; i++) {
         op = (*inst)[i];
         packed = (op->numOpSets > 1);
+
+        // check for pure data movement instructions (i.e., movsd, movapd)
+        if (!(op->type == OP_MOV || op->type == OP_ZERO)) {
+            // some movement instructions zero out the higher-order bytes of an
+            // SSE register
+            only_movement = false;
+        }
 
         // special case: BTC (bit test & complement--used for fast negation)
         if (op->type == OP_NEG && !packed &&
@@ -1062,7 +1109,16 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
             //replaced = true;
             TAG_CODE_TYPE(spec_code);
             continue;
-        }
+        } /*else if (op->type == OP_MOV) {
+            printf("BUILDING SPECIAL MOVE!\n");
+            special = true;
+            for (j=0; j<op->numOpSets; j++) {
+                pos += buildSpecialMove(pos, op->opSets[j].in[0], op->opSets[j].out[0]);
+            }
+            replaced = true;
+            TAG_CODE_TYPE(spec_code);
+            continue;
+        }*/
 
         // PRE-INSTRUMENTATION ANALYSIS
 
@@ -1072,7 +1128,14 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
         for (j=0; j<1; j++) {
 
             // save the output operand in case we need to patch it up
-            output = op->opSets[j].out[0];
+            //output = op->opSets[j].out[0];
+            // check for memory outputs
+            for (k=0; k<op->opSets[j].nOut; k++) {
+                output = op->opSets[j].out[k];
+                if (output->isMemory()) {
+                    mem_output = true;
+                }
+            }
 
             // for each input operand
             for (k=0; k<op->opSets[j].nIn; k++) {
@@ -1195,9 +1258,27 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
         // restore RAX (TODO: not always necessary)
         pos += mainGen->buildMovStackToGPR64(pos, REG_EAX, getSavedEAXOffset());
 
+        if (mem_output) {
+            // re-emit original instruction (buildReplacedInstruction does not
+            // handle memory output operands)
+            assert(op->type == OP_MOV);
+            unsigned char *orig = orig_code;
+            for (j=0; j<origNumBytes; j++) {
+                *pos++ = *orig++;
+            }
+            if (output->getBase() == REG_EIP) {
+                adjustDisplacement(output->getDisp(), pos);
+            }
+            special = true;
+            replaced = true;
+        }
+
         if (!(special && replaced)) {
-            pos += buildReplacedInstruction(pos, inst, orig_code, replacementRM);
-            debug_size = buildReplacedInstruction(debug_code, inst, orig_code, replacementRM);
+
+            // emit replaced (changed) instruction
+            pos += buildReplacedInstruction(pos, inst, orig_code, replacementRM, !only_movement);
+            debug_size = buildReplacedInstruction(debug_code, inst, orig_code, replacementRM, !only_movement);
+            //printf("     buildReplacedInstruction; replacementRM=%s\n", FPContext::FPReg2Str(replacementRM).c_str());
             if (debug_size) {
                 debug_assembly += FPDecoderXED::disassemble(debug_code, debug_size) + "\n";
             }
@@ -1218,7 +1299,7 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
 
         // fix up "replaced" flags in output
         //if (replaced && output->isRegisterSSE() && (packed || patch_output)) {
-        if (replaced && output->isRegisterSSE() && 
+        if (replaced && !only_movement && output->isRegisterSSE() && 
                 (output->getType() == IEEE_Double) && // used to be "packed || <type is double>"
                 mainPolicy->getSVType(inst) == SVT_IEEE_Single) {
             // TODO: handle GPR output operands?
@@ -1232,7 +1313,7 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
             }
             pos += buildFakeStackPopGPR64(pos, temp_gpr3);
             pos += buildFakeStackPopGPR64(pos, temp_gpr1);
-        } else if (replaced && output->isRegisterSSE() && output->getType() == SSE_Quad &&
+        } else if (replaced && !only_movement && output->isRegisterSSE() && output->getType() == SSE_Quad &&
                    mainPolicy->getSVType(inst) == SVT_IEEE_Single) {
             pos += buildFakeStackPushGPR64(pos, temp_gpr1);
             pos += buildFakeStackPushGPR64(pos, temp_gpr2);
@@ -1241,7 +1322,9 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
             pos += buildFakeStackPopGPR64(pos, temp_gpr3);
             pos += buildFakeStackPopGPR64(pos, temp_gpr2);
             pos += buildFakeStackPopGPR64(pos, temp_gpr1);
-        }
+        } /*else if (replaced && output->isMemory()) {
+            printf("TODO: fix up memory output operands\n");
+        }*/
 
         // restore any temporary XMM/GPR register
         if (replacementRM != REG_NONE) {
@@ -1305,7 +1388,8 @@ bool FPAnalysisInplace::isSupportedOp(FPOperation *op)
            op->type == OP_COMI ||
            op->type == OP_UCOMI ||
            op->type == OP_CMP ||
-           op->type == OP_CVT;
+           op->type == OP_CVT ||
+           op->type == OP_MOV;
 }
 
 bool FPAnalysisInplace::canBuildBinaryBlob(FPSemantics *inst)

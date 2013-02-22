@@ -4,11 +4,12 @@
 #include "FPSemantics.h"
 #include "FPOperand.h"
 #include "FPSV.h"
+#include "FPReplaceEntry.h"
 
 namespace FPInst {
 
 /**
- * Handles decision-making for shadow-value analysis.
+ * Handles decision-making for shadow-value or replacement analysis.
  *
  * Contains functions that policies can override to affect the behavior of
  * shadow-value analysis, including decisions about whether a particular
@@ -32,14 +33,21 @@ class FPSVPolicy {
 
         virtual bool shouldInstrument(FPSemantics *inst);
 
+        // shadow value or replacement type for a particular instruction or
+        // operand
         virtual FPSVType getSVType();
         virtual FPSVType getSVType(FPSemantics *inst);
         virtual FPSVType getSVType(FPOperand *op, FPSemantics *inst);
 
+        // initial setting for candidate configuration file
+        virtual FPReplaceEntryTag getDefaultRETag(FPSemantics *inst);
+
         virtual FPSVType getCommonType(FPSVType type1, FPSVType type2);
         virtual bool shouldReplaceWithPtr(FPOperand *op, FPSemantics *inst);
 
-    private:
+        virtual FPSVType RETag2SVType(FPReplaceEntryTag tag);
+
+    protected:
 
         FPSVType defaultType;
 

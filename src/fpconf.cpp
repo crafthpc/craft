@@ -34,6 +34,7 @@ char *binary = NULL;
 long binaryArg = 0;
 bool addAll = false;
 bool outputOriginal = false;
+bool memMode = false;
 
 // function/instruction indices and counts
 size_t midx = 0, fidx = 0, bbidx = 0, iidx = 0;
@@ -122,7 +123,7 @@ void configInstruction(void *addr, unsigned char *bytes, size_t nbytes)
        << mainLog->getSourceLineInfo(inst->getAddress()) << "]";
     entry->name = ss.str();
     entry->address = addr;
-    if (addAll || mainAnalysisInplace->shouldReplace(inst)) {
+    if (mainAnalysisInplace->shouldReplace(inst)) {
         if (outputOriginal) {
             if (inst->hasOperandOfType(IEEE_Double)) {
                 entry->tag = RETAG_DOUBLE;
@@ -131,14 +132,18 @@ void configInstruction(void *addr, unsigned char *bytes, size_t nbytes)
             } else {
                 entry->tag = RETAG_IGNORE;
             }
+            mainConfig->addReplaceEntry(entry);
         } else {
-            entry->tag = RETAG_CANDIDATE;
+            //entry->tag = RETAG_CANDIDATE;
+            entry->tag = mainAnalysisInplace->getDefaultRETag(inst);
+            mainConfig->addReplaceEntry(entry);
         }
-        mainConfig->addReplaceEntry(entry);
     } else {
-        entry->tag = RETAG_NONE;
+        // TODO: remove? fpinst shouldn't instrument if there's no entry
+        //       so no need to explicitly ignore these
+        //entry->tag = RETAG_IGNORE;
+        //mainConfig->addReplaceEntry(entry);
     }
-    //mainConfig->addReplaceEntry(entry);
 }
 
 void configBasicBlock(BPatch_basicBlock *block)
@@ -316,6 +321,7 @@ void usage()
     printf(" Options:\n");
     printf("\n");
     printf("  -a                   configure all instructions (including single-precision)\n");
+    printf("  -m                   configure for memory-oriented analysis\n");
     printf("  -r                   report original precision (intended to be used with '-a')\n");
     printf("  -s                   configure functions in shared libraries\n");
     printf("\n");
@@ -333,6 +339,8 @@ bool parseCommandLine(unsigned argc, char *argv[])
 			exit(EXIT_SUCCESS);
         } else if (strcmp(argv[i], "-a")==0) {
             addAll = true;
+        } else if (strcmp(argv[i], "-m")==0) {
+            memMode = true;
         } else if (strcmp(argv[i], "-r")==0) {
             outputOriginal = true;
 		} else if (strcmp(argv[i], "-s")==0) {
@@ -375,8 +383,12 @@ int main(int argc, char *argv[])
     //mainDecoder = new FPDecoderIAPI();    // use Dyninst's InstructionAPI
     
     // initialize analysis
+    FPConfig *baseConfig = new FPConfig();
+    if (memMode) {
+        baseConfig->setValue("sv_inp_type", "mem_double");
+    }
     mainAnalysisInplace = FPAnalysisInplace::getInstance();
-    mainAnalysisInplace->configure(new FPConfig(), mainDecoder, NULL, NULL);
+    mainAnalysisInplace->configure(baseConfig, mainDecoder, NULL, NULL);
 
     // open binary (and possibly dependencies)
 	BPatch_addressSpace *app;

@@ -8,17 +8,6 @@ FPSVConfigPolicy::FPSVConfigPolicy(FPConfig *config)
     this->config = config;
 }
 
-FPSVType FPSVConfigPolicy::RETag2SVType(FPReplaceEntryTag tag)
-{
-    FPSVType t = SVT_NONE;
-    switch (tag) {
-        case RETAG_DOUBLE:      t = SVT_IEEE_Double;    break;
-        case RETAG_SINGLE:      t = SVT_IEEE_Single;    break;
-        default:                t = SVT_NONE;           break;
-    }
-    return t;
-}
-
 bool FPSVConfigPolicy::shouldInstrument(FPSemantics *inst)
 {
     FPReplaceEntryTag tag = config->getReplaceTag(inst->getAddress());
@@ -49,6 +38,13 @@ FPSVType FPSVConfigPolicy::getSVType(FPSemantics *inst)
 FPSVType FPSVConfigPolicy::getSVType(FPOperand * /*op*/, FPSemantics *inst)
 {
     return RETag2SVType(config->getReplaceTag(inst->getAddress()));
+}
+
+FPReplaceEntryTag FPSVConfigPolicy::getDefaultRETag(FPSemantics * inst)
+{
+    // this really shouldn't get called; a config-based policy shouldn't be used
+    // to generate a new default configuration
+    return config->getReplaceTag(inst->getAddress());
 }
 
 /*

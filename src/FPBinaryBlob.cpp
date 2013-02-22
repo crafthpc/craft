@@ -245,6 +245,7 @@ size_t FPBinaryBlob::buildOperandLoadXMM(unsigned char *pos,
         FPOperand *src, FPRegister dest_xmm, bool packed)
 {
     assert(dest_xmm >= REG_XMM0 && dest_xmm <= REG_XMM15);
+    //printf("buildOperandLoadXMM: %s\n", src->toString().c_str());
     unsigned char *old_pos = pos;
     unsigned char prefix = (packed ? 0x66 : 0xf2);
     bool wide_operands = false;

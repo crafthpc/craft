@@ -15,6 +15,7 @@
 
 #include "FPSVPolicy.h"
 #include "FPSVConfigPolicy.h"
+#include "FPSVMemPolicy.h"
 
 
 namespace FPInst {
@@ -60,7 +61,8 @@ class FPBinaryBlobInplace : public FPBinaryBlob, public Snippet {
         size_t buildInitBlobDouble(unsigned char *pos, FPRegister dest, long tag);
         size_t buildFlagTestBlob(unsigned char *pos, FPRegister dest, long tag);
         size_t buildOperandInitBlob(unsigned char *pos, FPInplaceBlobInputEntry entry);
-        size_t buildReplacedInstruction(unsigned char *pos, FPSemantics *inst, unsigned char *orig_bytes, FPRegister replacementRM);
+        size_t buildReplacedInstruction(unsigned char *pos, FPSemantics *inst,
+                unsigned char *orig_bytes, FPRegister replacementRM, bool changePrecision);
         size_t buildFixSSEQuadOutput(unsigned char *pos, FPRegister xmm);
 
         // AND/OR/mask versions
@@ -75,6 +77,7 @@ class FPBinaryBlobInplace : public FPBinaryBlob, public Snippet {
         size_t buildSpecialCvtsd2ss(unsigned char *pos, unsigned char orig_prefix, unsigned char orig_modrm);
         size_t buildSpecialNegate(unsigned char *pos, FPOperand *src, FPOperand *dest);
         size_t buildSpecialZero(unsigned char *pos, FPOperand *dest);
+        size_t buildSpecialMove(unsigned char *pos, FPOperand *src, FPOperand *dest);
 
     private:
 
@@ -122,6 +125,7 @@ class FPAnalysisInplace : public FPAnalysis
         bool shouldPreInstrument(FPSemantics *inst);
         bool shouldPostInstrument(FPSemantics *inst);
         bool shouldReplace(FPSemantics *inst);
+        FPReplaceEntryTag getDefaultRETag(FPSemantics *inst);
 
         string finalInstReport();
 

@@ -7,6 +7,17 @@ FPSVPolicy::FPSVPolicy(FPSVType defaultType)
     this->defaultType = defaultType;
 }
 
+FPSVType FPSVPolicy::RETag2SVType(FPReplaceEntryTag tag)
+{
+    FPSVType t = SVT_NONE;
+    switch (tag) {
+        case RETAG_DOUBLE:      t = SVT_IEEE_Double;    break;
+        case RETAG_SINGLE:      t = SVT_IEEE_Single;    break;
+        default:                t = SVT_NONE;           break;
+    }
+    return t;
+}
+
 bool FPSVPolicy::shouldInstrument(FPSemantics *inst)
 {
     bool instrument = false;
@@ -32,6 +43,12 @@ bool FPSVPolicy::shouldInstrument(FPSemantics *inst)
        instrument = false;
     }
 
+    // ignore long doubles or non-floating-point operations
+    if (!(inst->hasOperandOfType(IEEE_Double) || inst->hasOperandOfType(SSE_Quad)) 
+            || inst->hasOperandOfType(C99_LongDouble)) {
+        instrument = false;
+    }
+
     // special case   TODO: remove this?
     //if (inst->getDisassembly().find("btc") != string::npos) {
        //instrument = true;
@@ -51,13 +68,32 @@ FPSVType FPSVPolicy::getSVType()
 {
     return defaultType;
 }
-FPSVType FPSVPolicy::getSVType(FPSemantics * /*inst*/)
+FPSVType FPSVPolicy::getSVType(FPSemantics *inst)
 {
-    return defaultType;
+    FPReplaceEntryTag tag = getDefaultRETag(inst);
+    if (tag == RETAG_CANDIDATE) {
+        return defaultType;
+    } else {
+        return RETag2SVType(tag);
+    }
 }
-FPSVType FPSVPolicy::getSVType(FPOperand * /*op*/, FPSemantics * /*inst*/)
+FPSVType FPSVPolicy::getSVType(FPOperand * /*op*/, FPSemantics *inst)
 {
-    return defaultType;
+    FPReplaceEntryTag tag = getDefaultRETag(inst);
+    if (tag == RETAG_CANDIDATE) {
+        return defaultType;
+    } else {
+        return RETag2SVType(tag);
+    }
+}
+
+FPReplaceEntryTag FPSVPolicy::getDefaultRETag(FPSemantics *inst)
+{
+    FPReplaceEntryTag tag = RETAG_IGNORE;
+    if (shouldInstrument(inst)) {
+        tag = RETAG_CANDIDATE;
+    }
+    return tag;
 }
 
 /*

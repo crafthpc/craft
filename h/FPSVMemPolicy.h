@@ -1,5 +1,5 @@
-#ifndef __FPFPSVCONFIGPOLICY_H
-#define __FPFPSVCONFIGPOLICY_H
+#ifndef __FPFPSVMEMPOLICY_H
+#define __FPFPSVMEMPOLICY_H
 
 #include "FPSVPolicy.h"
 #include "FPConfig.h"
@@ -7,14 +7,17 @@
 namespace FPInst {
 
 /**
- * Handles decision-making for config-based in-place replacement. Differs to the
- * settings in an FPConfig object for replacement decisions.
+ * Handles decision-making for memory-based replacement analysis.
+ *
+ * If an instruction is purely SSE register-based, it is ignored.
+ * If an instruction reads a double from memory, it is replaced with doubles.
+ * If an instruction write a double to memory, it is labeled as a candidate.
  */
-class FPSVConfigPolicy : public FPSVPolicy {
+class FPSVMemPolicy : public FPSVPolicy {
 
     public:
 
-        FPSVConfigPolicy(FPConfig *config);
+        FPSVMemPolicy(FPSVType defaultType);
 
         bool shouldInstrument(FPSemantics *inst);
 

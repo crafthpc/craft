@@ -511,6 +511,7 @@ def main
     $strategy_name = "bin_simple"           # desired search strategy
     $self_invoke = File.basename($0)        # used to spawn worker threads
     $fpconf_invoke = "fpconf"               # invoke configuration generator
+    $fpconf_options = ""                    # configuration generator options
     $fpinst_invoke = "fpinst"               # invoke mutator
 
     # check command-line options
@@ -702,7 +703,7 @@ def initialize_search
         end
     else
         # run fpconf to generate config
-        IO.popen("#{$fpconf_invoke} #{$binary_path}") do |io|
+        IO.popen("#{$fpconf_invoke} #{$fpconf_options} #{$binary_path}") do |io|
             io.each_line do |line|
                 orig_cfg.puts line
             end
@@ -1058,6 +1059,9 @@ def parse_command_line
             elsif opt == "-c" then
                 # initial configuration
                 $initial_cfg_fn = ARGV.shift
+            elsif opt == '-m' then
+                # memory-based analysis
+                $fpconf_options += "-m "
             elsif opt == '-N' then
                 # fortran mode
                 $fortran_mode = true
@@ -1650,6 +1654,7 @@ def print_usage
     puts "   -D             debug mode (ignore->single instead of double->single)"
     puts "   -f             stop splitting configs at the function level"
     puts "   -j <np>        spawn <np> worker threads"
+    puts "   -m             memory-based analysis"
     puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
     puts "                    valid strategies:  \"simple\" and \"bin_simple\""

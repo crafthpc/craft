@@ -10,14 +10,14 @@ opts="-O0 -O1 -O2 -O3"
 # change this to set which instrumentation modes are tested
 #modes="dcancel svinp_single svinp_double"
 #modes="svinp"
-modes="cinst dcancel dnan trange svinp svinp_double"
-#modes="svinp svinp_double"
+modes="cinst dcancel dnan trange svinp svinp_double svinp_mem_single svinp_mem_double"
+#modes="svinp_mem_single svinp_mem_double"
 
 # change this to set which tests are run
 #tests="pushpop"    # old x87-based test
 #tests="lulesh"     # lulesh won't accept -mno-80387 with -O1 or higher
 tests="arith calllib compare convert gauss intcopy mgbarsky mixed modes packed powloop"
-#tests="modes"
+#tests="mgbarsky"
 
 echo ""
 echo "===  FPANALYSIS TEST SUITE  ==="
@@ -97,6 +97,10 @@ do
             then modeopt="--svinp single"
             elif [ "$m" = "svinp_double" ]
             then modeopt="--svinp double"
+            elif [ "$m" = "svinp_mem_single" ]
+            then modeopt="--svinp mem_single"
+            elif [ "$m" = "svinp_mem_double" ]
+            then modeopt="--svinp mem_double"
             else
                 echo "Invalid test mode: $m"
                 exit
