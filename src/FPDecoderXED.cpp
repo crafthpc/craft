@@ -677,10 +677,10 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
                              OUTPUT_OP(IEEE_Single, REG_OP(0), 0); break;
         case XED_IFORM_MOVAPS_MEMps_XMMps:
         case XED_IFORM_MOVUPS_MEMps_XMMps:
-            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Single, REG_OP(0), 0); OUTPUT_OP(IEEE_Single, MEMORY_OP, 0);
-                             INPUT_OP(IEEE_Single, REG_OP(0), 1); OUTPUT_OP(IEEE_Single, MEMORY_OP, 1);
-                             INPUT_OP(IEEE_Single, REG_OP(0), 2); OUTPUT_OP(IEEE_Single, MEMORY_OP, 2);
-                             INPUT_OP(IEEE_Single, REG_OP(0), 3); OUTPUT_OP(IEEE_Single, MEMORY_OP, 3);
+            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Single, REG_OP(1), 0); OUTPUT_OP(IEEE_Single, MEMORY_OP, 0);
+                             INPUT_OP(IEEE_Single, REG_OP(1), 1); OUTPUT_OP(IEEE_Single, MEMORY_OP, 1);
+                             INPUT_OP(IEEE_Single, REG_OP(1), 2); OUTPUT_OP(IEEE_Single, MEMORY_OP, 2);
+                             INPUT_OP(IEEE_Single, REG_OP(1), 3); OUTPUT_OP(IEEE_Single, MEMORY_OP, 3);
                              mi++; break;
         case XED_IFORM_MOVAPS_XMMps_MEMps:
         case XED_IFORM_MOVUPS_XMMps_MEMps:
@@ -699,16 +699,16 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
                              INPUT_OP(IEEE_Single, REG_OP(1), 3); OUTPUT_OP(IEEE_Single, REG_OP(0), 3);
                              break;
         case XED_IFORM_MOVHPS_MEMq_XMMps:
-            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Single, REG_OP(0), 2); OUTPUT_OP(IEEE_Single, MEMORY_OP, 0);
-                             INPUT_OP(IEEE_Single, REG_OP(0), 3); OUTPUT_OP(IEEE_Single, MEMORY_OP, 1);
+            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Single, REG_OP(1), 2); OUTPUT_OP(IEEE_Single, MEMORY_OP, 0);
+                             INPUT_OP(IEEE_Single, REG_OP(1), 3); OUTPUT_OP(IEEE_Single, MEMORY_OP, 1);
                              mi++; break;
         case XED_IFORM_MOVHPS_XMMq_MEMq:
             OP_TYPE(OP_MOV); INPUT_OP(IEEE_Single, MEMORY_OP, 0); OUTPUT_OP(IEEE_Single, REG_OP(0), 2);
                              INPUT_OP(IEEE_Single, MEMORY_OP, 1); OUTPUT_OP(IEEE_Single, REG_OP(0), 3);
                              mi++; break;
         case XED_IFORM_MOVLPS_MEMq_XMMps:
-            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Single, REG_OP(0), 0); OUTPUT_OP(IEEE_Single, MEMORY_OP, 0);
-                             INPUT_OP(IEEE_Single, REG_OP(0), 1); OUTPUT_OP(IEEE_Single, MEMORY_OP, 1);
+            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Single, REG_OP(1), 0); OUTPUT_OP(IEEE_Single, MEMORY_OP, 0);
+                             INPUT_OP(IEEE_Single, REG_OP(1), 1); OUTPUT_OP(IEEE_Single, MEMORY_OP, 1);
                              mi++; break;
         case XED_IFORM_MOVLPS_XMMq_MEMq:
             OP_TYPE(OP_MOV); INPUT_OP(IEEE_Single, MEMORY_OP, 0); OUTPUT_OP(IEEE_Single, REG_OP(0), 0);
@@ -950,8 +950,8 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
             OP_TYPE(OP_MOV); INPUT_OP(IEEE_Double, REG_OP(1), 0);
                              OUTPUT_OP(IEEE_Double, REG_OP(0), 0); break;
         case XED_IFORM_MOVDDUP_XMMdq_MEMq:
-            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Double, REG_OP(0), 0); OUTPUT_OP(IEEE_Double, MEMORY_OP, 0);
-                             INPUT_OP(IEEE_Double, REG_OP(0), 0); OUTPUT_OP(IEEE_Double, MEMORY_OP, 2);
+            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Double, MEMORY_OP, 0); OUTPUT_OP(IEEE_Double, REG_OP(0), 0);
+                             INPUT_OP(IEEE_Double, MEMORY_OP, 0); OUTPUT_OP(IEEE_Double, REG_OP(0), 2);
                              mi++; break;
         case XED_IFORM_MOVDDUP_XMMdq_XMMq:
             OP_TYPE(OP_MOV); INPUT_OP(IEEE_Double, REG_OP(1), 0); OUTPUT_OP(IEEE_Double, REG_OP(0), 0);
@@ -959,8 +959,8 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
                              break;
         case XED_IFORM_MOVAPD_MEMpd_XMMpd:
         case XED_IFORM_MOVUPD_MEMpd_XMMpd:
-            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Double, REG_OP(0), 0); OUTPUT_OP(IEEE_Double, MEMORY_OP, 0);
-                             INPUT_OP(IEEE_Double, REG_OP(0), 2); OUTPUT_OP(IEEE_Double, MEMORY_OP, 2);
+            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Double, REG_OP(1), 0); OUTPUT_OP(IEEE_Double, MEMORY_OP, 0);
+                             INPUT_OP(IEEE_Double, REG_OP(1), 2); OUTPUT_OP(IEEE_Double, MEMORY_OP, 2);
                              mi++; break;
         case XED_IFORM_MOVAPD_XMMpd_MEMpd:
         case XED_IFORM_MOVUPD_XMMpd_MEMpd:
@@ -975,13 +975,13 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
                              INPUT_OP(IEEE_Double, REG_OP(1), 2); OUTPUT_OP(IEEE_Double, REG_OP(0), 2);
                              break;
         case XED_IFORM_MOVHPD_MEMq_XMMsd:
-            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Double, REG_OP(0), 2); OUTPUT_OP(IEEE_Double, MEMORY_OP, 0);
+            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Double, REG_OP(1), 2); OUTPUT_OP(IEEE_Double, MEMORY_OP, 0);
                              mi++; break;
         case XED_IFORM_MOVHPD_XMMsd_MEMq:
             OP_TYPE(OP_MOV); INPUT_OP(IEEE_Double, MEMORY_OP, 0); OUTPUT_OP(IEEE_Double, REG_OP(0), 2);
                              mi++; break;
         case XED_IFORM_MOVLPD_MEMq_XMMsd:
-            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Double, REG_OP(0), 0); OUTPUT_OP(IEEE_Double, MEMORY_OP, 0);
+            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Double, REG_OP(1), 0); OUTPUT_OP(IEEE_Double, MEMORY_OP, 0);
                              mi++; break;
         case XED_IFORM_MOVLPD_XMMsd_MEMq:
             OP_TYPE(OP_MOV); INPUT_OP(IEEE_Double, MEMORY_OP, 0); OUTPUT_OP(IEEE_Double, REG_OP(0), 0);
@@ -1020,7 +1020,7 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
                              break;
         case XED_IFORM_MOVQ_MEMq_XMMq_0F7E:
         case XED_IFORM_MOVQ_MEMq_XMMq_0FD6:
-            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Double, REG_OP(0), 0); OUTPUT_OP(IEEE_Double, MEMORY_OP, 0);
+            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Double, REG_OP(1), 0); OUTPUT_OP(IEEE_Double, MEMORY_OP, 0);
                              mi++; break;
         case XED_IFORM_MOVQ_XMMdq_MEMq_0F6E:
         case XED_IFORM_MOVQ_XMMdq_MEMq_0F7E:
@@ -1039,14 +1039,14 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
             OP_TYPE(OP_MOV); INPUT_OP(IEEE_Single, REG_OP(1), 0);
                              OUTPUT_OP(IEEE_Single, REG_OP(0), 0); break;
         case XED_IFORM_MOVD_MEMd_XMMd:
-            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Single, REG_OP(0), 0);
+            OP_TYPE(OP_MOV); INPUT_OP(IEEE_Single, REG_OP(1), 0);
                              OUTPUT_OP(IEEE_Single, MEMORY_OP, 0); mi++; break;
         case XED_IFORM_MOVD_XMMdq_MEMd:
             OP_TYPE(OP_MOV); INPUT_OP(IEEE_Single, MEMORY_OP, 0);
                              OUTPUT_OP(IEEE_Single, REG_OP(0), 0); mi++; break;
         case XED_IFORM_MOVDQA_MEMdq_XMMdq:
         case XED_IFORM_MOVDQU_MEMdq_XMMdq:
-            OP_TYPE(OP_MOV); INPUT_OP(SSE_Quad, REG_OP(0), 0);
+            OP_TYPE(OP_MOV); INPUT_OP(SSE_Quad, REG_OP(1), 0);
                              OUTPUT_OP(SSE_Quad, MEMORY_OP, 0); mi++; break;
         case XED_IFORM_MOVDQA_XMMdq_MEMdq:
         case XED_IFORM_MOVDQU_XMMdq_MEMdq:
