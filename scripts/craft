@@ -162,17 +162,22 @@ class PPoint
     def output (config, fout, overload)
         fout.print("^")
         if type == $TYPE_INSTRUCTION then
-            if not overload.nil? then
-                # status overridden by something higher up the tree
-                fout.print(overload)
-            else
-                if config.exceptions.has_key?(@uid) then
-                    # status overridden by current config
-                    fout.print(config.exceptions[@uid])
+            if @orig_status == $STATUS_CANDIDATE then
+                # candidate for replacement; check to see if we should
+                if not overload.nil? then
+                    # status overridden by something higher up the tree
+                    fout.print(overload)
                 else
-                    # no override; output configuration default
-                    fout.print(config.default)
+                    if config.exceptions.has_key?(@uid) then
+                        # status overridden by current config
+                        fout.print(config.exceptions[@uid])
+                    else
+                        # no override; output configuration default
+                        fout.print(config.default)
+                    end
                 end
+            else
+                fout.print(@orig_status)
             end
         else
             if overload.nil? then
