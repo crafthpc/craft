@@ -11,7 +11,7 @@ tmp_file=stdout.tmp
 t_start=`date +%s`
 
 # MODIFY THIS: run binary
-$binary >$tmp_file
+timeout 300 $binary >$tmp_file
 exit_code=$?
 
 # stop timing
