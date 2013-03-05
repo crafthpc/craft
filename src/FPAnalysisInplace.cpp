@@ -695,11 +695,11 @@ size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
      *unsigned char *tc;
      *printf("  new instruction for %s: ", inst->getDisassembly().c_str());
      *for (tc = orig_code; tc < (orig_code+i); tc++) {
-     *   printf("%02x ", (unsigned)*tc);
+     *  printf("%02x ", (unsigned)*tc);
      *}
      *printf(" => ");
      *for (tc = old_pos; tc < pos; tc++) {
-     *   printf("%02x ", (unsigned)*tc);
+     *  printf("%02x ", (unsigned)*tc);
      *}
      *printf("\n");
      */
@@ -828,8 +828,7 @@ size_t FPBinaryBlobInplace::buildExtractGPR64FromXMM(unsigned char *pos,
     }
 
     // pop stack into gpr
-    pos += mainGen->buildInstruction(pos, 0, true, false, 0x8b, gpr, REG_ESP, true, fake_stack_offset);
-    fake_stack_offset += 8;
+    pos += buildFakeStackPopGPR64(pos, gpr);
 
     return (size_t)(pos-old_pos);
 }
@@ -843,8 +842,7 @@ size_t FPBinaryBlobInplace::buildInsertGPR64IntoXMM(unsigned char *pos,
     unsigned char *old_pos = pos;
     
     // push gpr on stack
-    fake_stack_offset -= 8;
-    pos += mainGen->buildInstruction(pos, 0, true, false, 0x89, gpr, REG_ESP, true, fake_stack_offset);
+    pos += buildFakeStackPushGPR64(pos, gpr);
 
     // put stack back in xmm
     if (tag == 0) {
@@ -1072,8 +1070,8 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
     FPRegister replacementRM = REG_NONE;
     size_t spec_code = 0, pre_code = 0, rep_code = 0, post_code = 0;
     FPOperation *op;
-    FPOperand *input, *output = NULL;
-    bool mem_output = false;
+    FPOperand *input = NULL, *output = NULL;
+    bool mem_output = false, xmm_output = false;
     bool only_movement = true;
     size_t i, j, k;
 
@@ -1134,6 +1132,9 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
                 output = op->opSets[j].out[k];
                 if (output->isMemory()) {
                     mem_output = true;
+                }
+                if (output->isRegisterSSE()) {
+                    xmm_output = true;
                 }
             }
 
@@ -1258,7 +1259,22 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
         // restore RAX (TODO: not always necessary)
         pos += mainGen->buildMovStackToGPR64(pos, REG_EAX, getSavedEAXOffset());
 
-        if (mem_output) {
+        if (!replaced && only_movement && xmm_output &&
+                inst->getDisassembly().find("movhpd") != string::npos ||
+                inst->getDisassembly().find("movlpd") != string::npos) {
+            // this is a really ugly hack; the movhpd/movlpd instructions
+            // are the only ones that don't have xmm->xmm capability,
+            // which means that the mem -> xmm can't be implemented the same
+            // way it is for other instructions
+            pos += buildFakeStackPushGPR64(pos, temp_gpr1);
+            pos += buildExtractGPR64FromXMM(pos, temp_gpr1, replacementRM, 0);
+            pos += buildInsertGPR64IntoXMM(pos, temp_gpr1, output->getRegister(), output->getTag());
+            pos += buildFakeStackPopGPR64(pos, temp_gpr1);
+            special = true;
+            replaced = true;
+        }
+
+        if (!replaced && mem_output && only_movement) {
             // re-emit original instruction (buildReplacedInstruction does not
             // handle memory output operands)
             assert(op->type == OP_MOV);
@@ -1322,9 +1338,7 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
             pos += buildFakeStackPopGPR64(pos, temp_gpr3);
             pos += buildFakeStackPopGPR64(pos, temp_gpr2);
             pos += buildFakeStackPopGPR64(pos, temp_gpr1);
-        } /*else if (replaced && output->isMemory()) {
-            printf("TODO: fix up memory output operands\n");
-        }*/
+        }
 
         // restore any temporary XMM/GPR register
         if (replacementRM != REG_NONE) {
