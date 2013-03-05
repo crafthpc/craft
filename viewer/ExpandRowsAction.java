@@ -29,6 +29,8 @@ public class ExpandRowsAction extends AbstractAction implements ActionListener {
             appInst.expandRows(ConfigTreeNode.CNStatus.SINGLE);
         } else if (tag.equals("double")) {
             appInst.expandRows(ConfigTreeNode.CNStatus.DOUBLE);
+        } else if (tag.equals("ignore")) {
+            appInst.expandRows(ConfigTreeNode.CNStatus.IGNORE);
         } else if (tag.equals("tested")) {
             appInst.expandTestedRows();
         }

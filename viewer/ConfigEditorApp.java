@@ -119,6 +119,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         viewMenu.add(new ExpandRowsAction(this, "Collapse All",   null, null, "none"));
         viewMenu.add(new ExpandRowsAction(this, "Expand Singles", null, null, "single"));
         viewMenu.add(new ExpandRowsAction(this, "Expand Doubles", null, null, "double"));
+        viewMenu.add(new ExpandRowsAction(this, "Expand Ignore",  null, null, "ignore"));
         viewMenu.add(new ExpandRowsAction(this, "Expand Tested",  null, null, "tested"));
         viewMenu.add(new JSeparator());
         showEffectiveMenu = new JCheckBoxMenuItem("View Effective Status");
