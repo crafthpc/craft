@@ -110,8 +110,9 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
         logMenu.add(new JSeparator());
         logMenu.add(new BatchConfigAction(this, "Batch Config", null, new Integer(KeyEvent.VK_B)));
-        logMenu.add(new RemoveNonExecutedAction(this, "Remove Non-executed Entries", null, new Integer(KeyEvent.VK_N)));
-        logMenu.add(new RemoveMovementAction(this, "Remove Movement Entries", null, new Integer(KeyEvent.VK_M)));
+        logMenu.add(new RemoveNonExecutedAction (this, "Remove Non-executed Entries",  null, new Integer(KeyEvent.VK_N)));
+        logMenu.add(new RemoveMovementAction    (this, "Remove Movement Entries",      null, new Integer(KeyEvent.VK_M)));
+        logMenu.add(new RemoveNonCandidateAction(this, "Remove Non-candidate Entries", null, new Integer(KeyEvent.VK_M)));
         
         JMenu viewMenu = new JMenu("View");
         viewMenu.setMnemonic(KeyEvent.VK_V);
@@ -420,9 +421,9 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
     }
 
-    public boolean mergeConfigFile(File file) {
+    public void mergeConfigFile(File file) {
 
-        if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return false;
+        if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
         ConfigTreeNode origAppNode = (ConfigTreeNode)mainTree.getModel().getRoot();
         ConfigTreeNode origModNode = null;
         ConfigTreeNode origFuncNode = null;
@@ -436,18 +437,25 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         String curLine;
 
         boolean success = true;
+        StringBuffer errors = new StringBuffer();
 
         try {
             BufferedReader rdr = new BufferedReader(new FileReader(file));
 
-            // scan the file and build the configuration structure
-            while (success && (curLine = rdr.readLine()) != null) {
+            // scan the file and build the configuration structure;
+            // this works by reading through the file and simultaneously
+            // traversing the existing config tree;
+            // this assumes the files have the same structure and ordering,
+            // which should be the case
+            //
+            while ((curLine = rdr.readLine()) != null) {
                 if (curLine.startsWith("^")) {
                     curNode = new ConfigTreeNode(curLine);
                     if (curNode.type == ConfigTreeNode.CNType.APPLICATION) {
                         appNode = curNode;
                         if (!appNode.label.equals(origAppNode.label)) {
                             success = false;
+                            errors.append("Mismatched labels for " + curNode.label + "\n");
                         } else {
                             origAppNode.merge(appNode);
                         }
@@ -466,9 +474,11 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                         }
                         if (!found) {
                             success = false;
+                            errors.append("Cannot find original entry for " + curNode.label + "\n");
                         }
 
-                    } else if (curNode.type == ConfigTreeNode.CNType.FUNCTION) {
+                    } else if (curNode.type == ConfigTreeNode.CNType.FUNCTION &&
+                               curModNode != null && origModNode != null) {
                         curFuncNode = curNode;
                         Enumeration<ConfigTreeNode> origFuncs = origModNode.children();
                         boolean found = false;
@@ -482,6 +492,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                         }
                         if (!found) {
                             success = false;
+                            errors.append("Cannot find original entry for " + curNode.label + "\n");
                         }
 
                     } else if (curNode.type == ConfigTreeNode.CNType.BASIC_BLOCK &&
@@ -497,6 +508,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                                 found = true;
                             }
                         }
+                        if (!found) {
+                            success = false;
+                            errors.append("Cannot find original entry for " + curNode.label + "\n");
+                        }
 
                     } else if (curNode.type == ConfigTreeNode.CNType.INSTRUCTION &&
                                curBlockNode != null && origBlockNode != null) {
@@ -508,6 +523,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                                 insn.merge(curNode);
                                 found = true;
                             }
+                        }
+                        if (!found) {
+                            success = false;
+                            errors.append("Cannot find original entry for " + curNode.label + "\n");
                         }
                     }
                 } else {
@@ -521,9 +540,14 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             System.err.println("ERROR: " + e.getMessage());
         }
 
+        if (!success) {
+            String message = "Errors merging file " + file.getName() + ":\n\n" + errors.toString();
+            //System.out.println(message);
+            //JOptionPane.showMessageDialog(null, message);
+        }
+
         setTitle(DEFAULT_TITLE + " - (multiple files)");
         filenameLabel.setText("(multiple files)");
-        return success;
     }
     
     public void saveConfigFile() {
@@ -924,6 +948,47 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     while (insns.hasMoreElements()) {
                         curNode = insns.nextElement();
                         if (curNode.label.contains("mov")) {
+                            nodesToRemove.add(curNode);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (ConfigTreeNode node : nodesToRemove) {
+            TreeNode parent = node.getParent();
+            if (parent instanceof ConfigTreeNode) {
+                ((ConfigTreeNode)parent).remove(node);
+            }
+        }
+
+        refreshTree(appNode);
+        recalculateExecutionCounts(null);
+    }
+
+    public void removeNonCandidateEntries() {
+        if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
+
+        Set<ConfigTreeNode> nodesToRemove = new HashSet<ConfigTreeNode>();
+
+        ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+        ConfigTreeNode curModNode = null;
+        ConfigTreeNode curFuncNode = null;
+        ConfigTreeNode curBlockNode = null;
+        ConfigTreeNode curNode = null;
+        Enumeration<ConfigTreeNode> modules = appNode.children();
+        while (modules.hasMoreElements()) {
+            curModNode = modules.nextElement();
+            Enumeration<ConfigTreeNode> funcs = curModNode.children();
+            while (funcs.hasMoreElements()) {
+                curFuncNode = funcs.nextElement();
+                Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
+                while (blocks.hasMoreElements()) {
+                    curBlockNode = blocks.nextElement();
+                    Enumeration<ConfigTreeNode> insns = curBlockNode.children();
+                    while (insns.hasMoreElements()) {
+                        curNode = insns.nextElement();
+                        if (!curNode.candidate) {
                             nodesToRemove.add(curNode);
                         }
                     }

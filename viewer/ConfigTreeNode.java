@@ -45,6 +45,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
 
     public CNType type;
     public CNStatus status;
+    public boolean candidate;
     public int number;
     public long insnCount;
     public long insnExecCount;  // for code coverage
@@ -60,6 +61,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         super();
         type = CNType.APPLICATION;
         status = CNStatus.NONE;
+        candidate = false;
         number = 1;
         insnCount = -1;
         resetExecCounts();
@@ -74,6 +76,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         super();
         type = t;
         status = s;
+        candidate = false;
         number = num;
         insnCount = -1;
         resetExecCounts();
@@ -115,7 +118,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
                 case 'i':   status = CNStatus.IGNORE;    break;
                 case 's':   status = CNStatus.SINGLE;    break;
                 case 'd':   status = CNStatus.DOUBLE;    break;
-                case 'c':   status = CNStatus.CANDIDATE; break;
+                case 'c':   status = CNStatus.CANDIDATE; candidate = true; break;
                 default:    status = CNStatus.NONE;      break;
             }
         }
@@ -239,8 +242,11 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             status = CNStatus.IGNORE;
         } else if (status == CNStatus.DOUBLE || node.status == CNStatus.DOUBLE) {
             status = CNStatus.DOUBLE;
-        } else if (status == CNStatus.CANDIDATE || node.status == CNStatus.CANDIDATE) {
-            status = CNStatus.CANDIDATE;
+        }
+        
+        if (status == CNStatus.CANDIDATE || node.status == CNStatus.CANDIDATE) {
+            //System.out.println("Marking " + label + " as candidate!");
+            candidate = true;  // don't overwrite other status with "candidate"
         }
     }
 

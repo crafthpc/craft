@@ -8,6 +8,7 @@ FPCONF_CLASSES=ConfigEditorApp.class \
 	BatchConfigAction.class \
 	RemoveMovementAction.class \
 	RemoveNonExecutedAction.class \
+	RemoveNonCandidateAction.class \
 	ExpandRowsAction.class \
 	TestedResult.class \
 	TestedResultFile.class
