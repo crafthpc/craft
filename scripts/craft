@@ -1254,7 +1254,8 @@ def read_profiler_data
         if line=~ /<inst_id>(\d+)<\/inst_id>/ then
             cur_id = $1
             cur_pt = pt_by_id[cur_id]
-            if not cur_pt.nil? then
+            if not cur_pt.nil? and cur_pt.orig_status == $STATUS_CANDIDATE then
+                # only count candidates
                 cur_pt.attrs["cinst"] = cur_count
             end
         end
