@@ -37,10 +37,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public static final Font DEFAULT_FONT_SANS_BOLD  = new Font("SansSerif",  Font.BOLD,  10);
     public static final Font DEFAULT_FONT_MONO_PLAIN = new Font("Monospaced", Font.PLAIN, 12);
     public static final Font DEFAULT_FONT_MONO_BOLD  = new Font("Monospaced", Font.BOLD,  12);
-    public static final Color DEFAULT_COLOR_IGNORE    = new Color(225, 225,   0);
-    public static final Color DEFAULT_COLOR_SINGLE    = new Color(125, 255, 125);
-    public static final Color DEFAULT_COLOR_DOUBLE    = new Color(255, 120, 120);
-    public static final Color DEFAULT_COLOR_CANDIDATE = new Color(125, 175, 225);
+    public static final Color DEFAULT_COLOR_IGNORE    = new Color(240, 250, 160); // (225, 225,   0);
+    public static final Color DEFAULT_COLOR_SINGLE    = new Color(209, 242, 165); // (125, 255, 125);
+    public static final Color DEFAULT_COLOR_DOUBLE    = new Color(252, 157, 154); // (255, 120, 120);
+    public static final Color DEFAULT_COLOR_CANDIDATE = new Color(105, 210, 231); // (125, 175, 225);
     public static final Color DEFAULT_COLOR_BORDER    = new Color(  0,   0, 225);
     public static String fpconfOptions = "";
 
