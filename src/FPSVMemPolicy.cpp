@@ -86,6 +86,7 @@ FPReplaceEntryTag FPSVMemPolicy::getDefaultRETag(FPSemantics * inst)
 
     FPReplaceEntryTag tag = RETAG_IGNORE;
     
+    bool hasDoubleRegInput = false;
     bool hasMemoryOperand = false;
     bool hasMemoryOutputOperand = false;
     
@@ -108,6 +109,8 @@ FPReplaceEntryTag FPSVMemPolicy::getDefaultRETag(FPSemantics * inst)
                 opnd = ops[j].in[i];
                 if (opnd->isMemory()) {
                     hasMemoryOperand = true;
+                } else if (opnd->isRegisterSSE() && opnd->getType() == IEEE_Double) {
+                    hasDoubleRegInput = true;
                 }
             }
             
@@ -125,7 +128,7 @@ FPReplaceEntryTag FPSVMemPolicy::getDefaultRETag(FPSemantics * inst)
     if (hasMemoryOutputOperand) {
         tag = RETAG_CANDIDATE;          // we can try replacing these
                                         // (should only be movement instructions)
-    } else if (hasMemoryOperand) {
+    } else if (hasMemoryOperand || hasDoubleRegInput) {
         tag = RETAG_DOUBLE;             // we need to handle memory->reg conversion
     } else {
         tag = RETAG_IGNORE;             // we can ignore these
