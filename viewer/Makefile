@@ -11,7 +11,8 @@ FPCONF_CLASSES=ConfigEditorApp.class \
 	RemoveNonCandidateAction.class \
 	ExpandRowsAction.class \
 	TestedResult.class \
-	TestedResultFile.class
+	TestedResultFile.class \
+	SourceCodeViewer.class
 
 FPVIEW_CLASSES=CancellationReport.class \
 	ColumnResizer.class \

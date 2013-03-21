@@ -1093,75 +1093,16 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         // can't open anything except instructions
         if (node.type != ConfigTreeNode.CNType.INSTRUCTION) return;
 
-        // extract filename and line number from the label
-        String filename = "", linenoStr = "0";
-        Pattern p = Pattern.compile("\\[([^\\[:]*):(\\d+)\\]");
-        Matcher m = p.matcher(node.label);
-        if (m.find()) {
-            filename = m.group(1);
-            linenoStr = m.group(2);
-        }
-        int lineno = 0;
-        try {
-            lineno = Integer.parseInt(linenoStr);
-        } catch (NumberFormatException e) {};
-
-        // find the source file
-        String fullPath = null;
-        for (File path : Util.getSearchDirs()) {
-            if (fullPath == null) {
-                fullPath = Util.findFile(path, filename);
-                if (fullPath != null) {
-                    File parent = (new File(fullPath)).getParentFile();
-                    if (parent != null) {
-                        Util.addSearchDir(parent);
-                    }
-                    break;
-                }
-            }
-        }
-
-        // build the text area
-        JTextArea sourceCode = new JTextArea();
-        sourceCode.setFont(DEFAULT_FONT_MONO_PLAIN);
-        sourceCode.setBorder(new LineNumberedBorder(
-                    LineNumberedBorder.LEFT_SIDE, LineNumberedBorder.LEFT_JUSTIFY));
-        JScrollPane sourcePanel = new JScrollPane(sourceCode);
-
-        // load the file
-        if (fullPath != null) {
-            try {
-                BufferedReader reader = new BufferedReader(new FileReader(fullPath));
-                StringBuffer code = new StringBuffer();
-                String nextLine = reader.readLine();
-                int lineCount = 1;
-                int selStart = 0, selStop = 0;
-                while (nextLine != null) {
-                    if (lineCount == lineno)
-                        selStart = code.length();
-                    code.append(nextLine);
-                    if (lineCount == lineno)
-                        selStop = code.length();
-                    code.append(System.getProperty("line.separator"));
-                    nextLine = reader.readLine();
-                    lineCount++;
-                }
-                sourceCode.setText(code.toString());
-                sourceCode.select(selStart, selStop);
-            } catch (Exception ex) {
-                sourceCode.setText(ex.getMessage());
-            }
+        // initialize and show the source code explorer
+        SourceCodeViewer sourceWindow;
+        if (mainTree.getModel().getRoot() instanceof ConfigTreeNode) {
+            ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+            sourceWindow = new SourceCodeViewer(node, appNode);
         } else {
-            sourceCode.setText("Cannot find file: " + filename);
+            sourceWindow = new SourceCodeViewer(node);
         }
-
-        // build the window
-        JFrame sourceWindow = new JFrame("Source Viewer: " + filename);
-        sourceWindow.getContentPane().add(sourcePanel);
-        sourceWindow.setSize(800, 500);
-        sourceWindow.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        sourceWindow.setLocationRelativeTo(this);
         sourceWindow.setVisible(true);
+        sourceWindow.refreshInterface();
     }
 
     void setShowEffectiveStatus(boolean value) {
