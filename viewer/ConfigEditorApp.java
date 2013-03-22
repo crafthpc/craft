@@ -1090,8 +1090,17 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     }
 
     public void openSourceWindow(ConfigTreeNode node) {
+
         // can't open anything except instructions
         if (node.type != ConfigTreeNode.CNType.INSTRUCTION) return;
+
+        // make sure there's actually a debug filename in the instruction
+        // (faster to check here than to start creating a window and then have
+        // to abort it later)
+        if (SourceCodeViewer.getFilename(node).equals("")) {
+            JOptionPane.showMessageDialog(null, "No source code info for this instruction.");
+            return;
+        }
 
         // initialize and show the source code explorer
         SourceCodeViewer sourceWindow;
