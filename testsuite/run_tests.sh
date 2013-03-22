@@ -9,8 +9,8 @@ opts="-O0 -O1 -O2 -O3"
 
 # change this to set which instrumentation modes are tested
 #modes="dcancel svinp_single svinp_double"
-#modes="svinp"
-modes="cinst dcancel dnan trange svinp svinp_double svinp_mem_single svinp_mem_double"
+#modes="svinp_single"
+modes="cinst dcancel dnan trange svinp_single svinp_double svinp_mem_single svinp_mem_double"
 #modes="svinp_mem_single svinp_mem_double"
 
 # change this to set which tests are run
@@ -93,7 +93,7 @@ do
             then modeopt="--dnan"
             elif [ "$m" = "trange" ]
             then modeopt="--trange"
-            elif [ "$m" = "svinp" ]
+            elif [ "$m" = "svinp_single" ]
             then modeopt="--svinp single"
             elif [ "$m" = "svinp_double" ]
             then modeopt="--svinp double"
