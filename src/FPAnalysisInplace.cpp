@@ -1062,6 +1062,7 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
 
     //printf("\n    building binary blob for %p: %s\n",
             //inst->getAddress(), inst->getDisassembly().c_str());
+    //printf("%s\n", inst->toString().c_str());
 
 //#if 0
     bool packed = false;            // instruction is packed SSE
@@ -1260,8 +1261,8 @@ bool FPBinaryBlobInplace::generate(Point * /*pt*/, Buffer &buf)
         pos += mainGen->buildMovStackToGPR64(pos, REG_EAX, getSavedEAXOffset());
 
         if (!replaced && only_movement && xmm_output &&
-                inst->getDisassembly().find("movhpd") != string::npos ||
-                inst->getDisassembly().find("movlpd") != string::npos) {
+                (inst->getDisassembly().find("movhpd") != string::npos ||
+                 inst->getDisassembly().find("movlpd") != string::npos)) {
             // this is a really ugly hack; the movhpd/movlpd instructions
             // are the only ones that don't have xmm->xmm capability,
             // which means that the mem -> xmm can't be implemented the same
