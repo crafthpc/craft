@@ -207,6 +207,24 @@ string FPLog::getSourceLineInfo(void *addr)
     return ss.str();
 }
 
+string FPLog::getSourceFunction(void *addr)
+{
+    stringstream ss;
+    ss.clear();
+    ss.str("");
+    if (debug_symtab) {
+        Function *func;
+        debug_symtab->getContainingFunction((Offset)addr, func);
+        if (func) {
+            vector<string> names = func->getAllPrettyNames();
+            if (names.size() > 0) {
+                ss << sanitize(names[0]);
+            }
+        }
+    }
+    return ss.str();
+}
+
 void FPLog::getGlobalVars(vector<Variable *> &gvars)
 {
     vector<Variable *> vars;

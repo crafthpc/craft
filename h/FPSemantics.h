@@ -60,6 +60,12 @@ class FPSemantics {
          * routines.
          */
         bool hasOperandOfType(FPOperandType type);
+
+        /**
+         * Returns true if this instruction constains an operation of the given
+         * type.
+         */
+        bool hasOperationOfType(FPOperationType type);
         
         /**
          * Fills the given set with all the registers that would be needed to

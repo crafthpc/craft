@@ -115,6 +115,20 @@ bool FPSemantics::hasOperandOfType(FPOperandType type)
     for (i=0; !hasOp && i<numOps; i++) {
         if (ops[i]->hasOperandOfType(type)) {
             hasOp = true;
+            break;
+        }
+    }
+    return hasOp;
+}
+
+bool FPSemantics::hasOperationOfType(FPOperationType type)
+{
+    bool hasOp = false;
+    size_t i;
+    for (i=0; !hasOp && i<numOps; i++) {
+        if (ops[i]->getType() == type) {
+            hasOp = true;
+            break;
         }
     }
     return hasOp;
