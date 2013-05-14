@@ -1,0 +1,26 @@
+#!/bin/bash
+#
+
+# setup
+binary=$1
+tmp_file=stdout.tmp
+
+# run binary
+$binary >$tmp_file
+
+# check verification
+status="pass"
+check=`grep "SUCCESSFUL" $tmp_file`
+if [ -z "$check" ]; then
+    status="fail"
+fi
+
+# print output
+echo "status:  $status"
+echo "time:    1"
+echo "error:   0.0e0"
+
+# cleanup
+rm -f $tmp_file
+
+

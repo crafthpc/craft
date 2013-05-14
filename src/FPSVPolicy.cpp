@@ -109,8 +109,6 @@ FPSVType FPSVPolicy::getCommonType(FPSVType type1, FPSVType type2)
         if (type1 == SVT_NONE || type2 == SVT_NONE) {
             // nothing can operate with a NONE type...
             type = SVT_NONE;
-        } else if (type1 == SVT_MPFR_Quad || type2 == SVT_MPFR_Quad) {
-            type = SVT_MPFR_Quad;
         } else if (type1 == SVT_IEEE_Double || type2 == SVT_IEEE_Double) {
             type = SVT_IEEE_Double;
         } else if (type1 == SVT_IEEE_Single || type2 == SVT_IEEE_Single) {

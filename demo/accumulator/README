@@ -24,13 +24,16 @@ STEP 5: Build "a priori" optimal configuration:
 STEP 6: Test "a priori" optimal configuration:
     fpinst -c demo.cfg demo
 
-STEP 7: Run autoconfiguration script:
-    mkdir auto && cd auto
-    fpautoconf ../demo
+STEP 7: Look at craft_driver and verify understanding.
 
-STEP 8: Verify that automatically-generated config matches the "a priori" one:
-    fpconfed fpautoconf_final.cfg
+STEP 8: Run autoconfiguration script:
+    mkdir auto && cd auto
+    craft search ../demo
+
+STEP 9: Verify that automatically-generated config matches the "a priori" one:
+    fpconfed craft_final.cfg
 
 This demo was written by Mike Lam in March 2012.
+Last updated May 2013.
 Enjoy!
 

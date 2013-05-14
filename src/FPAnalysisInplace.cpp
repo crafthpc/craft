@@ -2352,7 +2352,6 @@ void FPAnalysisInplace::printShadowEntry(string name, FPOperandAddress addr, uns
 {
     //cout << "  printing shadow value entry: name=" << name << " addr=" << addr << " size=" << size << endl;
 
-    //mpfr_t tableVal;
     stringstream logDetails;
     char tempBuffer[2048];
 
@@ -2402,11 +2401,6 @@ void FPAnalysisInplace::printShadowEntry(string name, FPOperandAddress addr, uns
         sprintf(tempBuffer, "%.2e", fval);
         logDetails << "label=" << tempBuffer << endl;
         
-        // grab quad-precision version of the table value and output it
-        //mpfr_init2(tableVal, DEFAULT_MPFR_PREC);
-        //SVDT_GET_MPFR(tableVal, num);
-        //mpfr_sprintf(tempBuffer, "%.35Rf", tableVal);
-        //logDetails << "value=" << fval << endl;
         logDetails << "value=" << hex << raw << dec << endl;
 
         logDetails << "system value=0.0" << endl;

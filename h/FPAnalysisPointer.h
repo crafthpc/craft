@@ -5,9 +5,9 @@
 #include <math.h>
 
 // for garbage collection
-#define USE_GARBAGE_COLLECTOR
-#include "gc.h"
-#include "gc_cpp.h"
+//#define USE_GARBAGE_COLLECTOR
+//#include "gc.h"
+//#include "gc_cpp.h"
 
 // for manual live pointer tracking
 //#define USE_LIVE_PTR_LIST

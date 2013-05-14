@@ -1,8 +1,10 @@
 #ifndef __FPFPSV_H
 #define __FPFPSV_H
 
+#ifdef USE_GARBAGE_COLLECTOR
 #include <gc.h>
 #include <gc_cpp.h>
+#endif
 
 #include "FPContext.h"
 #include "FPOperand.h"
@@ -21,7 +23,6 @@ enum FPSVType {
     SVT_NONE,
     SVT_IEEE_Single,
     SVT_IEEE_Double,
-    SVT_MPFR_Quad,
     SVT_Composite
 };
 

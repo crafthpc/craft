@@ -44,24 +44,11 @@ bool instShared = false;
 unsigned long iidx = 0;
 
 // instructions to instrument
-const bool FILTER_ENABLED = true;
+const bool FILTER_ENABLED = false;
 const bool FILTER_INVERSE = false;  // false = keep ONLY instructions in filter
                                     // true  = keep all EXCEPT named instructions
-const unsigned long FILTER_INSNS[] = {
-
-    // ============ CG.W -O3 SPECIFIC ===========
-    //
-    // these and all other instructions work
-    //0x403640,
-    //0x403675
-
-    // these instructions NOT NOT
-    0x403650,
-    0x403655
-
-    // ==========================================
-};
-const unsigned long FILTER_INSNS_SIZE = 2;
+const unsigned long FILTER_INSNS[] = { };
+const unsigned long FILTER_INSNS_SIZE = 0;
 
 BPatch_module* getInitFiniModule() {
 
