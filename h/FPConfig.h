@@ -33,12 +33,14 @@ class FPConfig
 
         void getAllSettings(vector<string> &vals);
 
+        bool hasReplaceTagTree();
         FPReplaceEntryTag getReplaceTag(void *address);
 
         void getAllShadowEntries(vector<FPShadowEntry*> &entries);
         void getAllReplaceEntries(vector<FPReplaceEntry*> &entries);
         int getAddressList(void* addresses[], string key);
         string getSummary(bool includeReplace=false);
+        void buildFile(ostream &out);
 
         void addSetting(char* line);
         void addSetting(string line);
@@ -51,10 +53,15 @@ class FPConfig
 
         static const char RE_FLAG      = '^';
         static const char RE_NONE      = ' ';
-        static const char RE_IGNORE    = 'i';
+        static const char RE_IGNORE    = '!';
         static const char RE_SINGLE    = 's';
         static const char RE_DOUBLE    = 'd';
-        static const char RE_CANDIDATE = 'c';
+        static const char RE_CANDIDATE = '?';
+        static const char RE_NULL      = 'x';
+        static const char RE_CINST     = 'i';
+        static const char RE_DCANCEL   = 'c';
+        static const char RE_DNAN      = 'n';
+        static const char RE_TRANGE    = 'r';
 
         static const string RE_APP;
         static const string RE_MODULE;

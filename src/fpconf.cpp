@@ -27,14 +27,24 @@ FPConfig *mainConfig = NULL;
 FPDecoder *mainDecoder = NULL;
 
 // main analysis engine
+FPAnalysis        *mainAnalysis        = NULL;
 FPAnalysisInplace *mainAnalysisInplace = NULL;
+
+// instrumentation modes
+bool nullInst = false;
+bool countInst = false;
+bool detectCancel = false;
+bool detectNaN = false;
+bool trackRange = false;
+bool inplaceSV = false;
+char* inplaceSVType = NULL;
 
 // configuration file options
 char *binary = NULL;
 long binaryArg = 0;
 bool addAll = false;
-bool outputOriginal = false;
-bool memMode = false;
+bool outputCandidates = false;
+bool reportOriginal = false;
 
 // function/instruction indices and counts
 size_t midx = 0, fidx = 0, bbidx = 0, iidx = 0;
@@ -45,6 +55,12 @@ size_t total_fp_instructions = 0;
 
 // options
 bool instShared;
+
+// temporary entries
+FPReplaceEntry *tempModRE  = NULL;
+FPReplaceEntry *tempFuncRE = NULL;
+FPReplaceEntry *tempBblkRE = NULL;
+FPReplaceEntry *tempInsnRE = NULL;
 
 // }}}
 
@@ -123,26 +139,71 @@ void configInstruction(void *addr, unsigned char *bytes, size_t nbytes)
        << mainLog->getSourceLineInfo(inst->getAddress()) << "]";
     entry->name = ss.str();
     entry->address = addr;
-    if (mainAnalysisInplace->shouldReplace(inst)) {
-        if (outputOriginal) {
-            if (inst->hasOperandOfType(IEEE_Double)) {
-                entry->tag = RETAG_DOUBLE;
-            } else if (inst->hasOperandOfType(IEEE_Single)) {
-                entry->tag = RETAG_SINGLE;
-            } else {
-                entry->tag = RETAG_IGNORE;
-            }
-            mainConfig->addReplaceEntry(entry);
+
+    // if we're running in "report" mode, report the highest-precision IEEE
+    // operand present in the instruction
+    if (reportOriginal) {
+        if (inst->hasOperandOfType(IEEE_Double)) {
+            entry->tag = RETAG_DOUBLE;
+        } else if (inst->hasOperandOfType(IEEE_Single)) {
+            entry->tag = RETAG_SINGLE;
         } else {
-            //entry->tag = RETAG_CANDIDATE;
-            entry->tag = mainAnalysisInplace->getDefaultRETag(inst);
-            mainConfig->addReplaceEntry(entry);
+            entry->tag = RETAG_NONE;
         }
-    } else {
-        // TODO: remove? fpinst shouldn't instrument if there's no entry
-        //       so no need to explicitly ignore these
-        //entry->tag = RETAG_IGNORE;
-        //mainConfig->addReplaceEntry(entry);
+    }
+
+    // handle pre-instrumentation analysis types
+    if (mainAnalysis && mainAnalysis->shouldPreInstrument(inst)) {
+        if (outputCandidates) {
+            entry->tag = RETAG_CANDIDATE;
+        } else if (nullInst) {
+            entry->tag = RETAG_NULL;
+        } else if (countInst) {
+            entry->tag = RETAG_CINST;
+        } else if (detectCancel) {
+            entry->tag = RETAG_DCANCEL;
+        } else if (detectNaN) {
+            entry->tag = RETAG_DNAN;
+        }
+    }
+
+    // configure range-tracking analysis
+    if (trackRange && mainAnalysis->shouldReplace(inst)) {
+        if (outputCandidates) {
+            entry->tag = RETAG_CANDIDATE;
+        } else {
+            entry->tag = RETAG_TRANGE;
+        }
+    }
+
+    // configure general replacement analysis
+    if (inplaceSV && mainAnalysisInplace->shouldReplace(inst)) {
+        if (outputCandidates) {
+            entry->tag = mainAnalysisInplace->getDefaultRETag(inst);
+        } else if (mainAnalysisInplace->getSVType(inst) == SVT_IEEE_Single) {
+            entry->tag = RETAG_SINGLE;
+        } else /* if (mainAnalysisInplace->getSVType(inst) == SVT_IEEE_Double) */ {
+            entry->tag = RETAG_DOUBLE;
+        }
+    }
+
+    // don't report "none" or "ignore" unless explicitly desired
+    if (!(entry->tag == RETAG_NONE || entry->tag == RETAG_IGNORE) || addAll) {
+
+        // flush any buffered modules, functions, and basic blocks
+        if (tempModRE) {
+            mainConfig->addReplaceEntry(tempModRE);
+            tempModRE = NULL;
+        }
+        if (tempFuncRE) {
+            mainConfig->addReplaceEntry(tempFuncRE);
+            tempFuncRE = NULL;
+        }
+        if (tempBblkRE) {
+            mainConfig->addReplaceEntry(tempBblkRE);
+            tempBblkRE = NULL;
+        }
+        mainConfig->addReplaceEntry(entry);
     }
 }
 
@@ -161,7 +222,11 @@ void configBasicBlock(BPatch_basicBlock *block)
     // build config entry
     FPReplaceEntry *entry = new FPReplaceEntry(RETYPE_BASICBLOCK, bbidx);
     entry->address = (void*)block->getStartAddress();
-    mainConfig->addReplaceEntry(entry);
+    if (addAll) {
+        mainConfig->addReplaceEntry(entry);
+    } else {
+        tempBblkRE = entry;
+    }
 
     // get all floating-point instructions
     PatchBlock::Insns insns;
@@ -169,9 +234,7 @@ void configBasicBlock(BPatch_basicBlock *block)
 
     // config each point separately
     PatchBlock::Insns::iterator j;
-    //PatchBlock::Insns::reverse_iterator j;
     for (j = insns.begin(); j != insns.end(); j++) {
-    //for (j = insns.rbegin(); j != insns.rend(); j++) {
 
         // get instruction bytes
         addr = (void*)((*j).first);
@@ -199,16 +262,18 @@ void configFunction(BPatch_function *function, const char *name)
     FPReplaceEntry *entry = new FPReplaceEntry(RETYPE_FUNCTION, fidx);
     entry->name = name;
     entry->address = function->getBaseAddr();
-    mainConfig->addReplaceEntry(entry);
+    if (addAll) {
+        mainConfig->addReplaceEntry(entry);
+    } else {
+        tempFuncRE = entry;
+    }
 
     // config all basic blocks
     std::set<BPatch_basicBlock*> blocks;
     std::set<BPatch_basicBlock*>::iterator b;
-    //std::set<BPatch_basicBlock*>::reverse_iterator b;
     BPatch_flowGraph *cfg = function->getCFG();
     cfg->getAllBasicBlocks(blocks);
     for (b = blocks.begin(); b != blocks.end(); b++) {
-    //for (b = blocks.rbegin(); b != blocks.rend(); b++) {
         configBasicBlock(*b);
     }
 }
@@ -224,7 +289,11 @@ void configModule(BPatch_module *mod, const char *name)
     FPReplaceEntry *entry = new FPReplaceEntry(RETYPE_MODULE, midx);
     entry->name = name;
     entry->address = mod->getBaseAddr();
-    mainConfig->addReplaceEntry(entry);
+    if (addAll) {
+        mainConfig->addReplaceEntry(entry);
+    } else {
+        tempModRE = entry;
+    }
 
 	// get list of all functions
 	std::vector<BPatch_function *>* functions;
@@ -315,14 +384,23 @@ void configApplication(BPatch_addressSpace *app)
 
 void usage()
 {
-	printf("\nUsage:  fpconf [<options>] <binary>\n");
+	printf("\nUsage:  fpconf <analysis> [<options>] <binary>\n");
     printf(" Performs floating-point configuration on a binary.\n");
+    printf("Analyses:\n");
+    printf("\n");
+    printf("  --report             report original precision: single/double (default)\n");
+    printf("  --null               null instrumentation\n");
+	printf("  --cinst              count all floating-point instructions\n");
+	printf("  --dcancel            detect cancellation events\n");
+	printf("  --dnan               detect NaN values\n");
+	printf("  --trange             track operand value ranges\n");
+    printf("  --svinp <policy>     in-place replacement shadow value analysis\n");
+    printf("                         valid policies: \"single\", \"double\", \"mem_single\", \"mem_double\"\n");
     printf("\n");
     printf(" Options:\n");
     printf("\n");
-    printf("  -a                   configure all instructions (including single-precision)\n");
-    printf("  -m                   configure for memory-oriented analysis\n");
-    printf("  -r                   report original precision (intended to be used with '-a')\n");
+    printf("  -a                   output all instructions (including those that would normally be ignored)\n");
+    printf("  -c                   output original candidate configuration for automated search\n");
     printf("  -s                   configure functions in shared libraries\n");
     printf("\n");
 }
@@ -339,12 +417,25 @@ bool parseCommandLine(unsigned argc, char *argv[])
 			exit(EXIT_SUCCESS);
         } else if (strcmp(argv[i], "-a")==0) {
             addAll = true;
-        } else if (strcmp(argv[i], "-m")==0) {
-            memMode = true;
-        } else if (strcmp(argv[i], "-r")==0) {
-            outputOriginal = true;
+        } else if (strcmp(argv[i], "-c")==0) {
+            outputCandidates = true;
 		} else if (strcmp(argv[i], "-s")==0) {
 			instShared = true;
+		} else if (strcmp(argv[i], "--null")==0) {
+			nullInst = true;
+		} else if (strcmp(argv[i], "--report")==0) {
+            reportOriginal = true;
+		} else if (strcmp(argv[i], "--cinst")==0) {
+            countInst = true;
+		} else if (strcmp(argv[i], "--dcancel")==0) {
+            detectCancel = true;
+		} else if (strcmp(argv[i], "--dnan")==0) {
+            detectNaN = true;
+		} else if (strcmp(argv[i], "--trange")==0) {
+            trackRange = true;
+		} else if (strcmp(argv[i], "--svinp")==0) {
+            inplaceSV = true;
+            inplaceSVType = argv[++i];
         } else if (argv[i][0] == '-') {
             printf("Unrecognized option: %s\n", argv[i]);
             usage();
@@ -360,6 +451,34 @@ bool parseCommandLine(unsigned argc, char *argv[])
     return validArgs;
 }
 
+void initialize_analysis()
+{
+    if (nullInst) {
+        mainAnalysis = new FPAnalysis();
+    } else if (countInst) {
+        mainConfig->setValue("c_inst", "yes");
+        mainAnalysis = FPAnalysisCInst::getInstance();
+    } else if (detectCancel) {
+        mainConfig->setValue("d_cancel", "yes");
+        mainAnalysis = FPAnalysisDCancel::getInstance();
+    } else if (detectNaN) {
+        mainConfig->setValue("d_nan", "yes");
+        mainAnalysis = FPAnalysisDNan::getInstance();
+    } else if (trackRange) {
+        mainConfig->setValue("t_range", "yes");
+        mainAnalysis = FPAnalysisTRange::getInstance();
+    } else if (inplaceSV) {
+        mainConfig->setValue("sv_inp", "yes");
+        mainConfig->setValue("sv_inp_type", inplaceSVType);
+        mainAnalysis = FPAnalysisInplace::getInstance();
+        mainAnalysisInplace = FPAnalysisInplace::getInstance();
+    }
+    if (mainAnalysis) {
+        mainAnalysis->configure(mainConfig, mainDecoder, NULL, NULL);
+    } else {
+        reportOriginal = true;
+    }
+}
 // }}}
 
 
@@ -382,13 +501,8 @@ int main(int argc, char *argv[])
     mainDecoder = new FPDecoderXED();       // use Intel's decoder from Pin
     //mainDecoder = new FPDecoderIAPI();    // use Dyninst's InstructionAPI
     
-    // initialize analysis
-    FPConfig *baseConfig = new FPConfig();
-    if (memMode) {
-        baseConfig->setValue("sv_inp_type", "mem_double");
-    }
-    mainAnalysisInplace = FPAnalysisInplace::getInstance();
-    mainAnalysisInplace->configure(baseConfig, mainDecoder, NULL, NULL);
+    // set up analysis for decision-making
+    initialize_analysis();
 
     // open binary (and possibly dependencies)
 	BPatch_addressSpace *app;
@@ -403,12 +517,14 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    // perform configuration
+    // build configuration
     configApplication(app);
 
-    cout << "sv_inp=yes" << endl;
-    cout << "sv_inp_type=config" << endl;
-    cout << mainConfig->getSummary(true);
+    // output configuration
+    if (inplaceSV) {
+        mainConfig->setValue("sv_inp_type", "config");
+    }
+    mainConfig->buildFile(cout);
 
 	return(EXIT_SUCCESS);
 }

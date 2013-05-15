@@ -31,6 +31,11 @@
 #include "FPSemantics.h"
 
 // analyses
+#include "FPAnalysis.h"
+#include "FPAnalysisCInst.h"
+#include "FPAnalysisDCancel.h"
+#include "FPAnalysisDNan.h"
+#include "FPAnalysisTRange.h"
 #include "FPAnalysisInplace.h"
 
 using namespace std;

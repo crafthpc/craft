@@ -90,7 +90,9 @@ void FPAnalysisInplace::configure(FPConfig *config, FPDecoder *decoder,
         FPLog *log, FPContext *context)
 {
     FPAnalysis::configure(config, decoder, log, context);
-    if (config->hasValue("sv_inp_type")) {
+    if (config->hasReplaceTagTree()) {
+        mainPolicy = new FPSVConfigPolicy(config);
+    } else if (config->hasValue("sv_inp_type")) {
         string type = config->getValue("sv_inp_type");
         if (type == "single") {
             mainPolicy = new FPSVPolicy(SVT_IEEE_Single);
@@ -101,6 +103,7 @@ void FPAnalysisInplace::configure(FPConfig *config, FPDecoder *decoder,
         } else if (type == "mem_double") {
             mainPolicy = new FPSVMemPolicy(SVT_IEEE_Double);
         } else if (type == "config") {
+            printf("ERROR: config shadow value specified, but no config tree present");
             mainPolicy = new FPSVConfigPolicy(config);
         } else {
             printf("ERROR: unrecognized shadow value type \"%s\"",
@@ -194,6 +197,11 @@ bool FPAnalysisInplace::shouldPostInstrument(FPSemantics * /*inst*/)
 bool FPAnalysisInplace::shouldReplace(FPSemantics *inst)
 {
     return mainPolicy->shouldInstrument(inst);
+}
+
+FPSVType FPAnalysisInplace::getSVType(FPSemantics *inst)
+{
+    return mainPolicy->getSVType(inst);
 }
 
 FPReplaceEntryTag FPAnalysisInplace::getDefaultRETag(FPSemantics *inst)

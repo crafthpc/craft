@@ -146,9 +146,14 @@ void FPConfig::addReplaceEntry(string line)
     if (line.length() >= 2) {
         switch (line[1]) {
             case RE_IGNORE:     entry->tag = RETAG_IGNORE;      break;
+            case RE_SINGLE:     entry->tag = RETAG_SINGLE;      break;
             case RE_DOUBLE:     entry->tag = RETAG_DOUBLE;      break;
             case RE_CANDIDATE:  entry->tag = RETAG_CANDIDATE;   break;
-            case RE_SINGLE:     entry->tag = RETAG_SINGLE;      break;
+            case RE_NULL:       entry->tag = RETAG_NULL;        break;
+            case RE_CINST:      entry->tag = RETAG_CINST;       break;
+            case RE_DCANCEL:    entry->tag = RETAG_DCANCEL;     break;
+            case RE_DNAN:       entry->tag = RETAG_DNAN;        break;
+            case RE_TRANGE:     entry->tag = RETAG_TRANGE;      break;
             default:            entry->tag = RETAG_NONE;        break;
         }
     }
@@ -270,6 +275,11 @@ void FPConfig::getAllSettings(vector<string> &vals)
      */
 }
 
+bool FPConfig::hasReplaceTagTree()
+{
+    return replaceEntries.size() > 0;
+}
+
 FPReplaceEntryTag FPConfig::getReplaceTag(void *address)
 {
     FPReplaceEntryTag tag = RETAG_NONE;
@@ -346,9 +356,14 @@ string FPConfig::getReplaceEntryLine(FPReplaceEntry *rentry)
     ss << RE_FLAG;
     switch (rentry->tag) {
         case RETAG_IGNORE:      ss << RE_IGNORE;      break;
+        case RETAG_SINGLE:      ss << RE_SINGLE;      break;
         case RETAG_DOUBLE:      ss << RE_DOUBLE;      break;
         case RETAG_CANDIDATE:   ss << RE_CANDIDATE;   break;
-        case RETAG_SINGLE:      ss << RE_SINGLE;      break;
+        case RETAG_NULL:        ss << RE_NULL;        break;
+        case RETAG_CINST:       ss << RE_CINST;       break;
+        case RETAG_DCANCEL:     ss << RE_DCANCEL;     break;
+        case RETAG_DNAN:        ss << RE_DNAN;        break;
+        case RETAG_TRANGE:      ss << RE_TRANGE;      break;
         default:                ss << RE_NONE;      break;
     }
     ss << " ";
@@ -370,6 +385,22 @@ string FPConfig::getReplaceEntryLine(FPReplaceEntry *rentry)
     return ss.str();
 }
 
+void FPConfig::buildFile(ostream &out)
+{
+    map<string,string>::iterator i;
+    for (i=settings.begin(); i!=settings.end(); i++) {
+        out << i->first << "=" << i->second << endl;
+    }
+    vector<FPShadowEntry*>::iterator j;
+    for (j=shadowEntries.begin(); j!=shadowEntries.end(); j++) {
+        out << getShadowEntryLine(*j) << endl;
+    }
+    vector<FPReplaceEntry*>::iterator jj;
+    for (jj=replaceEntries.begin(); jj!=replaceEntries.end(); jj++) {
+        out << getReplaceEntryLine(*jj) << endl;
+    }
+}
+
 void FPConfig::buildSummary(ostream &out, bool includeReplace)
 {
     map<string,string>::iterator i;
@@ -384,6 +415,7 @@ void FPConfig::buildSummary(ostream &out, bool includeReplace)
     for (j=shadowEntries.begin(); j!=shadowEntries.end(); j++) {
         out << getShadowEntryLine(*j) << endl;
     }
+    out << "  " << replaceEntries.size() << " config tree entries" << endl;
     if (includeReplace) {
         vector<FPReplaceEntry*>::iterator jj;
         for (jj=replaceEntries.begin(); jj!=replaceEntries.end(); jj++) {

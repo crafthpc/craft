@@ -47,10 +47,15 @@ $TYPE_RANK[$TYPE_INSTRUCTION] = 5
 $TYPE_RRANK = $TYPE_RANK.invert
 
 $STATUS_NONE      = " "                             # replacement status posibilities
+$STATUS_IGNORE    = "!"
 $STATUS_SINGLE    = "s"
 $STATUS_DOUBLE    = "d"
-$STATUS_IGNORE    = "i"
-$STATUS_CANDIDATE = "c"
+$STATUS_CANDIDATE = "?"
+$STATUS_NULL      = "x"
+$STATUS_CINST     = "i"
+$STATUS_DCANCEL   = "c"
+$STATUS_DNAN      = "n"
+$STATUS_TRANGE    = "r"
 
 $FINALCFG_CUID = "FINAL"                            # special config; represents "best" final results
 
@@ -271,7 +276,7 @@ class AppConfig
 
     def filename
         # sanitize cuid
-        fn = ""
+        fn = "#{$search_tag}_"
         @cuid.each_char do |c|
             if c =~ /[0-9a-zA-Z_]/ then
                 fn << c.downcase
@@ -496,11 +501,11 @@ def main
     $craft_driver = "craft_driver"          # standard driver program name
     $status_preferred = $STATUS_SINGLE      # preferred replacement status
     $status_alternate = $STATUS_DOUBLE      # replacement status if cannot be preferred
-    $status_ignored = $STATUS_IGNORE        # "cannot instrument" replacement status
     $status_blank = " "                     # "no result" replacement status
     $fortran_mode = false                   # pass "-N" to mutator
     $base_type = $TYPE_INSTRUCTION          # stop splitting configs at this level
     $initial_cfg_fn = ""                    # initial config filename (may be blank)
+    $perf_log_fn = ""                       # initial profiling log (may be blank)
     $max_queue_length = 0                   # track largest queue size (approximate)
     $main_mode = "start"                    # main status ("start/search", "resume", "status", "clean", "worker", "help")
     $restart_inproc = false                 # resume by restarting all inprocess tests
@@ -511,7 +516,7 @@ def main
     $strategy_name = "bin_simple"           # desired search strategy
     $self_invoke = File.basename($0)        # used to spawn worker threads
     $fpconf_invoke = "fpconf"               # invoke configuration generator
-    $fpconf_options = ""                    # configuration generator options
+    $fpconf_options = "-c --svinp double"   # configuration generator options
     $fpinst_invoke = "fpinst"               # invoke mutator
 
     # check command-line options
@@ -723,8 +728,8 @@ def initialize_search
     $stdout.flush
     if !run_profiler then
         puts "Baseline profiling test failed verification!"
-        puts "Aborting search."
-        exit
+        #puts "Aborting search."        # not really necessary; we can run
+        #exit                           # without profiling data
     end
     read_profiler_data
     puts "done."
@@ -989,14 +994,10 @@ def read_craft_driver
             $binary_path = File.expand_path($1)
         elsif line =~ /^#\s*NUM_WORKERS\s*=\s*(\d+)/ then
             $num_workers = $1.to_i
-        elsif line =~ /^#\s*DEBUG_MODE\s*=\s*(\w+)/ then
-            if $1 == "single" then
-                $status_preferred = $STATUS_SINGLE
-                $status_alternate = $STATUS_IGNORE
-            elsif $1 == "double" then
-                $status_preferred = $STATUS_DOUBLE
-                $status_alternate = $STATUS_IGNORE
-            end
+        elsif line =~ /^#\s*PREFERRED_STATUS\s*=\s*(.)/ then
+            $status_preferred = $1
+        elsif line =~ /^#\s*ALTERNATE_STATUS\s*=\s*(.)/ then
+            $status_alternate = $1
         elsif line =~ /^#\s*INITIAL_CFG\s*=\s*(\w+)/ then
             $initial_cfg_fn = $1
         elsif line =~ /^#\s*FORTRAN_MODE\s*=\s*(\w+)/ then
@@ -1049,19 +1050,19 @@ def parse_command_line
                 # parallel: "-j4" variant
                 $num_workers = opt[2,opt.length-2].to_i
             elsif opt == "-d" then
-                # debug mode (double precision)
-                $status_preferred = $STATUS_DOUBLE
+                # debug mode
+                $status_preferred = ARGV.shift
                 $status_alternate = $STATUS_IGNORE
             elsif opt == "-D" then
-                # debug mode (single precision)
-                $status_preferred = $STATUS_SINGLE
-                $status_alternate = $STATUS_IGNORE
+                # debug mode
+                $status_preferred = ARGV.shift
+                $status_alternate = ARGV.shift
             elsif opt == "-c" then
                 # initial configuration
                 $initial_cfg_fn = ARGV.shift
             elsif opt == '-m' then
                 # memory-based analysis
-                $fpconf_options += "-m "
+                $fpconf_options = "-c --svinp mem_double "
             elsif opt == '-N' then
                 # fortran mode
                 $fortran_mode = true
@@ -1236,27 +1237,30 @@ end
 def read_profiler_data
     pt_by_id = Hash.new
 
-    # read individual instruction counts from log file
+    if File.exists?($perf_log_fn) then
 
-    # pass 1: extract ID => point mappings
-    IO.foreach($perf_log_fn) do |line|
-        if line =~ /instruction id="(\d+)" address="([x0-9a-zA-Z]+)"/ then
-            pt_by_id[$1] = $program.lookup_by_addr($2)
-        end
-    end
+        # read individual instruction counts from log file
 
-    # pass 2: read counts
-    cur_count = ""
-    IO.foreach($perf_log_fn) do |line|
-        if line =~ /priority="(\d+)" type="InstCount"/ then
-            cur_count = $1
+        # pass 1: extract ID => point mappings
+        IO.foreach($perf_log_fn) do |line|
+            if line =~ /instruction id="(\d+)" address="([x0-9a-zA-Z]+)"/ then
+                pt_by_id[$1] = $program.lookup_by_addr($2)
+            end
         end
-        if line=~ /<inst_id>(\d+)<\/inst_id>/ then
-            cur_id = $1
-            cur_pt = pt_by_id[cur_id]
-            if not cur_pt.nil? and cur_pt.orig_status == $STATUS_CANDIDATE then
-                # only count candidates
-                cur_pt.attrs["cinst"] = cur_count
+
+        # pass 2: read counts
+        cur_count = ""
+        IO.foreach($perf_log_fn) do |line|
+            if line =~ /priority="(\d+)" type="InstCount"/ then
+                cur_count = $1
+            end
+            if line=~ /<inst_id>(\d+)<\/inst_id>/ then
+                cur_id = $1
+                cur_pt = pt_by_id[cur_id]
+                if not cur_pt.nil? and cur_pt.orig_status == $STATUS_CANDIDATE then
+                    # only count candidates
+                    cur_pt.attrs["cinst"] = cur_count
+                end
             end
         end
     end
@@ -1441,8 +1445,8 @@ def save_settings
     f.puts $binary_name
     f.puts $binary_path
     f.puts $strategy_name
-    f.puts $stat_preferred
-    f.puts $stat_alternate
+    f.puts $status_preferred
+    f.puts $status_alternate
     f.puts $baseline_runtime
     f.puts($fortran_mode ? "fortran" : "other")
     f.puts $base_type
@@ -1457,8 +1461,8 @@ def load_settings
     $binary_name = f.gets.chomp
     $binary_path = f.gets.chomp
     $strategy_name = f.gets.chomp
-    $stat_preferred = f.gets.chomp
-    $stat_alternate = f.gets.chomp
+    $status_preferred = f.gets.chomp
+    $status_alternate = f.gets.chomp
     $baseline_runtime = f.gets.chomp.to_i
     lang = f.gets.chomp
     if lang == "fortran" then
@@ -1639,6 +1643,7 @@ end
 def print_usage
     puts " "
     puts "Usage:  #{$self_invoke} start [start-options] <binary>    (supervisor process)"
+    puts "        #{$self_invoke} search [start-options] <binary>    (supervisor process)"
     puts "          or"
     puts "        #{$self_invoke} resume [resume-options]           (resume supervisor process)"
     puts "          or"
@@ -1651,8 +1656,8 @@ def print_usage
     puts "Valid initial options:"
     puts "   -b             stop splitting configs at the basic block level"
     puts "   -c <file>      use <file> as initial base configuration"
-    puts "   -d             debug mode (ignore->double instead of double->single)"
-    puts "   -D             debug mode (ignore->single instead of double->single)"
+    puts "   -d <p>         debug mode (<p> -> ignore instead of double->single)"
+    puts "   -D <p> <a>     debug mode (<p> -> <a> instead of double->single)"
     puts "   -f             stop splitting configs at the function level"
     puts "   -j <np>        spawn <np> worker threads"
     puts "   -m             memory-based analysis"
@@ -1935,8 +1940,8 @@ end
 def clean_everything
     toDelete = Array.new
     Dir.glob("#{$search_tag}.*") do |fn| toDelete << fn end
+    Dir.glob("#{$search_tag}_*.cfg") do |fn| toDelete << fn end
     Dir.glob("*_worker*") do |fn| toDelete << fn end
-    Dir.glob("*.cfg") do |fn| toDelete << fn end
     Dir.glob("*.log") do |fn| toDelete << fn end
     Dir.glob("baseline") do |fn| toDelete << fn end
     Dir.glob("profile") do |fn| toDelete << fn end

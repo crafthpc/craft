@@ -1209,11 +1209,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         ConfigEditorApp app = null;
 
         // parse command-line args
-        for (i = 0; i < args.length; i++) {
-            if (args[i].equals("-r")) {
-                fpconfOptions += "-r ";
-            } else if (args[i].equals("-a")) {
-                fpconfOptions += "-a ";
+        i = 0;
+        while (i < args.length) {
+            if (args[i].equals("-c") && i < args.length-1) {
+                fpconfOptions += args[++i];
             } else {
                 File f = new File(args[i]);
                 if (f.exists()) {
@@ -1222,6 +1221,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     JOptionPane.showMessageDialog(null, "File not found: " + f.getName());
                 }
             }
+            i++;
         }
 
         // open all given log files

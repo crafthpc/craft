@@ -14,7 +14,16 @@ enum FPReplaceEntryType {
 };
 
 enum FPReplaceEntryTag {
-    RETAG_NONE, RETAG_IGNORE, RETAG_SINGLE, RETAG_DOUBLE, RETAG_CANDIDATE
+    RETAG_NONE,         // yield to parent in tree
+    RETAG_IGNORE,       // do not replace or instrument
+    RETAG_SINGLE,       // replace with svinp single
+    RETAG_DOUBLE,       // replace with svinp double
+    RETAG_CANDIDATE,    // placeholder for automatic search
+    RETAG_NULL,         // null snippet
+    RETAG_CINST,        // instruction counting
+    RETAG_DCANCEL,      // cancellation detection
+    RETAG_DNAN,         // NaN detection
+    RETAG_TRANGE        // range tracking
 };
 
 /**

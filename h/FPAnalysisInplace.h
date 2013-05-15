@@ -125,6 +125,7 @@ class FPAnalysisInplace : public FPAnalysis
         bool shouldPreInstrument(FPSemantics *inst);
         bool shouldPostInstrument(FPSemantics *inst);
         bool shouldReplace(FPSemantics *inst);
+        FPSVType getSVType(FPSemantics *inst);
         FPReplaceEntryTag getDefaultRETag(FPSemantics *inst);
 
         string finalInstReport();

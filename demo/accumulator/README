@@ -18,8 +18,9 @@ STEP 4: Verify failure of whole-program replacement:
     fpinst --svinp single demo
 
 STEP 5: Build "a priori" optimal configuration:
-    fpconfed demo    # when GUI loads, toggle the last addition in main()
-                     # to DOUBLE (red) and click "Save"
+    fpconf --svinp single demo >demo.cfg
+    fpconfed demo.cfg           # in GUI, toggle the last "addsd" in main()
+                                # to DOUBLE (red) and click "Save"
 
 STEP 6: Test "a priori" optimal configuration:
     fpinst -c demo.cfg demo
@@ -28,10 +29,12 @@ STEP 7: Look at craft_driver and verify understanding.
 
 STEP 8: Run autoconfiguration script:
     mkdir auto && cd auto
-    craft search ../demo
+    craft search ../demo        # add "-j4" or similar to parallelize
 
 STEP 9: Verify that automatically-generated config matches the "a priori" one:
     fpconfed craft_final.cfg
+
+You can run "craft clean" at the end to remove all CRAFT-generated files.
 
 This demo was written by Mike Lam in March 2012.
 Last updated May 2013.

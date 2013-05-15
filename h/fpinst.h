@@ -92,6 +92,11 @@ void wrapFunction(const char* oldFuncName, const char* newFuncName);
 void replaceLibmFunctions();
 
 // instrumenters
+void buildReplacement(void *addr, FPSemantics *inst, PatchBlock *block, FPAnalysis *analysis);
+void buildPreInstrumentation(FPSemantics *inst, FPAnalysis *analysis,
+        vector<Snippet::Ptr> &preHandlers, bool &preNeedsRegisters);
+void buildPostInstrumentation(FPSemantics *inst, FPAnalysis *analysis,
+        vector<Snippet::Ptr> &postHandlers, bool &postNeedsRegisters);
 bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, PatchBlock *block);
 void instrumentInstruction(void* addr, unsigned char *bytes, size_t nbytes,
         PatchFunction *func, PatchBlock *block,

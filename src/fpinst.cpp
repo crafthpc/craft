@@ -1271,268 +1271,295 @@ void replaceLibmFunctions()
 
 // {{{ application, function, basic block, and instruction instrumenters
 
+void buildReplacement(void *addr, FPSemantics *inst, PatchBlock *block, FPAnalysis *analysis)
+{
+    // build snippet
+    bool needsRegisters = false;
+    bool success = true;
+    Snippet::Ptr handler = analysis->buildReplacementCode(inst, mainApp, needsRegisters);
+    if (!handler) {
+        handler = buildDefaultReplacementCode(analysis, inst);
+    }
+    assert(!needsRegisters);    // not currently supported
+
+    // CFG surgery (remove the old instruction and insert the new snippet)
+    //
+    //
+
+    PatchBlock *insnBlock = block;   // block with old instruction
+    void *preSplitAddr = addr;
+    void *postSplitAddr = (void*)((unsigned long)preSplitAddr + inst->getNumBytes());
+
+    // split before instruction
+    if ((unsigned long)preSplitAddr > (unsigned long)insnBlock->start()) {
+        if (patchAPI_debug) {
+            printf("        splitting block [%p-%p] at %p\n",
+                    (void*)insnBlock->start(), (void*)insnBlock->end(), preSplitAddr);
+        }
+        insnBlock = PatchModifier::split(insnBlock, (Address)preSplitAddr);
+        if (!insnBlock) {
+            printf("ERROR: could not split block [%p-%p] at %p\n",
+                    (void*)block->start(), (void*)block->end(), preSplitAddr);
+            assert(0);
+        }
+    } else {
+        // instruction is at the beginning of a block; no need to split
+        // pre-block
+        if (patchAPI_debug) {
+            printf("        insn is at beginning of block\n");
+        }
+        insnBlock = block;
+    }
+
+    // split after instruction
+    PatchBlock *postBlock = NULL;
+    if ((unsigned long)postSplitAddr < (unsigned long)insnBlock->end()) {
+        if (patchAPI_debug) {
+            printf("        splitting block [%p-%p] at %p\n",
+                    (void*)insnBlock->start(), (void*)insnBlock->end(), postSplitAddr);
+        }
+        postBlock = PatchModifier::split(insnBlock, (Address)postSplitAddr);
+        if (!postBlock) {
+            printf("ERROR: could not split block [%p-%p] at %p\n",
+                    (void*)insnBlock->start(), (void*)block->end(), postSplitAddr);
+            assert(0);
+        }
+    } else {
+        // instruction is at the end of a block; no need to split
+        // post-block
+        if (patchAPI_debug) {
+            printf("        insn is at end of block\n");
+        }
+        assert(block->targets().size() == 1);
+        PatchEdge *postEdge = *(insnBlock->targets().begin());
+        assert(postEdge->type() == ParseAPI::FALLTHROUGH);
+        postBlock = postEdge->trg();
+    }
+
+    // insert new code
+    InsertedCode::Ptr icode = PatchModifier::insert(block->object(), handler, NULL);
+    //InsertedCode::Ptr icode = PatchModifier::insert(block->object(), handler, prePoint);
+    //InsertedCode::Ptr icode = PatchModifier::insert(block->object(), handler,
+           //mainMgr->findPoint(Location::Block(instBlock), Point::BlockEntry, true));
+    assert(icode->blocks().size() >= 1);
+    PatchBlock *newBlock = icode->entry();
+    assert(newBlock != NULL);
+
+    vector<PatchEdge*> edges;
+    vector<PatchEdge*>::const_iterator i;
+    vector<PatchEdge*>::iterator j;
+    bool keepInsnBlock = false;
+
+    // grab all incoming edges to insnBlock
+    edges.clear();
+    for (i = insnBlock->sources().begin(); i != insnBlock->sources().end(); i++) {
+        edges.push_back(*i);
+
+        if (patchAPI_debug) {
+            printf("        checking incoming edge of type %s\n", ParseAPI::format((*i)->type()).c_str());
+        }
+
+        // we can only redirect these types of edges
+        if (!((*i)->type() == ParseAPI::COND_TAKEN || 
+              (*i)->type() == ParseAPI::COND_NOT_TAKEN ||
+              (*i)->type() == ParseAPI::DIRECT ||
+              (*i)->type() == ParseAPI::FALLTHROUGH ||
+              (*i)->type() == ParseAPI::CALL_FT)) {
+            keepInsnBlock = true;
+        }
+    }
+
+    if (keepInsnBlock) {
+
+        // overwrite insnBlock with nops
+        if (patchAPI_debug) {
+            printf("        overwriting block [%p-%p]\n",
+                    (void*)insnBlock->start(), (void*)insnBlock->end());
+        }
+        success = overwriteBlock(insnBlock, 0x90);    // nop
+        assert(success);
+
+        // redirect from insnBlock to newBlock
+        edges.clear();
+        for (i = insnBlock->targets().begin(); i != insnBlock->targets().end(); i++) {
+            edges.push_back(*i);
+        }
+        for (j = edges.begin(); j != edges.end(); j++) {
+            if (patchAPI_debug) {
+                printf("        redirecting insn outgoing edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
+                       (void*)((*j)->src()->start()), (void*)((*j)->src()->end()),
+                       (void*)((*j)->trg()->start()), (void*)((*j)->trg()->end()),
+                       (void*)(newBlock->start()), (void*)(newBlock->end()));
+            }
+            success = PatchModifier::redirect(*j, newBlock);
+            assert(success);
+        }
+
+    } else {
+
+        // redirect from src/pre to newBlock (skip insnBlock)
+        for (j = edges.begin(); j != edges.end(); j++) {
+            if (patchAPI_debug) {
+                printf("        redirecting incoming edge [%p-%p] -> [%p-%p] of type %s to [%p-%p]\n",
+                       (void*)((*j)->src()->start()), (void*)((*j)->src()->end()),
+                       (void*)((*j)->trg()->start()), (void*)((*j)->trg()->end()),
+                       ParseAPI::format((*j)->type()).c_str(),
+                       (void*)(newBlock->start()), (void*)(newBlock->end()));
+            }
+            success = PatchModifier::redirect(*j, newBlock);
+            assert(success);
+        }
+    }
+
+    // redirect icode's exit to postBlock
+    // (should only be one of them)
+    assert(icode->exits().size() == 1);
+    if (patchAPI_debug) {
+        printf("        redirecting outgoing edge [%p-%p] -> [%p-%p] of type %s to [%p-%p]\n",
+               (void*)((*icode->exits().begin())->src()->start()),
+               (void*)((*icode->exits().begin())->src()->end()),
+               (void*)((*icode->exits().begin())->trg()->start()),
+               (void*)((*icode->exits().begin())->trg()->end()),
+               ParseAPI::format((*icode->exits().begin())->type()).c_str(),
+               (void*)(postBlock->start()), (void*)(postBlock->end()));
+    }
+    success = PatchModifier::redirect(*icode->exits().begin(), postBlock);
+    assert(success);
+
+    // should be single entry and exit now
+    PatchBlock *newEntry = icode->entry();
+    PatchBlock *newExit = (*icode->exits().begin())->src();
+
+    if (patchAPI_debug) {
+        // debug output
+        printf("    new sequence: => ");
+        if ((unsigned long)preSplitAddr > (unsigned long)block->start()) {
+           printf("[%p-%p] -> ", (void*)block->start(),
+                                 (void*)block->end());
+        } else if (keepInsnBlock) {
+           printf("[%p-%p] -> ", (void*)insnBlock->start(),
+                                 (void*)insnBlock->end());
+        }
+        printf("{ [%p-%p] ... [%p-%p] } ", 
+              (void*)newEntry->start(), (void*)newEntry->end(),
+              (void*)newExit->start(),  (void*)newExit->end());
+        printf(" -> [%p-%p] ", (void*)postBlock->start(),
+                              (void*)postBlock->end());
+        printf("=> \n");
+    }
+
+    // disassemble for log
+    set<PatchBlock*>::iterator k;
+    string disassembly("");
+    disassembly.append(disassembleBlock(newEntry));
+    disassembly.append("\n");
+    for (k = icode->blocks().begin(); k != icode->blocks().end(); k++) {
+        if (((*k) != newEntry) && ((*k) != newExit)) {
+            disassembly.append(disassembleBlock(*k));
+            disassembly.append("\n");
+        }
+    }
+    disassembly.append(disassembleBlock(newExit));
+    disassembly.append("\n");
+
+    // debug output
+    logfile->addMessage(STATUS, 0, "Inserted " + analysis->getTag() + " replacement instrumentation.",
+            disassembly, "", inst);
+}
+
+void buildPreInstrumentation(FPSemantics *inst, FPAnalysis *analysis,
+        vector<Snippet::Ptr> &preHandlers, bool &preNeedsRegisters)
+{
+    // build snippet
+    bool needsRegisters = false;
+    Snippet::Ptr handler = analysis->buildPreInstrumentation(inst, mainApp, needsRegisters);
+    if (!handler) {
+        handler = buildDefaultPreInstrumentation(analysis, inst);
+    }
+    preHandlers.push_back(handler);
+    preNeedsRegisters |= needsRegisters;
+
+    // debug output
+    logfile->addMessage(STATUS, 0, "Inserted " + analysis->getTag() + " pre-instrumentation.",
+            "", "", inst);
+}
+
+void buildPostInstrumentation(FPSemantics *inst, FPAnalysis *analysis,
+        vector<Snippet::Ptr> &postHandlers, bool &postNeedsRegisters)
+{
+    // build snippet
+    bool needsRegisters = false;
+    Snippet::Ptr handler = analysis->buildPostInstrumentation(inst, mainApp, needsRegisters);
+    if (!handler) {
+        handler = buildDefaultPostInstrumentation(analysis, inst);
+    }
+    postHandlers.push_back(handler);
+    postNeedsRegisters |= needsRegisters;
+
+    // debug output
+    logfile->addMessage(STATUS, 0, "Inserted " + analysis->getTag() + " post-instrumentation.",
+            "", "", inst);
+}
+
 bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, PatchBlock *block)
 {
-    Snippet::Ptr handler;
     vector<Snippet::Ptr> preHandlers;
     vector<Snippet::Ptr> postHandlers;
     bool preNeedsRegisters = false;
     bool postNeedsRegisters = false;
-    bool replaceNeedsRegisters = false;
-    Point *prePoint  = mainMgr->findPoint(
-                        Location::InstructionInstance(func, block, (Address)addr),
-                        Point::PreInsn, true);
-    Point *postPoint = mainMgr->findPoint(
-                        Location::InstructionInstance(func, block, (Address)addr),
-                        Point::PostInsn, true);
     bool replaced = false;
-    bool success = false;
 
     if (listFuncs) {
         printf("Instrumenting instruction at %p: %s\n", addr, inst->getDisassembly().c_str());
         printf("  in block %p-%p\n", (void*)block->start(), (void*)block->end());
     }
 
-    // for each analysis
-    vector<FPAnalysis*>::iterator a;
-    for (a = allAnalyses.begin(); a != allAnalyses.end(); a++) {
+    if (configuration->hasReplaceTagTree()) {
 
-        if ((*a)->shouldReplace(inst)) {
-
-            // can only replace once
-            assert(!replaced);
-
-            // build snippet
-            bool needsRegisters = false;
-            Snippet::Ptr handler = (*a)->buildReplacementCode(inst, mainApp, needsRegisters);
-            if (!handler) {
-                handler = buildDefaultReplacementCode(*a, inst);
-            }
-            assert(!needsRegisters);    // not currently supported
-            replaceNeedsRegisters |= needsRegisters;
-
-            // CFG surgery (remove the old instruction and insert the new snippet)
-            //
-            //
-
-            PatchBlock *insnBlock = block;   // block with old instruction
-            void *preSplitAddr = addr;
-            void *postSplitAddr = (void*)((unsigned long)preSplitAddr + inst->getNumBytes());
-
-            // split before instruction
-            if ((unsigned long)preSplitAddr > (unsigned long)insnBlock->start()) {
-                if (patchAPI_debug) {
-                    printf("        splitting block [%p-%p] at %p\n",
-                            (void*)insnBlock->start(), (void*)insnBlock->end(), preSplitAddr);
-                }
-                insnBlock = PatchModifier::split(insnBlock, (Address)preSplitAddr);
-                if (!insnBlock) {
-                    printf("ERROR: could not split block [%p-%p] at %p\n",
-                            (void*)block->start(), (void*)block->end(), preSplitAddr);
-                    assert(0);
-                }
-            } else {
-                // instruction is at the beginning of a block; no need to split
-                // pre-block
-                if (patchAPI_debug) {
-                    printf("        insn is at beginning of block\n");
-                }
-                insnBlock = block;
-            }
-
-            // split after instruction
-            PatchBlock *postBlock = NULL;
-            if ((unsigned long)postSplitAddr < (unsigned long)insnBlock->end()) {
-                if (patchAPI_debug) {
-                    printf("        splitting block [%p-%p] at %p\n",
-                            (void*)insnBlock->start(), (void*)insnBlock->end(), postSplitAddr);
-                }
-                postBlock = PatchModifier::split(insnBlock, (Address)postSplitAddr);
-                if (!postBlock) {
-                    printf("ERROR: could not split block [%p-%p] at %p\n",
-                            (void*)insnBlock->start(), (void*)block->end(), postSplitAddr);
-                    assert(0);
-                }
-            } else {
-                // instruction is at the end of a block; no need to split
-                // post-block
-                if (patchAPI_debug) {
-                    printf("        insn is at end of block\n");
-                }
-                assert(block->targets().size() == 1);
-                PatchEdge *postEdge = *(insnBlock->targets().begin());
-                assert(postEdge->type() == ParseAPI::FALLTHROUGH);
-                postBlock = postEdge->trg();
-            }
-
-            // insert new code
-            InsertedCode::Ptr icode = PatchModifier::insert(block->object(), handler, NULL);
-            //InsertedCode::Ptr icode = PatchModifier::insert(block->object(), handler, prePoint);
-            //InsertedCode::Ptr icode = PatchModifier::insert(block->object(), handler,
-                   //mainMgr->findPoint(Location::Block(instBlock), Point::BlockEntry, true));
-            assert(icode->blocks().size() >= 1);
-            PatchBlock *newBlock = icode->entry();
-            assert(newBlock != NULL);
- 
-            vector<PatchEdge*> edges;
-            vector<PatchEdge*>::const_iterator i;
-            vector<PatchEdge*>::iterator j;
-            bool keepInsnBlock = false;
-
-            // grab all incoming edges to insnBlock
-            edges.clear();
-            for (i = insnBlock->sources().begin(); i != insnBlock->sources().end(); i++) {
-                edges.push_back(*i);
-
-                if (patchAPI_debug) {
-                    printf("        checking incoming edge of type %s\n", ParseAPI::format((*i)->type()).c_str());
-                }
-
-                // we can only redirect these types of edges
-                if (!((*i)->type() == ParseAPI::COND_TAKEN || 
-                      (*i)->type() == ParseAPI::COND_NOT_TAKEN ||
-                      (*i)->type() == ParseAPI::DIRECT ||
-                      (*i)->type() == ParseAPI::FALLTHROUGH ||
-                      (*i)->type() == ParseAPI::CALL_FT)) {
-                    keepInsnBlock = true;
-                }
-            }
-
-            if (keepInsnBlock) {
-
-                // overwrite insnBlock with nops
-                if (patchAPI_debug) {
-                    printf("        overwriting block [%p-%p]\n",
-                            (void*)insnBlock->start(), (void*)insnBlock->end());
-                }
-                success = overwriteBlock(insnBlock, 0x90);    // nop
-                assert(success);
-
-                // redirect from insnBlock to newBlock
-                edges.clear();
-                for (i = insnBlock->targets().begin(); i != insnBlock->targets().end(); i++) {
-                    edges.push_back(*i);
-                }
-                for (j = edges.begin(); j != edges.end(); j++) {
-                    if (patchAPI_debug) {
-                        printf("        redirecting insn outgoing edge [%p-%p] -> [%p-%p] to [%p-%p]\n",
-                               (void*)((*j)->src()->start()), (void*)((*j)->src()->end()),
-                               (void*)((*j)->trg()->start()), (void*)((*j)->trg()->end()),
-                               (void*)(newBlock->start()), (void*)(newBlock->end()));
-                    }
-                    success = PatchModifier::redirect(*j, newBlock);
-                    assert(success);
-                }
-
-            } else {
-
-                // redirect from src/pre to newBlock (skip insnBlock)
-                for (j = edges.begin(); j != edges.end(); j++) {
-                    if (patchAPI_debug) {
-                        printf("        redirecting incoming edge [%p-%p] -> [%p-%p] of type %s to [%p-%p]\n",
-                               (void*)((*j)->src()->start()), (void*)((*j)->src()->end()),
-                               (void*)((*j)->trg()->start()), (void*)((*j)->trg()->end()),
-                               ParseAPI::format((*j)->type()).c_str(),
-                               (void*)(newBlock->start()), (void*)(newBlock->end()));
-                    }
-                    success = PatchModifier::redirect(*j, newBlock);
-                    assert(success);
-                }
-            }
-
-            // redirect icode's exit to postBlock
-            // (should only be one of them)
-            assert(icode->exits().size() == 1);
-            if (patchAPI_debug) {
-                printf("        redirecting outgoing edge [%p-%p] -> [%p-%p] of type %s to [%p-%p]\n",
-                       (void*)((*icode->exits().begin())->src()->start()),
-                       (void*)((*icode->exits().begin())->src()->end()),
-                       (void*)((*icode->exits().begin())->trg()->start()),
-                       (void*)((*icode->exits().begin())->trg()->end()),
-                       ParseAPI::format((*icode->exits().begin())->type()).c_str(),
-                       (void*)(postBlock->start()), (void*)(postBlock->end()));
-            }
-            success = PatchModifier::redirect(*icode->exits().begin(), postBlock);
-            assert(success);
-
-            // should be single entry and exit now
-            PatchBlock *newEntry = icode->entry();
-            PatchBlock *newExit = (*icode->exits().begin())->src();
-
-            if (patchAPI_debug) {
-                // debug output
-                printf("    new sequence: => ");
-                if ((unsigned long)preSplitAddr > (unsigned long)block->start()) {
-                   printf("[%p-%p] -> ", (void*)block->start(),
-                                         (void*)block->end());
-                } else if (keepInsnBlock) {
-                   printf("[%p-%p] -> ", (void*)insnBlock->start(),
-                                         (void*)insnBlock->end());
-                }
-                printf("{ [%p-%p] ... [%p-%p] } ", 
-                      (void*)newEntry->start(), (void*)newEntry->end(),
-                      (void*)newExit->start(),  (void*)newExit->end());
-                printf(" -> [%p-%p] ", (void*)postBlock->start(),
-                                      (void*)postBlock->end());
-                printf("=> \n");
-            }
-
-            // disassemble for log
-            set<PatchBlock*>::iterator k;
-            string disassembly("");
-            disassembly.append(disassembleBlock(newEntry));
-            disassembly.append("\n");
-            for (k = icode->blocks().begin(); k != icode->blocks().end(); k++) {
-                if (((*k) != newEntry) && ((*k) != newExit)) {
-                    disassembly.append(disassembleBlock(*k));
-                    disassembly.append("\n");
-                }
-            }
-            disassembly.append(disassembleBlock(newExit));
-            disassembly.append("\n");
-
+        // if there is a configuration tree, do what it
+        // says ONLY and DO NOT iterate over every analysis
+        FPReplaceEntryTag tag = configuration->getReplaceTag(addr);
+        assert(tag != RETAG_CANDIDATE);
+        if (tag == RETAG_NULL) {
+            preHandlers.push_back(PatchAPI::convert(new BPatch_nullExpr()));
+            logfile->addMessage(STATUS, 0, "Inserted null pre-instrumentation.", "", "", inst);
+        } else if (tag == RETAG_CINST) {
+            buildPreInstrumentation(inst, FPAnalysisCInst::getInstance(), preHandlers, preNeedsRegisters);
+        } else if (tag == RETAG_DCANCEL) {
+            buildPreInstrumentation(inst, FPAnalysisDCancel::getInstance(), preHandlers, preNeedsRegisters);
+        } else if (tag == RETAG_DNAN) {
+            buildPreInstrumentation(inst, FPAnalysisDNan::getInstance(), preHandlers, preNeedsRegisters);
+        } else if (tag == RETAG_TRANGE) {
+            buildReplacement(addr, inst, block, FPAnalysisTRange::getInstance());
             replaced = true;
-
-            // find new pre/post points (not necessary?)
-            //prePoint  = mainMgr->findPoint(Location::Block(block), Point::BlockExit,  true);
-            //postPoint = mainMgr->findPoint(Location::Block(target),  Point::BlockEntry, true);
-
-            // debug output
-            logfile->addMessage(STATUS, 0, "Inserted " + (*a)->getTag() + " replacement instrumentation.",
-                    disassembly, "", inst);
+        } else if (tag == RETAG_SINGLE || tag == RETAG_DOUBLE) {
+            buildReplacement(addr, inst, block, FPAnalysisInplace::getInstance());
+            replaced = true;
+        } else if (tag == RETAG_IGNORE || tag == RETAG_NONE) {
+            // do nothing
         }
-        if ((*a)->shouldPreInstrument(inst)) {
 
-            // build snippet
-            bool needsRegisters = false;
-            handler = (*a)->buildPreInstrumentation(inst, mainApp, needsRegisters);
-            if (!handler) {
-                handler = buildDefaultPreInstrumentation(*a, inst);
+    } else {
+
+        // for each analysis
+        vector<FPAnalysis*>::iterator a;
+        for (a = allAnalyses.begin(); a != allAnalyses.end(); a++) {
+
+            if ((*a)->shouldReplace(inst)) {
+
+                // can only replace once
+                assert(!replaced);
+                buildReplacement(addr, inst, block, *a);
+                replaced = true;
             }
-            preHandlers.push_back(handler);
-            preNeedsRegisters |= needsRegisters;
 
-            // debug output
-            logfile->addMessage(STATUS, 0, "Inserted " + (*a)->getTag() + " pre-instrumentation.",
-                    "", "", inst);
-        }
-        if ((*a)->shouldPostInstrument(inst)) {
-
-            // build snippet
-            bool needsRegisters = false;
-            Snippet::Ptr handler = (*a)->buildPostInstrumentation(inst, mainApp, needsRegisters);
-            if (!handler) {
-                handler = buildDefaultPostInstrumentation(*a, inst);
+            if ((*a)->shouldPreInstrument(inst)) {
+                buildPreInstrumentation(inst, *a, preHandlers, preNeedsRegisters);
             }
-            postHandlers.push_back(handler);
-            postNeedsRegisters |= needsRegisters;
-
-            // debug output
-            logfile->addMessage(STATUS, 0, "Inserted " + (*a)->getTag() + " post-instrumentation.",
-                    "", "", inst);
+            if ((*a)->shouldPostInstrument(inst)) {
+                buildPostInstrumentation(inst, *a, postHandlers, postNeedsRegisters);
+            }
         }
-
-        // TODO: build counter increment snippets
     }
 
     // add register handlers
@@ -1542,12 +1569,14 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
     if (postNeedsRegisters) {
         buildRegHandlers(inst, postHandlers);
     }
-    if (replaceNeedsRegisters) {
-        assert(0);
-        // TODO: add register handlers for replacement code
-    }
 
     // insert pre/post snippets
+    Point *prePoint  = mainMgr->findPoint(
+                        Location::InstructionInstance(func, block, (Address)addr),
+                        Point::PreInsn, true);
+    Point *postPoint = mainMgr->findPoint(
+                        Location::InstructionInstance(func, block, (Address)addr),
+                        Point::PostInsn, true);
     vector<Snippet::Ptr>::iterator k;
     for (k = preHandlers.begin(); k != preHandlers.end(); k++) {
         assert(prePoint != NULL);
@@ -2050,10 +2079,10 @@ void usage()
 	printf("  --dcancel            detect cancellation events\n");
 	printf("  --dnan               detect NaN values\n");
 	printf("  --trange             track operand value ranges\n");
-    printf("  --svptr <policy>     pointer-replacement shadow value analysis\n");
-    printf("                         valid policies: \"single\", \"double\"\n");
+    //printf("  --svptr <policy>     pointer-replacement shadow value analysis\n");
+    //printf("                         valid policies: \"single\", \"double\"\n");
     printf("  --svinp <policy>     in-place replacement shadow value analysis\n");
-    printf("                         valid policies: \"single\", \"double\", \"config\"\n");
+    printf("                         valid policies: \"single\", \"double\", \"mem_single\", \"mem_double\", \"config\"\n");
     printf("\n");
     printf(" Options:\n");
     printf("\n");
