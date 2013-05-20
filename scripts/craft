@@ -130,20 +130,7 @@ class PPoint
     end
 
     def build_cuid
-        # build config unique id
-        label = @uid
-        if @uid =~ /APPLICATION/ then
-            label = "APP #{@attrs["desc"]}"
-        elsif @uid =~ /MODULE/ then
-            label = "MOD #{@attrs["desc"]}"
-        elsif @uid =~ /FUNC/ then
-            label = "FUNC #{@attrs["desc"]}"
-        elsif @uid =~ /BBLK/ then
-            label = "BBLK #{@attrs["addr"]}"
-        elsif @uid =~ /INSN/ then
-            label = "INSN #{@attrs["addr"]}"
-        end
-        return label
+        return @uid
     end
 
     def build_label
@@ -954,7 +941,7 @@ def finalize_search
     # try the final config (and keep results)
     puts "Testing final configuration ... "
     Dir.chdir($final_path)
-    run_config_file($final_config_fn, true, $final_config.cuid)
+    run_config_file($final_config_fn, true, $final_config.label)
     Dir.chdir($search_path)
 
     # start generating final report
@@ -1123,14 +1110,14 @@ def initialize_program
     prolog = ""
     IO.foreach($orig_config_fn) do |line|
         if line =~ /(APPLICATION #\d+: [x0-9A-Fa-f]+) \"(.+)\"/ then
-            $program = PPoint.new($1, $TYPE_APPLICATION, line[1,1])
+            $program = PPoint.new("#{$1} #{$2}", $TYPE_APPLICATION, line[1,1])
             $program.attrs["desc"] = $2
         elsif line =~ /(MODULE #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
-            mod = PPoint.new($1, $TYPE_MODULE, line[1,1])
+            mod = PPoint.new("#{$1} #{$2}", $TYPE_MODULE, line[1,1])
             mod.attrs["desc"] = $2
             $program.children << mod if $program != nil
         elsif line =~ /(FUNC #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
-            func = PPoint.new($1, $TYPE_FUNCTION, line[1,1])
+            func = PPoint.new("#{$1} #{$2}", $TYPE_FUNCTION, line[1,1])
             func.attrs["desc"] = $2
             mod.children << func if mod != nil
         elsif line =~ /(BBLK #\d+: (0x[0-9A-Fa-f]+))/ then
@@ -1311,7 +1298,7 @@ def run_config (cfg)
     $program.build_config_file(cfg, cfg_path)
 
     # pass off to filename version
-    result,error,runtime = run_config_file(cfg_path, false, cfg.cuid)
+    result,error,runtime = run_config_file(cfg_path, false, cfg.label)
 
     # save result
     cfg.attrs["result"] = result
@@ -1324,7 +1311,7 @@ def run_config (cfg)
     return result
 end
 
-def run_config_file (fn, keep, cuid)
+def run_config_file (fn, keep, label)
 
     # status updates
     basename = File.basename(fn)
@@ -1332,7 +1319,7 @@ def run_config_file (fn, keep, cuid)
         basename = $1
     end
     #puts "  Testing #{basename} ..."
-    $status_buffer = "    Finished testing #{cuid}:\n"
+    $status_buffer = "    Finished testing #{label}:\n"
 
     # build rewritten mutatee
     cmd = "#{$fpinst_invoke} -i #{$fortran_mode ? "-N" : ""}"
@@ -1754,13 +1741,13 @@ def print_status
                 line = ""
                 if i < inproc.size then
                     icfg = inproc[i]
-                    line += "    - %-30s %5.1f  %5.1f "%[format_text(icfg.cuid,30),icfg.attrs["orig_icount"],icfg.attrs["orig_cinst"]]
+                    line += "    - %-30s %5.1f  %5.1f "%[format_text(icfg.label,30),icfg.attrs["orig_icount"],icfg.attrs["orig_cinst"]]
                 else
                     line += "%50s"%" "
                 end
                 if i < queue.size then
                     qcfg = queue[i]
-                    line += "    - %-30s %5.1f  %5.1f "%[format_text(qcfg.cuid,30),qcfg.attrs["orig_icount"],qcfg.attrs["orig_cinst"]]
+                    line += "    - %-30s %5.1f  %5.1f "%[format_text(qcfg.label,30),qcfg.attrs["orig_icount"],qcfg.attrs["orig_cinst"]]
                 end
                 status_text << line if line.strip != ""
             end
@@ -1877,13 +1864,13 @@ def build_best_report(num,copy_files=false)
         if i < inst_passed_cfgs.size then
             pcfg,ppct = inst_passed_cfgs[i]
             FileUtils.cp($passed_path + pcfg.filename, $best_path) if copy_files
-            line += "    - %-35s  %5.1f  "%[format_text(pcfg.cuid,35),ppct]
+            line += "    - %-35s  %5.1f  "%[format_text(pcfg.label,35),ppct]
         else
             line += "%50s"%" "
         end
         if i < inst_failed_cfgs.size then
             fcfg,fpct = inst_failed_cfgs[i]
-            line += "    - %-35s  %5.1f  "%[format_text(fcfg.cuid,35),fpct]
+            line += "    - %-35s  %5.1f  "%[format_text(fcfg.label,35),fpct]
         end
         report << line if line.strip != ""
     end
@@ -1900,13 +1887,13 @@ def build_best_report(num,copy_files=false)
         if i < exec_passed_cfgs.size then
             pcfg,ppct = exec_passed_cfgs[i]
             FileUtils.cp($passed_path + pcfg.filename, $best_path) if copy_files
-            line += "    - %-35s  %5.1f  "%[format_text(pcfg.cuid,35),ppct]
+            line += "    - %-35s  %5.1f  "%[format_text(pcfg.label,35),ppct]
         else
             line += "%50s"%" " 
         end
         if i < exec_failed_cfgs.size then
             fcfg,fpct = exec_failed_cfgs[i]
-            line += "    - %-35s  %5.1f  "%[format_text(fcfg.cuid,35),fpct]
+            line += "    - %-35s  %5.1f  "%[format_text(fcfg.label,35),fpct]
         end
         report << line if line.strip != ""
     end
