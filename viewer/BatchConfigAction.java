@@ -12,9 +12,14 @@ public class BatchConfigAction extends AbstractAction implements ActionListener 
 
     final ConfigTreeNode.CNStatus[] allStatuses = {
             ConfigTreeNode.CNStatus.CANDIDATE,
+            ConfigTreeNode.CNStatus.IGNORE,
             ConfigTreeNode.CNStatus.SINGLE,
             ConfigTreeNode.CNStatus.DOUBLE,
-            ConfigTreeNode.CNStatus.IGNORE,
+            ConfigTreeNode.CNStatus.TRANGE,
+            ConfigTreeNode.CNStatus.CINST,
+            ConfigTreeNode.CNStatus.DCANCEL,
+            ConfigTreeNode.CNStatus.DNAN,
+            ConfigTreeNode.CNStatus.NULL,
             ConfigTreeNode.CNStatus.NONE };
 
     ConfigEditorApp appInst;

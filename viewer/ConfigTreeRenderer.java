@@ -60,14 +60,29 @@ public class ConfigTreeRenderer extends DefaultTreeCellRenderer {
                 case IGNORE:
                     setBackground(ConfigEditorApp.DEFAULT_COLOR_IGNORE);
                     setOpaque(true);        break;
+                case CANDIDATE:
+                    setBackground(ConfigEditorApp.DEFAULT_COLOR_CANDIDATE);
+                    setOpaque(true);        break;
                 case SINGLE:
                     setBackground(ConfigEditorApp.DEFAULT_COLOR_SINGLE);
                     setOpaque(true);        break;
                 case DOUBLE:
                     setBackground(ConfigEditorApp.DEFAULT_COLOR_DOUBLE);
                     setOpaque(true);        break;
-                case CANDIDATE:
-                    setBackground(ConfigEditorApp.DEFAULT_COLOR_CANDIDATE);
+                case TRANGE:
+                    setBackground(ConfigEditorApp.DEFAULT_COLOR_TRANGE);
+                    setOpaque(true);        break;
+                case NULL:
+                    setBackground(ConfigEditorApp.DEFAULT_COLOR_NULL);
+                    setOpaque(true);        break;
+                case CINST:
+                    setBackground(ConfigEditorApp.DEFAULT_COLOR_CINST);
+                    setOpaque(true);        break;
+                case DCANCEL:
+                    setBackground(ConfigEditorApp.DEFAULT_COLOR_DCANCEL);
+                    setOpaque(true);        break;
+                case DNAN:
+                    setBackground(ConfigEditorApp.DEFAULT_COLOR_DNAN);
                     setOpaque(true);        break;
                 default:
                     setOpaque(false);       break;

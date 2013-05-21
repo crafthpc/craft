@@ -16,7 +16,8 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     }
 
     public enum CNStatus {
-        NONE, IGNORE, SINGLE, DOUBLE, CANDIDATE
+        NONE, IGNORE, CANDIDATE, SINGLE, DOUBLE,
+        TRANGE, NULL, CINST, DCANCEL, DNAN
     }
 
     public static String Type2Str(CNType type) {
@@ -36,9 +37,14 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         switch (status) {
             case NONE:      str = "NONE";    break;
             case IGNORE:    str = "IGNR";    break;
+            case CANDIDATE: str = "CAND";    break;
             case SINGLE:    str = "SING";    break;
             case DOUBLE:    str = "DOUB";    break;
-            case CANDIDATE: str = "CAND";    break;
+            case TRANGE:    str = "TRAN";    break;
+            case NULL:      str = "NULL";    break;
+            case CINST:     str = "CINS";    break;
+            case DCANCEL:   str = "DCAN";    break;
+            case DNAN:      str = "DNAN";    break;
         }
         return str;
     }
@@ -115,10 +121,15 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         if (configLine.length() > 1) {
             switch (configLine.charAt(1)) {
                 case ' ':   status = CNStatus.NONE;      break;
-                case 'i':   status = CNStatus.IGNORE;    break;
+                case '!':   status = CNStatus.IGNORE;    break;
+                case '?':   status = CNStatus.CANDIDATE; candidate = true; break;
                 case 's':   status = CNStatus.SINGLE;    break;
                 case 'd':   status = CNStatus.DOUBLE;    break;
-                case 'c':   status = CNStatus.CANDIDATE; candidate = true; break;
+                case 'r':   status = CNStatus.TRANGE;    break;
+                case 'x':   status = CNStatus.NULL;      break;
+                case 'i':   status = CNStatus.CINST;     break;
+                case 'c':   status = CNStatus.DCANCEL;   break;
+                case 'n':   status = CNStatus.DNAN;      break;
                 default:    status = CNStatus.NONE;      break;
             }
         }
@@ -200,34 +211,33 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     }
 
     public void toggleNoneSingle() {
-        switch (status) {
-            case NONE:      status = CNStatus.SINGLE;       break;
-            case IGNORE:    status = CNStatus.NONE;         break;
-            case SINGLE:    status = CNStatus.NONE;         break;
-            case DOUBLE:    status = CNStatus.NONE;         break;
-            case CANDIDATE: status = CNStatus.NONE;         break;
-            default:        status = CNStatus.NONE;         break;
+        if (status == CNStatus.NONE) {
+            status = CNStatus.SINGLE;
+        } else {
+            status = CNStatus.NONE;
         }
     }
 
     public void toggleIgnoreSingle() {
-        switch (status) {
-            case NONE:      status = CNStatus.IGNORE;       break;
-            case IGNORE:    status = CNStatus.SINGLE;       break;
-            case SINGLE:    status = CNStatus.IGNORE;       break;
-            case DOUBLE:    status = CNStatus.IGNORE;       break;
-            case CANDIDATE: status = CNStatus.IGNORE;       break;
-            default:        status = CNStatus.IGNORE;       break;
+        if (status == CNStatus.IGNORE) {
+            status = CNStatus.SINGLE;
+        } else {
+            status = CNStatus.IGNORE;
         }
     }
 
     public void toggleAll() {
         switch (status) {
-            case NONE:      status = CNStatus.IGNORE;       break;
-            case IGNORE:    status = CNStatus.SINGLE;       break;
+            case NONE:    /*status = CNStatus.IGNORE;       break;  // these have their own button
+            case IGNORE:    status = CNStatus.CANDIDATE;    break;
+            case CANDIDATE: status = CNStatus.SINGLE;       break;
             case SINGLE:    status = CNStatus.DOUBLE;       break;
-            case DOUBLE:    status = CNStatus.NONE;         break;
-            case CANDIDATE: status = CNStatus.NONE;         break;
+            case DOUBLE:    status = CNStatus.NULL;         break;
+            case NULL:    */status = CNStatus.TRANGE;       break;
+            case TRANGE:    status = CNStatus.CINST;        break;
+            case CINST:     status = CNStatus.DCANCEL;      break;
+            case DCANCEL:   status = CNStatus.DNAN;         break;
+            case DNAN:      status = CNStatus.NONE;         break;
             default:        status = CNStatus.NONE;         break;
         }
     }
@@ -236,18 +246,26 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         //System.out.println("Merging: " + Status2Str(status) + "  " + label);
         //System.out.println("   with: " + Status2Str(node.status) + "  " + node.label);
 
-        if (status == CNStatus.NONE || node.status == CNStatus.NONE) {
-            status = CNStatus.NONE;
+        if (status == CNStatus.CANDIDATE || node.status == CNStatus.CANDIDATE) {
+            //System.out.println("Marking " + label + " as candidate!");
+            candidate = true;  // don't overwrite other status with "candidate"
         } else if (status == CNStatus.IGNORE || node.status == CNStatus.IGNORE) {
             status = CNStatus.IGNORE;
         } else if (status == CNStatus.DOUBLE || node.status == CNStatus.DOUBLE) {
             status = CNStatus.DOUBLE;
-        }
-        
-        if (status == CNStatus.CANDIDATE || node.status == CNStatus.CANDIDATE) {
-            //System.out.println("Marking " + label + " as candidate!");
-            candidate = true;  // don't overwrite other status with "candidate"
-        }
+        } else if (status == CNStatus.SINGLE || node.status == CNStatus.SINGLE) {
+            status = CNStatus.SINGLE;
+        } else if (status == CNStatus.TRANGE || node.status == CNStatus.TRANGE) {
+            status = CNStatus.TRANGE;
+        } else if (status == CNStatus.CINST || node.status == CNStatus.CINST) {
+            status = CNStatus.CINST;
+        } else if (status == CNStatus.DCANCEL || node.status == CNStatus.DCANCEL) {
+            status = CNStatus.DCANCEL;
+        } else if (status == CNStatus.DNAN || node.status == CNStatus.DNAN) {
+            status = CNStatus.DNAN;
+        } else if (status == CNStatus.NULL || node.status == CNStatus.NULL) {
+            status = CNStatus.NULL;
+        } // only other status is NONE
     }
 
     public String formatFileEntry() {
@@ -255,10 +273,15 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         str.append('^');
         switch (status) {
             case NONE:      str.append(' ');    break;
-            case IGNORE:    str.append('i');    break;
+            case IGNORE:    str.append('!');    break;
+            case CANDIDATE: str.append('?');    break;
             case SINGLE:    str.append('s');    break;
             case DOUBLE:    str.append('d');    break;
-            case CANDIDATE: str.append('c');    break;
+            case TRANGE:    str.append('r');    break;
+            case NULL:      str.append('x');    break;
+            case CINST:     str.append('i');    break;
+            case DCANCEL:   str.append('c');    break;
+            case DNAN:      str.append('n');    break;
             default:        str.append(' ');    break;
         }
         str.append(' ');
