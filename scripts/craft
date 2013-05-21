@@ -181,8 +181,9 @@ class PPoint
                     overload = @orig_status
                 end
             end
+            fout.print(" ")
         end
-        fout.print("  ")
+        fout.print(" ")
         fout.print($TYPE_SPACES[@type])     # indentation
         fout.print(@uid)
         if @attrs.has_key?("desc") then
