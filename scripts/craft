@@ -294,6 +294,7 @@ class Strategy
     attr_accessor :program
     attr_accessor :preferred
     attr_accessor :alternate
+    attr_accessor :basetype
 
     def initialize(program, pref, alt)
         @preferred = pref
@@ -378,7 +379,6 @@ end # }}}
 #
 # {{{ BinaryStrategy
 class BinaryStrategy < Strategy
-    attr_accessor :basetype
 
     def split_config(config)
         configs = Array.new
@@ -477,6 +477,42 @@ class BinaryStrategy < Strategy
     end
 end # }}}
 
+
+# ExhaustiveStrategy
+#
+# Naive search algorithm that searches all instructions immediately. Highly
+# parallelizable but generally less effecient than binary searching. Potentially
+# useful for pointing out inconsistencies in binary search results.
+#
+# {{{ ExhaustiveStrategy
+class ExhaustiveStrategy < Strategy
+
+    def build_initial_configs
+        # find all basetype-level points
+        configs = Array.new
+        find_configs(@program, configs)
+        return configs
+    end
+
+    def find_configs(pt, configs)
+        if pt.type == @basetype then
+            cfg = AppConfig.new(pt.build_cuid, pt.build_label, @alternate)
+            cfg.exceptions[pt.uid] = @preferred
+            cfg.attrs["level"] = pt.type
+            configs << cfg
+        else
+            pt.children.each do |child|
+                find_configs(child, configs)
+            end
+        end
+    end
+
+    def split_config(config)
+        # don't split
+        return Array.new
+    end
+
+end # }}}
 
 # App entry point
 
@@ -759,9 +795,7 @@ def resume_lower_search
     else
         puts "Lowering base type from #{$base_type} to #{$TYPE_RRANK[new_base_rank]}."
         $base_type = $TYPE_RRANK[new_base_rank]
-        if $strategy_name == "bin_simple" then
-            $strategy.basetype = $base_type
-        end
+        $strategy.basetype = $base_type
     end
 
     # look for new configurations
@@ -1149,12 +1183,14 @@ def initialize_strategy
         $strategy = Strategy.new($program, $status_preferred, $status_alternate)
     elsif $strategy_name == "bin_simple" then
         $strategy = BinaryStrategy.new($program, $status_preferred, $status_alternate)
-        $strategy.basetype = $base_type
+    elsif $strategy_name == "exhaustive" then
+        $strategy = ExhaustiveStrategy.new($program, $status_preferred, $status_alternate)
     else
         puts "Unrecognized search strategy \"#{$strategy_name}\""
         puts "Aborting search."
         exit
     end
+    $strategy.basetype = $base_type
 end
 
 
@@ -1651,7 +1687,7 @@ def print_usage
     puts "   -m             memory-based analysis"
     puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
-    puts "                    valid strategies:  \"simple\" and \"bin_simple\""
+    puts "                    valid strategies:  \"simple\", \"bin_simple\", and \"exhaustive\""
     puts " "
     puts "Valid resumption options:"
     puts "   -j <np>        spawn <np> worker threads"
