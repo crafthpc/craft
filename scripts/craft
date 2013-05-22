@@ -382,7 +382,6 @@ class BinaryStrategy < Strategy
 
     def split_config(config)
         configs = Array.new
-        all_insns = true
 
         # build list of new configurations
         if config.exceptions.size > 1 then
@@ -418,10 +417,6 @@ class BinaryStrategy < Strategy
                             child_pt = child.children.first
                         end
 
-                        if not (child_pt.type == $TYPE_INSTRUCTION) then
-                            all_insns = false
-                        end
-
                         cfg = AppConfig.new(child_pt.build_cuid, child_pt.build_label, config.default)
                         #puts "ADDING #{cfg.cuid} #{child_pt.type}"
                         cfg.exceptions[child_pt.uid] = v
@@ -438,11 +433,7 @@ class BinaryStrategy < Strategy
         end
 
         # sort in descending order of instruction executions
-        # don't do this if we just have a bunch of instruction configs
-        if not all_insns then
-            configs.sort! { |c1, c2| c2.attrs["cinst"].to_i <=> c1.attrs["cinst"].to_i }
-            #puts "Sorting #{configs.size} at #{config.cuid}"
-        end
+        configs.sort! { |c1, c2| c2.attrs["cinst"].to_i <=> c1.attrs["cinst"].to_i }
 
         # merge into two (binary search) if we have a lot of new configs
         if configs.size > 5 then
