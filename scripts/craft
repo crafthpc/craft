@@ -528,6 +528,7 @@ def main
     $status_blank = " "                     # "no result" replacement status
     $fortran_mode = false                   # pass "-N" to mutator
     $base_type = $TYPE_INSTRUCTION          # stop splitting configs at this level
+    $skip_nonexecuted = true                # don't bother running configs with non-executed instructions
     $initial_cfg_fn = ""                    # initial config filename (may be blank)
     $perf_log_fn = ""                       # initial profiling log (may be blank)
     $max_queue_length = 0                   # track largest queue size (approximate)
@@ -850,11 +851,27 @@ def run_main_search_loop
                 configs = $strategy.split_config(cfg)
                 configs.each do |child|
                     add_child = true
+
+                    # skip single-exception configs where the only exception
+                    # is lower than the base type; currently there is no
+                    # situation where we will encounter mixed-level configs
                     if child.exceptions.keys.size == 1 then
                         pt = $program.lookup_by_uid(child.exceptions.keys.first)
                         if !pt.nil? and $TYPE_RANK[pt.type] > $TYPE_RANK[$base_type] then
                             add_child = false
                         end
+                    end
+
+                    # skip non-executed instructions if desired; assume they
+                    # will pass
+                    if $skip_nonexecuted and child.attrs["cinst"].to_i == 0 then
+                        puts "Skipping non-executed config #{child.label}."
+                        add_to_mainlog("    Skipping non-executed config #{child.label}.")
+                        child.attrs["result"] = $RESULT_PASS
+                        calculate_orig_stats(child)
+                        add_tested_config(child)
+                        rebuild_final_config
+                        add_child = false
                     end
                     if add_child then
                         add_to_workqueue(child)
@@ -1085,6 +1102,9 @@ def parse_command_line
             elsif opt == '-m' then
                 # memory-based analysis
                 $fpconf_options = "-c --svinp mem_double "
+            elsif opt == '-a' then
+                # skip non-executed configs
+                $skip_nonexecuted = false
             elsif opt == '-N' then
                 # fortran mode
                 $fortran_mode = true
@@ -1474,6 +1494,7 @@ def save_settings
     f.puts $baseline_runtime
     f.puts($fortran_mode ? "fortran" : "other")
     f.puts $base_type
+    f.puts $skip_nonexecuted
     f.puts $initial_cfg_fn
     f.puts $perf_log_fn
     f.close
@@ -1495,6 +1516,7 @@ def load_settings
         $fortran_mode = false
     end
     $base_type = f.gets.chomp
+    $skip_nonexecuted = (f.gets.chomp == true.to_s)
     $initial_cfg_fn = f.gets.chomp
     $perf_log_fn = f.gets.chomp
     f.close
@@ -1678,6 +1700,7 @@ def print_usage
     puts "        #{$self_invoke} worker <id> <dir>                 (worker process; used internally)"
     puts " "
     puts "Valid initial options:"
+    puts "   -a             test all generated configs (don't skip non-executed instructions)"
     puts "   -b             stop splitting configs at the basic block level"
     puts "   -c <file>      use <file> as initial base configuration"
     puts "   -d <p>         debug mode (<p> -> ignore instead of double->single)"
