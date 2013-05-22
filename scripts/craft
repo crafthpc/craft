@@ -1914,7 +1914,9 @@ def build_best_report(num,copy_files=false)
         line = ""
         if i < inst_passed_cfgs.size then
             pcfg,ppct = inst_passed_cfgs[i]
-            FileUtils.cp($passed_path + pcfg.filename, $best_path) if copy_files
+            if copy_files and File.exists?($passed_path + pcfg.filename) then
+                FileUtils.cp($passed_path + pcfg.filename, $best_path)
+            end
             line += "    - %-35s  %5.1f  "%[format_text(pcfg.label,35),ppct]
         else
             line += "%50s"%" "
@@ -1937,7 +1939,9 @@ def build_best_report(num,copy_files=false)
         line = ""
         if i < exec_passed_cfgs.size then
             pcfg,ppct = exec_passed_cfgs[i]
-            FileUtils.cp($passed_path + pcfg.filename, $best_path) if copy_files
+            if copy_files and File.exists?($passed_path + pcfg.filename) then
+                FileUtils.cp($passed_path + pcfg.filename, $best_path)
+            end
             line += "    - %-35s  %5.1f  "%[format_text(pcfg.label,35),ppct]
         else
             line += "%50s"%" " 
