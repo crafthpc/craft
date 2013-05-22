@@ -231,9 +231,9 @@ class AppConfig
             l1 = attrs["level"]
             l2 = c2.attrs["level"]
             if l1 == l2 then
-                if attrs.has_key?("orig_cinst") and c2.attrs.has_key?("orig_cinst") then
-                    oc1 = attrs["orig_cinst"].to_f
-                    oc2 = c2.attrs["orig_cinst"].to_f
+                if attrs.has_key?("pct_cinst") and c2.attrs.has_key?("pct_cinst") then
+                    oc1 = attrs["pct_cinst"].to_f
+                    oc2 = c2.attrs["pct_cinst"].to_f
                     if oc1 == oc2 then
                         result = -1
                     else
@@ -250,12 +250,12 @@ class AppConfig
         end
 
         # descending instrumented % + executed %
-        if attrs.has_key?("orig_icount") and c2.attrs.has_key?("orig_icount") and
-           attrs.has_key?("orig_cinst") and c2.attrs.has_key?("orig_cinst") then
-            oi1 = attrs["orig_icount"].to_f
-            oi2 = c2.attrs["orig_icount"].to_f
-            oc1 = attrs["orig_cinst"].to_f
-            oc2 = c2.attrs["orig_cinst"].to_f
+        if attrs.has_key?("pct_icount") and c2.attrs.has_key?("pct_icount") and
+           attrs.has_key?("pct_cinst") and c2.attrs.has_key?("pct_cinst") then
+            oi1 = attrs["pct_icount"].to_f
+            oi2 = c2.attrs["pct_icount"].to_f
+            oc1 = attrs["pct_cinst"].to_f
+            oc2 = c2.attrs["pct_cinst"].to_f
             result = (oi2+oc2) <=> (oi1+oc1)
         end
 
@@ -1330,22 +1330,22 @@ end
 
 
 def calculate_orig_stats (cfg)
-    orig_icount = 0
-    orig_cinst = 0
+    pct_icount = 0
+    pct_cinst = 0
     cfg.exceptions.keys.each do |k|
         pt = $program.lookup_by_uid(k)
         if !pt.nil? then
-            orig_icount += pt.attrs["icount"].to_i
-            orig_cinst += pt.attrs["cinst"].to_i
+            pct_icount += pt.attrs["icount"].to_i
+            pct_cinst += pt.attrs["cinst"].to_i
             if cfg.exceptions.keys.size == 1 then
                 cfg.attrs["single_type"] = pt.type
             end
         end
     end
-    orig_icount = (orig_icount.to_f / $program.attrs["icount"].to_f * 100.0).to_s
-    orig_cinst = (orig_cinst.to_f / $program.attrs["cinst"].to_f * 100.0).to_s
-    cfg.attrs["orig_icount"] = orig_icount.to_s
-    cfg.attrs["orig_cinst"] = orig_cinst.to_s
+    pct_icount = (pct_icount.to_f / $program.attrs["icount"].to_f * 100.0).to_s
+    pct_cinst = (pct_cinst.to_f / $program.attrs["cinst"].to_f * 100.0).to_s
+    cfg.attrs["pct_icount"] = pct_icount.to_s
+    cfg.attrs["pct_cinst"] = pct_cinst.to_s
 end
 
 def run_config (cfg)
@@ -1801,13 +1801,13 @@ def print_status
                 line = ""
                 if i < inproc.size then
                     icfg = inproc[i]
-                    line += "    - %-30s %5.1f  %5.1f "%[format_text(icfg.label,30),icfg.attrs["orig_icount"],icfg.attrs["orig_cinst"]]
+                    line += "    - %-30s %5.1f  %5.1f "%[format_text(icfg.label,30),icfg.attrs["pct_icount"],icfg.attrs["pct_cinst"]]
                 else
                     line += "%50s"%" "
                 end
                 if i < queue.size then
                     qcfg = queue[i]
-                    line += "    - %-30s %5.1f  %5.1f "%[format_text(qcfg.label,30),qcfg.attrs["orig_icount"],qcfg.attrs["orig_cinst"]]
+                    line += "    - %-30s %5.1f  %5.1f "%[format_text(qcfg.label,30),qcfg.attrs["pct_icount"],qcfg.attrs["pct_cinst"]]
                 end
                 status_text << line if line.strip != ""
             end
@@ -1900,16 +1900,16 @@ def build_best_report(num,copy_files=false)
     results.each do |cfg|
         if not (cfg.cuid == $FINALCFG_CUID) then
             if cfg.attrs["result"] == $RESULT_PASS then
-                inst_passed_cfgs << [cfg, cfg.attrs["orig_icount"].to_f]
-                exec_passed_cfgs << [cfg, cfg.attrs["orig_cinst"].to_f]
-                inst_passed += cfg.attrs["orig_icount"].to_f
-                exec_passed += cfg.attrs["orig_cinst"].to_f
+                inst_passed_cfgs << [cfg, cfg.attrs["pct_icount"].to_f]
+                exec_passed_cfgs << [cfg, cfg.attrs["pct_cinst"].to_f]
+                inst_passed += cfg.attrs["pct_icount"].to_f
+                exec_passed += cfg.attrs["pct_cinst"].to_f
             else
                 if cfg.attrs.has_key?("single_type") and cfg.attrs["single_type"] == $base_type then
-                    inst_failed_cfgs << [cfg, cfg.attrs["orig_icount"].to_f]
-                    exec_failed_cfgs << [cfg, cfg.attrs["orig_cinst"].to_f]
-                    inst_failed += cfg.attrs["orig_icount"].to_f
-                    exec_failed += cfg.attrs["orig_cinst"].to_f
+                    inst_failed_cfgs << [cfg, cfg.attrs["pct_icount"].to_f]
+                    exec_failed_cfgs << [cfg, cfg.attrs["pct_cinst"].to_f]
+                    inst_failed += cfg.attrs["pct_icount"].to_f
+                    exec_failed += cfg.attrs["pct_cinst"].to_f
                 end
             end
         end
