@@ -759,10 +759,7 @@ def initialize_search
 
     # initialize work queue
     configs = $strategy.build_initial_configs
-    configs.each do |cfg|
-        add_to_workqueue(cfg)
-        puts "Added config #{cfg.label} to workqueue."
-    end
+    add_to_workqueue_bulk(configs)
     $max_queue_length = get_workqueue_length
 
     # create folders for saving configurations
@@ -1516,8 +1513,7 @@ def load_settings
 end
 
 
-def add_to_workqueue(cfg)
-    calculate_orig_stats(cfg)
+def add_to_workqueue_bulk(configs)
 
     queue = Array.new
     f = File.new("#{$workqueue_fn}", "r+")
@@ -1526,6 +1522,31 @@ def add_to_workqueue(cfg)
         queue << doc
     end
 
+    configs.each do |cfg|
+        calculate_orig_stats(cfg)
+        queue << cfg
+        puts "Added config #{cfg.label} to workqueue."
+    end
+    queue.sort!
+
+    f.truncate(0)
+    f.pos = 0
+    queue.each do |cfg|
+        YAML.dump(cfg, f)
+    end
+    f.close
+end
+
+def add_to_workqueue(cfg)
+
+    queue = Array.new
+    f = File.new("#{$workqueue_fn}", "r+")
+    f.flock File::LOCK_EX
+    YAML.each_document(f) do |doc|
+        queue << doc
+    end
+
+    calculate_orig_stats(cfg)
     queue << cfg
     queue.sort!
     
