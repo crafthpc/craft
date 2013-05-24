@@ -859,6 +859,7 @@ def run_main_search_loop
                         puts "Skipping non-executed config #{child.label}."
                         add_to_mainlog("    Skipping non-executed config #{child.label}.")
                         child.attrs["result"] = $RESULT_PASS
+                        child.attrs["skipped"] = "yes"
                         calculate_orig_stats(child)
                         add_tested_config(child)
                         rebuild_final_config
@@ -995,6 +996,7 @@ def finalize_search
     summary = get_tested_configs_summary
     report << "Total configs tested:      #{"%11d" % summary["total"]}"
     report << "  Total passed:            #{"%11d" % summary["pass"]}"
+    report << "    Total skipped:         #{"%11d" % summary["skipped"]}"
     report << "  Total failed:            #{"%11d" % summary["fail"]}"
     report << "  Total aborted:           #{"%11d" % summary["error"]}"
     report << "Done.  [Total elapsed walltime: #{format_time(elapsed)}]"
@@ -1767,6 +1769,7 @@ def print_status
         summary = get_tested_configs_summary
         status_text << "#{indent}Total configs tested:      #{"%13d" % summary["total"]}"
         status_text << "#{indent}   Total passed:           #{"%13d" % summary["pass"]}"
+        status_text << "#{indent}     Total skipped:        #{"%11d" % summary["skipped"]}"
         status_text << "#{indent}   Total failed:           #{"%13d" % summary["fail"]}"
         status_text << "#{indent}   Total aborted:          #{"%13d" % summary["error"]}"
         status_text << "#{indent}Current in-proc length:    #{"%13d" % get_inproc_length}"
@@ -1972,6 +1975,9 @@ def get_tested_configs_summary
             elsif cfg.attrs["result"] == $RESULT_ERROR then
                 summary["error"] += 1
             end
+        end
+        if cfg.attrs.has_key?("skipped") and cfg.attrs["skipped"] == "yes" then
+            summary["skipped"] += 1
         end
     end
     summary["total"] = tested_cfgs.size
