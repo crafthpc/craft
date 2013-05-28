@@ -136,15 +136,15 @@ class PPoint
     def build_label
         # build human-readable label
         label = @uid
-        if @uid =~ /APPLICATION/ then
+        if @uid.include?($TYPE_APPLICATION) then
             label = "APP #{@attrs["desc"]}"
-        elsif @uid =~ /MODULE/ then
+        elsif @uid.include?($TYPE_MODULE) then
             label = "MOD #{@attrs["desc"]}"
-        elsif @uid =~ /FUNC/ then
+        elsif @uid.include?($TYPE_FUNCTION) then
             label = "FUNC #{@attrs["desc"]}"
-        elsif @uid =~ /BBLK/ then
+        elsif @uid.include?($TYPE_BASICBLOCK) then
             label = "BBLK #{@attrs["addr"]}"
-        elsif @uid =~ /INSN/ then
+        elsif @uid.include?($TYPE_INSTRUCTION) then
             label = "INSN #{@attrs["addr"]} \"#{@attrs["desc"]}\""
         end
         return label
@@ -227,12 +227,12 @@ class AppConfig
         result = nil
 
         # ascending level rank -> descending executed %
-        if attrs.has_key?("level") and c2.attrs.has_key?("level") then
-            l1 = attrs["level"]
+        if @attrs.has_key?("level") and c2.attrs.has_key?("level") then
+            l1 = @attrs["level"]
             l2 = c2.attrs["level"]
             if l1 == l2 then
-                if attrs.has_key?("pct_cinst") and c2.attrs.has_key?("pct_cinst") then
-                    oc1 = attrs["pct_cinst"].to_f
+                if @attrs.has_key?("pct_cinst") and c2.attrs.has_key?("pct_cinst") then
+                    oc1 = @attrs["pct_cinst"].to_f
                     oc2 = c2.attrs["pct_cinst"].to_f
                     if oc1 == oc2 then
                         result = -1
@@ -250,11 +250,11 @@ class AppConfig
         end
 
         # descending instrumented % + executed %
-        if attrs.has_key?("pct_icount") and c2.attrs.has_key?("pct_icount") and
-           attrs.has_key?("pct_cinst") and c2.attrs.has_key?("pct_cinst") then
-            oi1 = attrs["pct_icount"].to_f
+        if @attrs.has_key?("pct_icount") and c2.attrs.has_key?("pct_icount") and
+           @attrs.has_key?("pct_cinst") and c2.attrs.has_key?("pct_cinst") then
+            oi1 = @attrs["pct_icount"].to_f
             oi2 = c2.attrs["pct_icount"].to_f
-            oc1 = attrs["pct_cinst"].to_f
+            oc1 = @attrs["pct_cinst"].to_f
             oc2 = c2.attrs["pct_cinst"].to_f
             result = (oi2+oc2) <=> (oi1+oc1)
         end
@@ -263,13 +263,23 @@ class AppConfig
     end
 
     def filename
-        # sanitize cuid
+        # add sanitized cuid for uniqueness
         fn = "#{$search_tag}_"
         @cuid.each_char do |c|
             if c =~ /[0-9a-zA-Z_]/ then
                 fn << c.downcase
             elsif c == ' ' then
                 fn << "_"
+            end
+        end
+        # add sanitized description for readability (in some cases)
+        if @attrs.has_key?("desc") and (@cuid.include?($TYPE_MODULE) or @cuid.include?($TYPE_FUNCTION)) then
+            @attrs["desc"].each_char do |c|
+                if c =~ /[0-9a-zA-Z_]/ then
+                    fn << c.downcase
+                elsif c == ' ' then
+                    fn << "_"
+                end
             end
         end
         fn << ".cfg"
@@ -732,7 +742,7 @@ def initialize_search
     end
     Dir.glob("fpconf.log").each do |f| File.delete(f) end
     orig_cfg.close
-    puts "done."
+    puts "Done."
 
     # read all program control points and baseline performance data
     # depends on initial configuration being present
@@ -746,9 +756,10 @@ def initialize_search
         puts "Baseline profiling test failed verification!"
         #puts "Aborting search."        # not really necessary; we can run
         #exit                           # without profiling data
+    else
+        puts "Done."
     end
     read_profiler_data
-    puts "done."
 
     # initialize strategy object
     # depends on $program being initialized
@@ -977,7 +988,7 @@ def finalize_search
     $stdout.flush
     rebuild_final_config
     FileUtils.cp($final_config_fn, $final_path)
-    puts "done."
+    puts "Done."
 
     # try the final config (and keep results)
     puts "Testing final configuration ... "
@@ -1155,14 +1166,14 @@ def initialize_program
     prolog = ""
     IO.foreach($orig_config_fn) do |line|
         if line =~ /(APPLICATION #\d+: [x0-9A-Fa-f]+) \"(.+)\"/ then
-            $program = PPoint.new("#{$1} #{$2}", $TYPE_APPLICATION, line[1,1])
+            $program = PPoint.new($1, $TYPE_APPLICATION, line[1,1])
             $program.attrs["desc"] = $2
         elsif line =~ /(MODULE #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
-            mod = PPoint.new("#{$1} #{$2}", $TYPE_MODULE, line[1,1])
+            mod = PPoint.new($1, $TYPE_MODULE, line[1,1])
             mod.attrs["desc"] = $2
             $program.children << mod if $program != nil
         elsif line =~ /(FUNC #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
-            func = PPoint.new("#{$1} #{$2}", $TYPE_FUNCTION, line[1,1])
+            func = PPoint.new($1, $TYPE_FUNCTION, line[1,1])
             func.attrs["desc"] = $2
             mod.children << func if mod != nil
         elsif line =~ /(BBLK #\d+: (0x[0-9A-Fa-f]+))/ then
