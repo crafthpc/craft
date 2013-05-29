@@ -1,6 +1,7 @@
 FPCONF_CLASSES=ConfigEditorApp.class \
     ConfigFilter.class \
 	ConfigTreeNode.class \
+	ConfigTreeIterator.class \
 	ConfigTreeListener.class \
 	ConfigTreeRenderer.class \
 	OpenConfigAction.class \

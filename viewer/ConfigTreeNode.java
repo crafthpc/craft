@@ -186,6 +186,10 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         return status;
     }
 
+    public void resetInsnCount() {
+        insnCount = -1;
+    }
+
     public long getInsnCount() {
         long count = 0;
         if (insnCount == -1) {
@@ -312,6 +316,121 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
 
     public void setTested(boolean value) {
         tested = value;
+    }
+
+    public void preManipulate(ConfigTreeIterator iterator) {
+        Enumeration<ConfigTreeNode> children = children();
+        ConfigTreeNode child = null;
+        iterator.manipulate(this);
+        while (children.hasMoreElements()) {
+            child = children.nextElement();
+            child.preManipulate(iterator);
+        }
+    }
+
+    public void postManipulate(ConfigTreeIterator iterator) {
+        Enumeration<ConfigTreeNode> children = children();
+        ConfigTreeNode child = null;
+        while (children.hasMoreElements()) {
+            child = children.nextElement();
+            child.postManipulate(iterator);
+        }
+        iterator.manipulate(this);
+    }
+
+    public void getRegexTagLookups(Map<String,ConfigTreeNode> lookup) {
+        lookup.put(regexTag, this);
+        Enumeration<ConfigTreeNode> children = children();
+        ConfigTreeNode child = null;
+        while (children.hasMoreElements()) {
+            child = children.nextElement();
+            child.getRegexTagLookups(lookup);
+        }
+    }
+
+    public void getStatusCounts(Map<CNStatus,Long> counts) {
+        Enumeration<ConfigTreeNode> children = children();
+        ConfigTreeNode child = null;
+        while (children.hasMoreElements()) {
+            child = children.nextElement();
+            child.getStatusCounts(counts);
+        }
+        if (type == CNType.INSTRUCTION) {
+            Long count = new Long(1);
+            if (counts.containsKey(status)) {
+                count = new Long(1 + counts.get(status).longValue());
+            }
+            counts.put(status, count);
+        }
+    }
+
+    public void updateExecCounts(LLogFile logfile) {
+        if (type == ConfigTreeNode.CNType.INSTRUCTION) {
+            CNStatus status = getEffectiveStatus();
+            if (logfile != null) {
+                // read exec count from log file if present
+                LInstruction insn = logfile.instructionsByAddress.get(address);
+                if (insn != null) {
+                    totalExecCount = insn.count;
+                }
+            }
+            if (totalExecCount > 0) {
+                insnExecCount = 1;      // code coverage
+            }
+            execCount.put(status, new Long(totalExecCount));
+        } else {
+            Enumeration<ConfigTreeNode> children = children();
+            ConfigTreeNode child = null;
+            resetExecCounts();
+            while (children.hasMoreElements()) {
+
+                // recurse
+                child = children.nextElement();
+                child.updateExecCounts(logfile);
+
+                // update aggregate counts
+                insnExecCount  += child.insnExecCount;
+                totalExecCount += child.totalExecCount;
+                for (Map.Entry<CNStatus,Long> entry : child.execCount.entrySet()) {
+                    long newCount = entry.getValue().longValue();
+                    if (execCount.containsKey(entry.getKey())) {
+                        newCount += execCount.get(entry.getKey()).longValue();
+                    }
+                    execCount.put(entry.getKey(), new Long(newCount));
+                }
+            }
+        }
+    }
+
+    public void batchConfig(CNStatus orig, CNStatus dest) {
+        Enumeration<ConfigTreeNode> children = children();
+        ConfigTreeNode child = null;
+        while (children.hasMoreElements()) {
+            child = children.nextElement();
+            child.batchConfig(orig, dest);
+        }
+        if (type == CNType.INSTRUCTION && status == orig) {
+            status = dest;
+        }
+    }
+
+    public void removeChildren(ConfigTreeIterator iterator) {
+        Set<ConfigTreeNode> nodesToRemove = new HashSet<ConfigTreeNode>();
+        Enumeration<ConfigTreeNode> children = children();
+        ConfigTreeNode child = null;
+        while (children.hasMoreElements()) {
+            child = children.nextElement();
+            child.removeChildren(iterator);
+            if (iterator.test(child)) {
+                nodesToRemove.add(child);
+            }
+        }
+        if (nodesToRemove.size() > 0) {
+            resetInsnCount();
+            for (ConfigTreeNode node : nodesToRemove) {
+                remove(node);
+            }
+        }
     }
 
     public String toString() {
