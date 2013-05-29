@@ -1801,7 +1801,7 @@ def print_status
         summary = get_tested_configs_summary
         status_text << "#{indent}Total configs tested:      #{"%13d" % summary["total"]}"
         status_text << "#{indent}   Total passed:           #{"%13d" % summary["pass"]}"
-        status_text << "#{indent}     Total skipped:        #{"%11d" % summary["skipped"]}"
+        status_text << "#{indent}     Total skipped:        #{"%13d" % summary["skipped"]}"
         status_text << "#{indent}   Total failed:           #{"%13d" % summary["fail"]}"
         status_text << "#{indent}   Total aborted:          #{"%13d" % summary["error"]}"
         status_text << "#{indent}Current in-proc length:    #{"%13d" % get_inproc_length}"
