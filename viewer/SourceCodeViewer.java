@@ -15,7 +15,8 @@ import java.util.regex.*;
 import javax.swing.*;
 import javax.swing.event.*;
 
-public class SourceCodeViewer extends JFrame implements ListSelectionListener {
+public class SourceCodeViewer extends JFrame
+    implements ActionListener, DocumentListener, ListSelectionListener {
 
     // parsing string for debug info in config node labels
     public static final String REGEX = "\\[([^\\[:]*):(\\d+)\\]";
@@ -34,6 +35,7 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
     public JTextArea sourceCode;
     public LineNumberedBorder sourceBorder;
     public JList sourceFiles;
+    public JTextField searchBox;
     public JSplitPane mainPanel;
 
 
@@ -112,13 +114,28 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
         sourceCode.setBorder(sourceBorder);
         JScrollPane sourcePanel = new JScrollPane(sourceCode);
 
+        // build search box
+        searchBox = new JTextField(30);
+        searchBox.addActionListener(this);
+        searchBox.getDocument().addDocumentListener(this);
+
+        // build right side infrastructure
+        JPanel searchPanel = new JPanel();
+        searchPanel.add(new JLabel("Search: "));
+        searchPanel.add(searchBox);
+        JPanel rightPanel = new JPanel();
+        rightPanel.setLayout(new BorderLayout());
+        rightPanel.add(sourcePanel, BorderLayout.CENTER);
+        rightPanel.add(searchPanel, BorderLayout.NORTH);
+
+
         // build main splitpane layout
         mainPanel = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, true,
-                sourceFilePanel, sourcePanel);
+                sourceFilePanel, rightPanel);
 
         // set up window
         getContentPane().add(mainPanel);
-        setSize(1100, 800);
+        setSize(1200, 800);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(this);
     }
@@ -318,6 +335,48 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
         return lineno;
     }
 
+
+    public void search(boolean findNext) {
+        String text = searchBox.getText();
+
+        // generally, start at the top ...
+        int start = 0;
+
+        // ... but if we're looking for the "next" match,
+        // start after the current selection
+        if (findNext && sourceCode.getSelectionEnd() > 0) {
+            start = sourceCode.getSelectionEnd() + 1;
+        }
+
+        int pos = sourceCode.getText().indexOf(text, start);
+        if (pos == -1) {
+            // restart from the top
+            pos = sourceCode.getText().indexOf(text);
+        }
+        if (pos >= 0) {
+            // highlight found text
+            sourceCode.setSelectionStart(pos);
+            sourceCode.setSelectionEnd(pos+text.length());
+        }
+    }
+
+    public void changedUpdate(DocumentEvent e) {
+        search(false);
+    }
+
+    public void insertUpdate(DocumentEvent e) {
+        search(false);
+    }
+
+    public void removeUpdate(DocumentEvent e) {
+        search(false);
+    }
+
+    public void actionPerformed(ActionEvent e) {
+        if (e.getSource() == searchBox) {
+            search(true);
+        }
+    }
 
     public void valueChanged(ListSelectionEvent e) {
 
