@@ -1,3 +1,4 @@
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
@@ -16,6 +17,8 @@ import javax.swing.border.AbstractBorder;
  *
  *@author     Paul Durbin
  *@created    January 29, 2002
+ *
+ * Modified by Mike Lam, May 2013
  */
 public class LineNumberedBorder extends AbstractBorder {
    public static void main(String[] args) {
@@ -107,6 +110,12 @@ public class LineNumberedBorder extends AbstractBorder {
     */
    public static int LEFT_JUSTIFY = 1;
  
+   public static int DOT_WIDTH    = 5;
+   public static int DOT_HEIGHT   = 7;
+   public static int DOT_ARC      = 2;
+   public static int DOT_SPACING  = 2;
+   public static int MAX_DOTS     = 10;
+
    /**
     *  Indicates the justification of the text of the line number.
     */
@@ -116,10 +125,17 @@ public class LineNumberedBorder extends AbstractBorder {
     *  Indicates the location of the line numbers, w.r.t. the component.
     */
    private int location = LEFT_SIDE;
+
+   private SourceFileInfo fileInfo;
  
    public LineNumberedBorder(int location, int justify) {
       setLocation(location);
       setLineNumberJustification(justify);
+      fileInfo = null;
+   }
+
+   public void setFileInfo(SourceFileInfo fi) {
+      fileInfo = fi;
    }
  
    public Insets getBorderInsets(Component c) {
@@ -138,7 +154,7 @@ public class LineNumberedBorder extends AbstractBorder {
    public Insets getBorderInsets(Component c, Insets insets) {
       // if c is not a JTextArea...nothing is done...
       if (c instanceof JTextArea) {
-         int width = lineNumberWidth((JTextArea) c);
+         int width = lineNumberWidth((JTextArea) c) + dotWidth();
          if (location == LEFT_SIDE) {
             insets.left = width;
          } else {
@@ -185,6 +201,15 @@ public class LineNumberedBorder extends AbstractBorder {
             Math.max(textArea.getRows(), textArea.getLineCount() + 1);
       return textArea.getFontMetrics(
             textArea.getFont()).stringWidth(lineCount + " ");
+   }
+
+   private int dotWidth() {
+      if (fileInfo == null) {
+         return 0;
+      } else {
+         return Math.min((MAX_DOTS*2)*(DOT_WIDTH+DOT_SPACING),
+                         fileInfo.maxLineLength*(DOT_WIDTH+DOT_SPACING));
+      }
    }
  
    //
@@ -289,12 +314,57 @@ public class LineNumberedBorder extends AbstractBorder {
             String label = padLabel(startingLineNumber, length, true);
             g.drawString(label, lnxstart - fm.stringWidth(label), ybaseline);
          }
+
+         // draw replacement info
+         if (fileInfo != null) {
+             Integer i = Integer.valueOf(startingLineNumber);
+             int ydots     = (int)((float)ybaseline - ((float)fontHeight/2.0) - ((float)DOT_HEIGHT/2.0))+2;
+             int yellipsis = (int)((float)ybaseline - ((float)fontHeight/2.0))+2;
+             int k = 0;
+             Color oldColor = g.getColor();
+             if (fileInfo.singleCounts.containsKey(i)) {
+                 for (int j=0; j<fileInfo.singleCounts.get(i).intValue() && j<MAX_DOTS; j++) {
+                     if (j < MAX_DOTS-1) {
+                         drawDot(g, (lnxstart + lineWidth)+(k*(DOT_WIDTH+DOT_SPACING)), ydots, Color.GREEN);
+                     } else {
+                         drawEllipsis(g, (lnxstart + lineWidth)+(k*(DOT_WIDTH+DOT_SPACING)), yellipsis);
+                     }
+                     k++;
+                 }
+             }
+             if (fileInfo.doubleCounts.containsKey(i)) {
+                 for (int j=0; j<fileInfo.doubleCounts.get(i).intValue() && j<MAX_DOTS; j++) {
+                     if (j < MAX_DOTS-1) {
+                         drawDot(g, (lnxstart + lineWidth)+(k*(DOT_WIDTH+DOT_SPACING)), ydots, Color.RED);
+                     } else {
+                         drawEllipsis(g, (lnxstart + lineWidth)+(k*(DOT_WIDTH+DOT_SPACING)), yellipsis);
+                     }
+                     k++;
+                 }
+
+             }
+             g.setColor(oldColor);
+         }
  
          ybaseline += fontHeight;
          startingLineNumber++;
       }
    }
    // paintComponent
+   
+   private void drawDot(Graphics g, int x, int y, Color c) {
+       g.setColor(c);
+       g.fillRoundRect(x, y, DOT_WIDTH, DOT_HEIGHT, DOT_ARC, DOT_ARC);
+       g.setColor(Color.BLACK);
+       g.drawRoundRect(x, y, DOT_WIDTH, DOT_HEIGHT, DOT_ARC, DOT_ARC);
+   }
+
+   private void drawEllipsis(Graphics g, int x, int y) {
+       g.setColor(Color.BLACK);
+       g.drawLine(x,   y, x  , y+1);
+       g.drawLine(x+2, y, x+2, y+1);
+       g.drawLine(x+4, y, x+4, y+1);
+   }
  
    /**
     *  Create the string for the line number. NOTE: The <tt>length</tt> param

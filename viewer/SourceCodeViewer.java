@@ -32,6 +32,7 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
 
     // interface elements
     public JTextArea sourceCode;
+    public LineNumberedBorder sourceBorder;
     public JList sourceFiles;
     public JSplitPane mainPanel;
 
@@ -74,7 +75,11 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
         // recursively find all the files in this config tree, and add them to
         // the file list box; also read any replacement info
         scanConfigInfo(root);
+        SourceFileInfo curFileInfo = null;
         refreshFileList();
+        if (allFiles.containsKey(currentFile)) {
+            sourceBorder.setFileInfo(allFiles.get(currentFile));
+        }
     }
 
     public void refreshInterface() {
@@ -102,8 +107,9 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
         // build main source code textbox
         sourceCode = new JTextArea();
         sourceCode.setFont(ConfigEditorApp.DEFAULT_FONT_MONO_PLAIN);
-        sourceCode.setBorder(new LineNumberedBorder(
-                    LineNumberedBorder.LEFT_SIDE, LineNumberedBorder.LEFT_JUSTIFY));
+        sourceBorder = new LineNumberedBorder(LineNumberedBorder.LEFT_SIDE,
+                LineNumberedBorder.LEFT_JUSTIFY);
+        sourceCode.setBorder(sourceBorder);
         JScrollPane sourcePanel = new JScrollPane(sourceCode);
 
         // build main splitpane layout
@@ -132,6 +138,7 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
         if (allFiles.containsKey(filename)) {
             curFileInfo = allFiles.get(filename);
         }
+        sourceBorder.setFileInfo(curFileInfo);
 
         // find the source file
         String fullPath;
@@ -154,32 +161,8 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
                 while (nextLine != null) {
 
                     // insert replacement info if we have it
-                    Integer i = new Integer(lineCount);
-                    if (curFileInfo != null && (
-                            (curFileInfo.singleCounts.containsKey(i) ||
-                             curFileInfo.doubleCounts.containsKey(i))
-                            )) {
-                        int k = 2;
-                        code.append("[");
-                        if (curFileInfo.singleCounts.containsKey(i)) {
-                            for (int j=0; j<curFileInfo.singleCounts.get(i).intValue(); j++, k++) {
-                                code.append("s");
-                            }
-                        }
-                        if (curFileInfo.doubleCounts.containsKey(i)) {
-                            for (int j=0; j<curFileInfo.doubleCounts.get(i).intValue(); j++, k++) {
-                                code.append("d");
-                            }
-                        }
-                        code.append("]");
-                        for (int j=0; j<(17-k); j++) {
-                            code.append(" ");
-                        }
-                    } else {
-                        for (int j=0; j<17; j++) {
-                            code.append(" ");
-                        }
-                    }
+                    // (not needed w/ new graphical indicators
+                    //appendReplacementInfo(code, lineCount, curFileInfo);
 
                     // append the current line
                     if (lineCount == lineNumber)
@@ -198,6 +181,35 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
             }
         } else {
             sourceCode.setText("Cannot find file: " + filename);
+        }
+    }
+
+    private void appendReplacementInfo(StringBuffer code, int lineno, SourceFileInfo fileInfo) {
+        Integer i = Integer.valueOf(lineno);
+        if (fileInfo != null && (
+                (fileInfo.singleCounts.containsKey(i) ||
+                 fileInfo.doubleCounts.containsKey(i))
+                )) {
+            int k = 2;
+            code.append("[");
+            if (fileInfo.singleCounts.containsKey(i)) {
+                for (int j=0; j<fileInfo.singleCounts.get(i).intValue(); j++, k++) {
+                    code.append("s");
+                }
+            }
+            if (fileInfo.doubleCounts.containsKey(i)) {
+                for (int j=0; j<fileInfo.doubleCounts.get(i).intValue(); j++, k++) {
+                    code.append("d");
+                }
+            }
+            code.append("]");
+            for (int j=0; j<(17-k); j++) {
+                code.append(" ");
+            }
+        } else {
+            for (int j=0; j<17; j++) {
+                code.append(" ");
+            }
         }
     }
 
@@ -222,22 +234,11 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
 
                 // extract line-specific replacement information
                 int lineno = getLineNumber(node);
-                Integer i = new Integer(lineno);
                 if (node.status == ConfigTreeNode.CNStatus.SINGLE) {
-                    if (fi.singleCounts.containsKey(i)) {
-                        fi.singleCounts.put(i, new Integer(fi.singleCounts.get(i).intValue()+1));
-                    } else {
-                        fi.singleCounts.put(i, new Integer(1));
-                    }
-                    fi.overallSingleCount += 1;
+                    fi.incrementSingle(lineno);
                 }
                 if (node.status == ConfigTreeNode.CNStatus.DOUBLE) {
-                    if (fi.doubleCounts.containsKey(i)) {
-                        fi.doubleCounts.put(i, new Integer(fi.doubleCounts.get(i).intValue()+1));
-                    } else {
-                        fi.doubleCounts.put(i, new Integer(1));
-                    }
-                    fi.overallDoubleCount += 1;
+                    fi.incrementDouble(lineno);
                 }
             }
         } else {
