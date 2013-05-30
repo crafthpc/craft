@@ -17,46 +17,6 @@ import javax.swing.event.*;
 
 public class SourceCodeViewer extends JFrame implements ListSelectionListener {
 
-    /**
-     * Helper class for storing debug file information.
-     */
-    public class FileInfo {
-
-        public String filename;     // filename (no path; key for allFiles)
-        public String path;         // full file path
-
-        // line_number => replacement count mappings
-        public Map<Integer, Integer> singleCounts;
-        public Map<Integer, Integer> doubleCounts;
-
-        // aggregate replacement counts
-        public int overallSingleCount;
-        public int overallDoubleCount;
-
-        public FileInfo(String fn) {
-            filename = fn;
-            path = null;
-            singleCounts = new HashMap<Integer, Integer>();
-            doubleCounts = new HashMap<Integer, Integer>();
-            overallSingleCount = 0;
-            overallDoubleCount = 0;
-        }
-
-        public String toString() {
-            // pretty display for the file list box
-            // (includes overall replacement counts)
-            String label = filename;
-            if (overallSingleCount > 0) {
-                label += "  S:" + overallSingleCount;
-            }
-            if (overallDoubleCount > 0) {
-                label += "  D:" + overallDoubleCount;
-            }
-            return label;
-        }
-    }
-
-
     // parsing string for debug info in config node labels
     public static final String REGEX = "\\[([^\\[:]*):(\\d+)\\]";
     public static final Pattern REGEX_PATTERN = Pattern.compile(REGEX);
@@ -64,7 +24,7 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
     // stores source file info (path, replacements, etc.)
     // cached for efficiency (shouldn't need to re-scan config tree
     // every time we switch between files)
-    public SortedMap<String, FileInfo> allFiles;
+    public SortedMap<String, SourceFileInfo> allFiles;
 
     // which file are we currently viewing?
     // (should be a key into allFiles)
@@ -82,7 +42,7 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
 
     public SourceCodeViewer(ConfigTreeNode node, ConfigTreeNode root) {
         currentFile = getFilename(node);
-        allFiles = new TreeMap<String, FileInfo>();
+        allFiles = new TreeMap<String, SourceFileInfo>();
         int lineNumber = getLineNumber(node);
         initialize();
         if (root != null) {
@@ -101,7 +61,7 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
     
     public SourceCodeViewer(String filename, int lineNumber, ConfigTreeNode root) {
         currentFile = filename;
-        allFiles = new TreeMap<String, FileInfo>();
+        allFiles = new TreeMap<String, SourceFileInfo>();
         initialize();
         if (root != null) {
             addConfigInfo(root);
@@ -168,7 +128,7 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
 
         // grab cached file info if it's present
         // this can speed up full path calculation and provide replacement info
-        FileInfo curFileInfo = null;
+        SourceFileInfo curFileInfo = null;
         if (allFiles.containsKey(filename)) {
             curFileInfo = allFiles.get(filename);
         }
@@ -251,11 +211,11 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
             if (!fn.equals("")) {
 
                 // see if we've already added this file
-                FileInfo fi = null;
+                SourceFileInfo fi = null;
                 if (allFiles.containsKey(fn)) {
                     fi = allFiles.get(fn);
                 } else {
-                    fi = new FileInfo(fn);
+                    fi = new SourceFileInfo(fn);
                     fi.path = getFullPath(fn);
                     allFiles.put(fn, fi);
                 }
@@ -298,7 +258,7 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
         int selectedFile = -1;
         DefaultListModel model = new DefaultListModel();
         for (String fn : allFiles.keySet()) {
-            FileInfo fi = allFiles.get(fn);
+            SourceFileInfo fi = allFiles.get(fn);
             if (fi.filename.equals(currentFile)) {
                 selectedFile = model.size();
             }
@@ -363,8 +323,8 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
         // switch to the newly-selected file
         Object obj = sourceFiles.getSelectedValue();
         if (obj == null) return;
-        if (!(obj instanceof FileInfo)) return;
-        String fn = ((FileInfo)obj).filename;
+        if (!(obj instanceof SourceFileInfo)) return;
+        String fn = ((SourceFileInfo)obj).filename;
         loadFile(fn);
     }
 }

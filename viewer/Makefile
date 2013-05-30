@@ -13,7 +13,8 @@ FPCONF_CLASSES=ConfigEditorApp.class \
 	ExpandRowsAction.class \
 	TestedResult.class \
 	TestedResultFile.class \
-	SourceCodeViewer.class
+	SourceCodeViewer.class \
+	SourceFileInfo.class
 
 FPVIEW_CLASSES=CancellationReport.class \
 	ColumnResizer.class \
