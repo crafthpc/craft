@@ -15,47 +15,8 @@ import java.util.regex.*;
 import javax.swing.*;
 import javax.swing.event.*;
 
-public class SourceCodeViewer extends JFrame implements ListSelectionListener {
-
-    /**
-     * Helper class for storing debug file information.
-     */
-    public class FileInfo {
-
-        public String filename;     // filename (no path; key for allFiles)
-        public String path;         // full file path
-
-        // line_number => replacement count mappings
-        public Map<Integer, Integer> singleCounts;
-        public Map<Integer, Integer> doubleCounts;
-
-        // aggregate replacement counts
-        public int overallSingleCount;
-        public int overallDoubleCount;
-
-        public FileInfo(String fn) {
-            filename = fn;
-            path = null;
-            singleCounts = new HashMap<Integer, Integer>();
-            doubleCounts = new HashMap<Integer, Integer>();
-            overallSingleCount = 0;
-            overallDoubleCount = 0;
-        }
-
-        public String toString() {
-            // pretty display for the file list box
-            // (includes overall replacement counts)
-            String label = filename;
-            if (overallSingleCount > 0) {
-                label += "  S:" + overallSingleCount;
-            }
-            if (overallDoubleCount > 0) {
-                label += "  D:" + overallDoubleCount;
-            }
-            return label;
-        }
-    }
-
+public class SourceCodeViewer extends JFrame
+    implements ActionListener, DocumentListener, ListSelectionListener {
 
     // parsing string for debug info in config node labels
     public static final String REGEX = "\\[([^\\[:]*):(\\d+)\\]";
@@ -64,7 +25,7 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
     // stores source file info (path, replacements, etc.)
     // cached for efficiency (shouldn't need to re-scan config tree
     // every time we switch between files)
-    public SortedMap<String, FileInfo> allFiles;
+    public SortedMap<String, SourceFileInfo> allFiles;
 
     // which file are we currently viewing?
     // (should be a key into allFiles)
@@ -72,7 +33,9 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
 
     // interface elements
     public JTextArea sourceCode;
+    public LineNumberedBorder sourceBorder;
     public JList sourceFiles;
+    public JTextField searchBox;
     public JSplitPane mainPanel;
 
 
@@ -82,7 +45,7 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
 
     public SourceCodeViewer(ConfigTreeNode node, ConfigTreeNode root) {
         currentFile = getFilename(node);
-        allFiles = new TreeMap<String, FileInfo>();
+        allFiles = new TreeMap<String, SourceFileInfo>();
         int lineNumber = getLineNumber(node);
         initialize();
         if (root != null) {
@@ -101,7 +64,7 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
     
     public SourceCodeViewer(String filename, int lineNumber, ConfigTreeNode root) {
         currentFile = filename;
-        allFiles = new TreeMap<String, FileInfo>();
+        allFiles = new TreeMap<String, SourceFileInfo>();
         initialize();
         if (root != null) {
             addConfigInfo(root);
@@ -114,7 +77,11 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
         // recursively find all the files in this config tree, and add them to
         // the file list box; also read any replacement info
         scanConfigInfo(root);
+        SourceFileInfo curFileInfo = null;
         refreshFileList();
+        if (allFiles.containsKey(currentFile)) {
+            sourceBorder.setFileInfo(allFiles.get(currentFile));
+        }
     }
 
     public void refreshInterface() {
@@ -142,17 +109,33 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
         // build main source code textbox
         sourceCode = new JTextArea();
         sourceCode.setFont(ConfigEditorApp.DEFAULT_FONT_MONO_PLAIN);
-        sourceCode.setBorder(new LineNumberedBorder(
-                    LineNumberedBorder.LEFT_SIDE, LineNumberedBorder.LEFT_JUSTIFY));
+        sourceBorder = new LineNumberedBorder(LineNumberedBorder.LEFT_SIDE,
+                LineNumberedBorder.LEFT_JUSTIFY);
+        sourceCode.setBorder(sourceBorder);
         JScrollPane sourcePanel = new JScrollPane(sourceCode);
+
+        // build search box
+        searchBox = new JTextField(30);
+        searchBox.addActionListener(this);
+        searchBox.getDocument().addDocumentListener(this);
+
+        // build right side infrastructure
+        JPanel searchPanel = new JPanel();
+        searchPanel.add(new JLabel("Search: "));
+        searchPanel.add(searchBox);
+        JPanel rightPanel = new JPanel();
+        rightPanel.setLayout(new BorderLayout());
+        rightPanel.add(sourcePanel, BorderLayout.CENTER);
+        rightPanel.add(searchPanel, BorderLayout.NORTH);
+
 
         // build main splitpane layout
         mainPanel = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, true,
-                sourceFilePanel, sourcePanel);
+                sourceFilePanel, rightPanel);
 
         // set up window
         getContentPane().add(mainPanel);
-        setSize(1100, 800);
+        setSize(1200, 800);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(this);
     }
@@ -168,10 +151,11 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
 
         // grab cached file info if it's present
         // this can speed up full path calculation and provide replacement info
-        FileInfo curFileInfo = null;
+        SourceFileInfo curFileInfo = null;
         if (allFiles.containsKey(filename)) {
             curFileInfo = allFiles.get(filename);
         }
+        sourceBorder.setFileInfo(curFileInfo);
 
         // find the source file
         String fullPath;
@@ -194,32 +178,8 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
                 while (nextLine != null) {
 
                     // insert replacement info if we have it
-                    Integer i = new Integer(lineCount);
-                    if (curFileInfo != null && (
-                            (curFileInfo.singleCounts.containsKey(i) ||
-                             curFileInfo.doubleCounts.containsKey(i))
-                            )) {
-                        int k = 2;
-                        code.append("[");
-                        if (curFileInfo.singleCounts.containsKey(i)) {
-                            for (int j=0; j<curFileInfo.singleCounts.get(i).intValue(); j++, k++) {
-                                code.append("s");
-                            }
-                        }
-                        if (curFileInfo.doubleCounts.containsKey(i)) {
-                            for (int j=0; j<curFileInfo.doubleCounts.get(i).intValue(); j++, k++) {
-                                code.append("d");
-                            }
-                        }
-                        code.append("]");
-                        for (int j=0; j<(17-k); j++) {
-                            code.append(" ");
-                        }
-                    } else {
-                        for (int j=0; j<17; j++) {
-                            code.append(" ");
-                        }
-                    }
+                    // (not needed w/ new graphical indicators
+                    //appendReplacementInfo(code, lineCount, curFileInfo);
 
                     // append the current line
                     if (lineCount == lineNumber)
@@ -241,6 +201,35 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
         }
     }
 
+    private void appendReplacementInfo(StringBuffer code, int lineno, SourceFileInfo fileInfo) {
+        Integer i = Integer.valueOf(lineno);
+        if (fileInfo != null && (
+                (fileInfo.singleCounts.containsKey(i) ||
+                 fileInfo.doubleCounts.containsKey(i))
+                )) {
+            int k = 2;
+            code.append("[");
+            if (fileInfo.singleCounts.containsKey(i)) {
+                for (int j=0; j<fileInfo.singleCounts.get(i).intValue(); j++, k++) {
+                    code.append("s");
+                }
+            }
+            if (fileInfo.doubleCounts.containsKey(i)) {
+                for (int j=0; j<fileInfo.doubleCounts.get(i).intValue(); j++, k++) {
+                    code.append("d");
+                }
+            }
+            code.append("]");
+            for (int j=0; j<(17-k); j++) {
+                code.append(" ");
+            }
+        } else {
+            for (int j=0; j<17; j++) {
+                code.append(" ");
+            }
+        }
+    }
+
     private void scanConfigInfo(ConfigTreeNode node) {
         // recursively scan for debug file information
 
@@ -251,33 +240,22 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
             if (!fn.equals("")) {
 
                 // see if we've already added this file
-                FileInfo fi = null;
+                SourceFileInfo fi = null;
                 if (allFiles.containsKey(fn)) {
                     fi = allFiles.get(fn);
                 } else {
-                    fi = new FileInfo(fn);
+                    fi = new SourceFileInfo(fn);
                     fi.path = getFullPath(fn);
                     allFiles.put(fn, fi);
                 }
 
                 // extract line-specific replacement information
                 int lineno = getLineNumber(node);
-                Integer i = new Integer(lineno);
                 if (node.status == ConfigTreeNode.CNStatus.SINGLE) {
-                    if (fi.singleCounts.containsKey(i)) {
-                        fi.singleCounts.put(i, new Integer(fi.singleCounts.get(i).intValue()+1));
-                    } else {
-                        fi.singleCounts.put(i, new Integer(1));
-                    }
-                    fi.overallSingleCount += 1;
+                    fi.incrementSingle(lineno);
                 }
                 if (node.status == ConfigTreeNode.CNStatus.DOUBLE) {
-                    if (fi.doubleCounts.containsKey(i)) {
-                        fi.doubleCounts.put(i, new Integer(fi.doubleCounts.get(i).intValue()+1));
-                    } else {
-                        fi.doubleCounts.put(i, new Integer(1));
-                    }
-                    fi.overallDoubleCount += 1;
+                    fi.incrementDouble(lineno);
                 }
             }
         } else {
@@ -298,7 +276,7 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
         int selectedFile = -1;
         DefaultListModel model = new DefaultListModel();
         for (String fn : allFiles.keySet()) {
-            FileInfo fi = allFiles.get(fn);
+            SourceFileInfo fi = allFiles.get(fn);
             if (fi.filename.equals(currentFile)) {
                 selectedFile = model.size();
             }
@@ -358,13 +336,55 @@ public class SourceCodeViewer extends JFrame implements ListSelectionListener {
     }
 
 
+    public void search(boolean findNext) {
+        String text = searchBox.getText();
+
+        // generally, start at the top ...
+        int start = 0;
+
+        // ... but if we're looking for the "next" match,
+        // start after the current selection
+        if (findNext && sourceCode.getSelectionEnd() > 0) {
+            start = sourceCode.getSelectionEnd() + 1;
+        }
+
+        int pos = sourceCode.getText().indexOf(text, start);
+        if (pos == -1) {
+            // restart from the top
+            pos = sourceCode.getText().indexOf(text);
+        }
+        if (pos >= 0) {
+            // highlight found text
+            sourceCode.setSelectionStart(pos);
+            sourceCode.setSelectionEnd(pos+text.length());
+        }
+    }
+
+    public void changedUpdate(DocumentEvent e) {
+        search(false);
+    }
+
+    public void insertUpdate(DocumentEvent e) {
+        search(false);
+    }
+
+    public void removeUpdate(DocumentEvent e) {
+        search(false);
+    }
+
+    public void actionPerformed(ActionEvent e) {
+        if (e.getSource() == searchBox) {
+            search(true);
+        }
+    }
+
     public void valueChanged(ListSelectionEvent e) {
 
         // switch to the newly-selected file
         Object obj = sourceFiles.getSelectedValue();
         if (obj == null) return;
-        if (!(obj instanceof FileInfo)) return;
-        String fn = ((FileInfo)obj).filename;
+        if (!(obj instanceof SourceFileInfo)) return;
+        String fn = ((SourceFileInfo)obj).filename;
         loadFile(fn);
     }
 }

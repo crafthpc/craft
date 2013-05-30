@@ -578,7 +578,6 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public void saveConfigFile() {
         if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
 
-
         try {
             PrintWriter wrt = new PrintWriter(mainConfigFile);
             //PrintWriter wrt = new PrintWriter("test.txt");        // for testing
@@ -602,112 +601,15 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public void recalculateExecutionCounts(LLogFile logfile) {
         // walk the config tree and retrieve/calculate all execution counts
         ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
-        ConfigTreeNode curModuleNode = null;
-        ConfigTreeNode curFuncNode = null;
-        ConfigTreeNode curBlockNode = null;
-        ConfigTreeNode curNode = null;
-        appNode.resetExecCounts();
-        Enumeration<ConfigTreeNode> modules = appNode.children();
-        while (modules.hasMoreElements()) {
-            curModuleNode = modules.nextElement();
-            curModuleNode.resetExecCounts();
-            Enumeration<ConfigTreeNode> funcs = curModuleNode.children();
-            while (funcs.hasMoreElements()) {
-                curFuncNode = funcs.nextElement();
-                curFuncNode.resetExecCounts();
-                Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
-                while (blocks.hasMoreElements()) {
-                    curBlockNode = blocks.nextElement();
-                    curBlockNode.resetExecCounts();
-                    Enumeration<ConfigTreeNode> insns = curBlockNode.children();
-                    while (insns.hasMoreElements()) {
-                        curNode = insns.nextElement();
-                        ConfigTreeNode.CNStatus status = curNode.getEffectiveStatus();
-
-                        long count = curNode.totalExecCount;
-                        if (logfile != null) {
-                            LInstruction insn = logfile.instructionsByAddress.get(curNode.address);
-                            if (insn != null) {
-                                count = insn.count;
-                                curNode.totalExecCount = count;
-                            }
-                        }
-                        curNode.execCount.put(status, new Long(count));
-
-                        // aggregate replacement status statistics
-                        curBlockNode.totalExecCount += count;
-                        if (curBlockNode.execCount.containsKey(status)) {
-                            curBlockNode.execCount.put(status,
-                                    new Long(count) + curBlockNode.execCount.get(status));
-                        } else {
-                            curBlockNode.execCount.put(status, new Long(count));
-                        }
-                        curFuncNode.totalExecCount += count;
-                        if (curFuncNode.execCount.containsKey(status)) {
-                            curFuncNode.execCount.put(status,
-                                    new Long(count) + curFuncNode.execCount.get(status));
-                        } else {
-                            curFuncNode.execCount.put(status, new Long(count));
-                        }
-                        curModuleNode.totalExecCount += count;
-                        if (curModuleNode.execCount.containsKey(status)) {
-                            curModuleNode.execCount.put(status,
-                                    new Long(count) + curModuleNode.execCount.get(status));
-                        } else {
-                            curModuleNode.execCount.put(status, new Long(count));
-                        }
-                        appNode.totalExecCount += count;
-                        if (appNode.execCount.containsKey(status)) {
-                            appNode.execCount.put(status,
-                                    new Long(count) + appNode.execCount.get(status));
-                        } else {
-                            appNode.execCount.put(status, new Long(count));
-                        }
-
-                        // code coverage
-                        if (count > 0) {
-                            curNode.insnExecCount++;
-                            curBlockNode.insnExecCount++;
-                            curFuncNode.insnExecCount++;
-                            curModuleNode.insnExecCount++;
-                            appNode.insnExecCount++;
-                        }
-                    }
-                }
-            }
-        }
+        appNode.updateExecCounts(logfile);
     }
 
     public void addTestedResults(TestedResultFile rfile) {
 
         // walk the config tree and save all regexTags into a lookup table
         ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
-        ConfigTreeNode curModuleNode = null;
-        ConfigTreeNode curFuncNode = null;
-        ConfigTreeNode curBlockNode = null;
-        ConfigTreeNode curNode = null;
         Map<String,ConfigTreeNode> lookup = new HashMap<String,ConfigTreeNode>();
-        lookup.put(appNode.regexTag, appNode);
-        Enumeration<ConfigTreeNode> modules = appNode.children();
-        while (modules.hasMoreElements()) {
-            curModuleNode = modules.nextElement();
-            lookup.put(curModuleNode.regexTag, curModuleNode);
-            Enumeration<ConfigTreeNode> funcs = curModuleNode.children();
-            while (funcs.hasMoreElements()) {
-                curFuncNode = funcs.nextElement();
-                lookup.put(curFuncNode.regexTag, curFuncNode);
-                Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
-                while (blocks.hasMoreElements()) {
-                    curBlockNode = blocks.nextElement();
-                    lookup.put(curBlockNode.regexTag, curBlockNode);
-                    Enumeration<ConfigTreeNode> insns = curBlockNode.children();
-                    while (insns.hasMoreElements()) {
-                        curNode = insns.nextElement();
-                        lookup.put(curNode.regexTag, curNode);
-                    }
-                }
-            }
-        }
+        appNode.getRegexTagLookups(lookup);
 
         // iterate over the results and add them to the tree
         for (TestedResult r : rfile.allResults) {
@@ -772,62 +674,54 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     }
 
     public void refreshKeyLabels() {
-        int noneCount      = 0;
-        int ignoreCount    = 0;
-        int candidateCount = 0;
-        int singleCount    = 0;
-        int doubleCount    = 0;
-        int nullCount      = 0;
-        int miscCount      = 0;
-        ConfigTreeNode.CNStatus status;
+        Map<ConfigTreeNode.CNStatus,Long> allCounts = new HashMap<ConfigTreeNode.CNStatus,Long>();
         if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
         ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
-        ConfigTreeNode curModNode = null;
-        ConfigTreeNode curFuncNode = null;
-        ConfigTreeNode curBlockNode = null;
-        ConfigTreeNode curNode = null;
-
-        Enumeration<ConfigTreeNode> modules = appNode.children();
-        while (modules.hasMoreElements()) {
-            curModNode = modules.nextElement();
-            Enumeration<ConfigTreeNode> funcs = curModNode.children();
-            while (funcs.hasMoreElements()) {
-                curFuncNode = funcs.nextElement();
-                Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
-                while (blocks.hasMoreElements()) {
-                    curBlockNode = blocks.nextElement();
-                    Enumeration<ConfigTreeNode> insns = curBlockNode.children();
-                    while (insns.hasMoreElements()) {
-                        curNode = insns.nextElement();
-                        if (mainRenderer.getShowEffectiveStatus()) {
-                            status = curNode.getEffectiveStatus();
-                        } else {
-                            status = curNode.status;
-                        }
-                        switch (status) {
-                            case NONE:      noneCount++;        break;
-                            case IGNORE:    ignoreCount++;      break;
-                            case CANDIDATE: candidateCount++;   break;
-                            case SINGLE:    singleCount++;      break;
-                            case DOUBLE:    doubleCount++;      break;
-                            case NULL:      nullCount++;        break;
-                            case TRANGE:
-                            case CINST:
-                            case DCANCEL:
-                            case DNAN:      miscCount++;        break;
-                            default:                            break;
-                        }
-                    }
-                }
-            }
+        appNode.getStatusCounts(allCounts);
+        long noneCount      = 0;
+        long ignoreCount    = 0;
+        long candidateCount = 0;
+        long singleCount    = 0;
+        long doubleCount    = 0;
+        long nullCount      = 0;
+        long miscCount      = 0;
+        if (allCounts.containsKey(ConfigTreeNode.CNStatus.NONE)) {
+            noneCount      += (allCounts.get(ConfigTreeNode.CNStatus.NONE).longValue());
         }
-        noneKeyLabel.setText(" NONE (" + noneCount + ") ");
-        ignoreKeyLabel.setText(" IGNORE (" + ignoreCount + ") ");
+        if (allCounts.containsKey(ConfigTreeNode.CNStatus.IGNORE)) {
+            ignoreCount    += (allCounts.get(ConfigTreeNode.CNStatus.IGNORE).longValue());
+        }
+        if (allCounts.containsKey(ConfigTreeNode.CNStatus.CANDIDATE)) {
+            candidateCount += (allCounts.get(ConfigTreeNode.CNStatus.CANDIDATE).longValue());
+        }
+        if (allCounts.containsKey(ConfigTreeNode.CNStatus.SINGLE)) {
+            singleCount    += (allCounts.get(ConfigTreeNode.CNStatus.SINGLE).longValue());
+        }
+        if (allCounts.containsKey(ConfigTreeNode.CNStatus.DOUBLE)) {
+            doubleCount    += (allCounts.get(ConfigTreeNode.CNStatus.DOUBLE).longValue());
+        }
+        if (allCounts.containsKey(ConfigTreeNode.CNStatus.NULL)) {
+            nullCount      += (allCounts.get(ConfigTreeNode.CNStatus.NULL).longValue());
+        }
+        if (allCounts.containsKey(ConfigTreeNode.CNStatus.TRANGE)) {
+            miscCount      += (allCounts.get(ConfigTreeNode.CNStatus.TRANGE).longValue());
+        }
+        if (allCounts.containsKey(ConfigTreeNode.CNStatus.CINST)) {
+            miscCount      += (allCounts.get(ConfigTreeNode.CNStatus.CINST).longValue());
+        }
+        if (allCounts.containsKey(ConfigTreeNode.CNStatus.DCANCEL)) {
+            miscCount      += (allCounts.get(ConfigTreeNode.CNStatus.DCANCEL).longValue());
+        }
+        if (allCounts.containsKey(ConfigTreeNode.CNStatus.DNAN)) {
+            miscCount      += (allCounts.get(ConfigTreeNode.CNStatus.DNAN).longValue());
+        }
+        noneKeyLabel.setText     (" NONE ("      + noneCount      + ") ");
+        ignoreKeyLabel.setText   (" IGNORE ("    + ignoreCount    + ") ");
         candidateKeyLabel.setText(" CANDIDATE (" + candidateCount + ") ");
-        singleKeyLabel.setText(" SINGLE (" + singleCount + ") ");
-        doubleKeyLabel.setText(" DOUBLE (" + doubleCount + ") ");
-        nullKeyLabel.setText(" NULL (" + nullCount + ") ");
-        miscKeyLabel.setText(" MISC (" + miscCount + ") ");
+        singleKeyLabel.setText   (" SINGLE ("    + singleCount    + ") ");
+        doubleKeyLabel.setText   (" DOUBLE ("    + doubleCount    + ") ");
+        nullKeyLabel.setText     (" NULL ("      + nullCount      + ") ");
+        miscKeyLabel.setText     (" MISC ("      + miscCount      + ") ");
     }
 
     public void search(boolean findNext) {
@@ -879,166 +773,86 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public void batchConfig(ConfigTreeNode.CNStatus orig, ConfigTreeNode.CNStatus dest) {
         if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
         ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
-        ConfigTreeNode curModNode = null;
-        ConfigTreeNode curFuncNode = null;
-        ConfigTreeNode curBlockNode = null;
-        ConfigTreeNode curNode = null;
-        Enumeration<ConfigTreeNode> modules = appNode.children();
-        while (modules.hasMoreElements()) {
-            curModNode = modules.nextElement();
-            Enumeration<ConfigTreeNode> funcs = curModNode.children();
-            while (funcs.hasMoreElements()) {
-                curFuncNode = funcs.nextElement();
-                Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
-                while (blocks.hasMoreElements()) {
-                    curBlockNode = blocks.nextElement();
-                    Enumeration<ConfigTreeNode> insns = curBlockNode.children();
-                    while (insns.hasMoreElements()) {
-                        curNode = insns.nextElement();
-                        if (curNode.status == orig) {
-                            curNode.status = dest;
-                        }
-                    }
-                }
-            }
-        }
+        appNode.batchConfig(orig, dest);
         mainTree.repaint();
         refreshKeyLabels();
     }
 
     public void removeNonExecutedEntries() {
         if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
-
-        Set<ConfigTreeNode> nodesToRemove = new HashSet<ConfigTreeNode>();
-
         ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
-        ConfigTreeNode curModNode = null;
-        ConfigTreeNode curFuncNode = null;
-        ConfigTreeNode curBlockNode = null;
-        ConfigTreeNode curNode = null;
-        Enumeration<ConfigTreeNode> modules = appNode.children();
-        while (modules.hasMoreElements()) {
-            curModNode = modules.nextElement();
-            if (curModNode.totalExecCount == 0) {
-                nodesToRemove.add(curModNode);
-            } else {
-                Enumeration<ConfigTreeNode> funcs = curModNode.children();
-                while (funcs.hasMoreElements()) {
-                    curFuncNode = funcs.nextElement();
-                    if (curFuncNode.totalExecCount == 0) {
-                        nodesToRemove.add(curFuncNode);
-                    } else {
-                        Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
-                        while (blocks.hasMoreElements()) {
-                            curBlockNode = blocks.nextElement();
-                            if (curBlockNode.totalExecCount == 0) {
-                                nodesToRemove.add(curBlockNode);
-                            } else {
-                                Enumeration<ConfigTreeNode> insns = curBlockNode.children();
-                                while (insns.hasMoreElements()) {
-                                    curNode = insns.nextElement();
-                                    if (curNode.totalExecCount == 0) {
-                                        nodesToRemove.add(curNode);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        appNode.removeChildren(new ConfigTreeIterator() {
+            public boolean test(ConfigTreeNode node) {
+                return (node.totalExecCount == 0);
             }
-        }
-
-        for (ConfigTreeNode node : nodesToRemove) {
-            TreeNode parent = node.getParent();
-            if (parent instanceof ConfigTreeNode) {
-                ((ConfigTreeNode)parent).remove(node);
-            }
-        }
-
+        });
         refreshTree(appNode);
         recalculateExecutionCounts(null);
     }
 
     public void removeMovementEntries() {
         if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
-
-        Set<ConfigTreeNode> nodesToRemove = new HashSet<ConfigTreeNode>();
-
         ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
-        ConfigTreeNode curModNode = null;
-        ConfigTreeNode curFuncNode = null;
-        ConfigTreeNode curBlockNode = null;
-        ConfigTreeNode curNode = null;
-        Enumeration<ConfigTreeNode> modules = appNode.children();
-        while (modules.hasMoreElements()) {
-            curModNode = modules.nextElement();
-            Enumeration<ConfigTreeNode> funcs = curModNode.children();
-            while (funcs.hasMoreElements()) {
-                curFuncNode = funcs.nextElement();
-                Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
-                while (blocks.hasMoreElements()) {
-                    curBlockNode = blocks.nextElement();
-                    Enumeration<ConfigTreeNode> insns = curBlockNode.children();
-                    while (insns.hasMoreElements()) {
-                        curNode = insns.nextElement();
-                        if (curNode.label.contains("mov")) {
-                            nodesToRemove.add(curNode);
-                        }
-                    }
+        appNode.removeChildren(new ConfigTreeIterator() {
+            public boolean test(ConfigTreeNode node) {
+                boolean rm = false;
+                switch (node.type) {
+                    case MODULE:
+                    case FUNCTION:
+                    case BASIC_BLOCK:
+                        rm = (node.getChildCount() == 0);
+                        break;
+                    case INSTRUCTION:
+                        rm = node.label.contains("mov");
+                        break;
                 }
+                return rm;
             }
-        }
-
-        for (ConfigTreeNode node : nodesToRemove) {
-            TreeNode parent = node.getParent();
-            if (parent instanceof ConfigTreeNode) {
-                ((ConfigTreeNode)parent).remove(node);
-            }
-        }
-
+        });
         refreshTree(appNode);
         recalculateExecutionCounts(null);
     }
 
     public void removeNonCandidateEntries() {
         if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
-
-        Set<ConfigTreeNode> nodesToRemove = new HashSet<ConfigTreeNode>();
-
         ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
-        ConfigTreeNode curModNode = null;
-        ConfigTreeNode curFuncNode = null;
-        ConfigTreeNode curBlockNode = null;
-        ConfigTreeNode curNode = null;
-        Enumeration<ConfigTreeNode> modules = appNode.children();
-        while (modules.hasMoreElements()) {
-            curModNode = modules.nextElement();
-            Enumeration<ConfigTreeNode> funcs = curModNode.children();
-            while (funcs.hasMoreElements()) {
-                curFuncNode = funcs.nextElement();
-                Enumeration<ConfigTreeNode> blocks = curFuncNode.children();
-                while (blocks.hasMoreElements()) {
-                    curBlockNode = blocks.nextElement();
-                    Enumeration<ConfigTreeNode> insns = curBlockNode.children();
-                    while (insns.hasMoreElements()) {
-                        curNode = insns.nextElement();
-                        if (!curNode.candidate) {
-                            nodesToRemove.add(curNode);
-                        }
-                    }
+        appNode.removeChildren(new ConfigTreeIterator() {
+            public boolean test(ConfigTreeNode node) {
+                boolean rm = false;
+                switch (node.type) {
+                    case MODULE:
+                    case FUNCTION:
+                    case BASIC_BLOCK:
+                        rm = (node.getChildCount() == 0);
+                        break;
+                    case INSTRUCTION:
+                        rm = !node.candidate;
+                        break;
                 }
+                return rm;
             }
-        }
-
-        for (ConfigTreeNode node : nodesToRemove) {
-            TreeNode parent = node.getParent();
-            if (parent instanceof ConfigTreeNode) {
-                ((ConfigTreeNode)parent).remove(node);
-            }
-        }
-
+        });
         refreshTree(appNode);
         recalculateExecutionCounts(null);
+    }
+
+    public void removeEmptyNodes() {
+        if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
+        ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+        appNode.removeChildren(new ConfigTreeIterator() {
+            public boolean test(ConfigTreeNode node) {
+                boolean rm = false;
+                switch (node.type) {
+                    case MODULE:
+                    case FUNCTION:
+                    case BASIC_BLOCK:
+                        rm = (node.getChildCount() == 0);
+                        break;
+                }
+                return rm;
+            }
+        });
+        refreshTree(appNode);
     }
 
     public void expandAllRows() {

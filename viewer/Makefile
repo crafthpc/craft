@@ -1,6 +1,7 @@
 FPCONF_CLASSES=ConfigEditorApp.class \
     ConfigFilter.class \
 	ConfigTreeNode.class \
+	ConfigTreeIterator.class \
 	ConfigTreeListener.class \
 	ConfigTreeRenderer.class \
 	OpenConfigAction.class \
@@ -12,7 +13,8 @@ FPCONF_CLASSES=ConfigEditorApp.class \
 	ExpandRowsAction.class \
 	TestedResult.class \
 	TestedResultFile.class \
-	SourceCodeViewer.class
+	SourceCodeViewer.class \
+	SourceFileInfo.class
 
 FPVIEW_CLASSES=CancellationReport.class \
 	ColumnResizer.class \
