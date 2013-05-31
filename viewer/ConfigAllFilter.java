@@ -1,12 +1,12 @@
 /**
  * ConfigFilter
  *
- * only allow config files
+ * only allow config-related files: configs, logs, etc.
  */
 
 import java.io.*;
 
-public class ConfigFilter extends javax.swing.filechooser.FileFilter {
+public class ConfigAllFilter extends javax.swing.filechooser.FileFilter {
 
     public boolean accept(File f) {
         if (f.isDirectory()) {
@@ -14,7 +14,9 @@ public class ConfigFilter extends javax.swing.filechooser.FileFilter {
         }
         String ext = Util.getExtension(f);
         if (ext != null) {
-            if (ext.equals("cfg")) {
+            if (ext.equals("cfg") ||
+                ext.equals("log") ||
+                ext.equals("tested")) {
                 return true;
             }
         }
@@ -22,7 +24,7 @@ public class ConfigFilter extends javax.swing.filechooser.FileFilter {
     }
 
     public String getDescription() {
-        return "Configuration files (*.cfg)";
+        return "Config-related files (*.cfg;*.log;*.tested)";
     }
 }
 

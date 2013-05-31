@@ -1,10 +1,17 @@
+# Makefile for CRAFT viewer
+#
+# This should probably be turned into an Ant project at some point.
+#
+
 FPCONF_CLASSES=ConfigEditorApp.class \
     ConfigFilter.class \
+    ConfigAllFilter.class \
 	ConfigTreeNode.class \
 	ConfigTreeIterator.class \
 	ConfigTreeListener.class \
 	ConfigTreeRenderer.class \
 	OpenConfigAction.class \
+	MergeConfigAction.class \
 	SaveConfigAction.class \
 	BatchConfigAction.class \
 	RemoveMovementAction.class \
@@ -74,7 +81,7 @@ conf: $(FPCONF_CLASSES)
 	javac *.java
 
 clean:
-	rm -f $(FPVIEW_CLASSES) $(FPCONF_CLASSES)
+	rm -f *.class
 
 .PHONY: build view conf clean
 

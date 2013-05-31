@@ -56,6 +56,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
     // main interface elements
     public JFileChooser fileChooser;
+    public JFileChooser fileAllChooser;
     public JPanel mainPanel;
     public JPanel topPanel;
     public JLabel filenameLabel;
@@ -99,7 +100,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
         fileChooser = new JFileChooser();
         fileChooser.setCurrentDirectory(new File("."));
-        fileChooser.addChoosableFileFilter(new ConfigFilter());
+        fileChooser.setFileFilter(new ConfigFilter());
+        fileAllChooser = new JFileChooser();
+        fileAllChooser.setCurrentDirectory(new File("."));
+        fileAllChooser.setFileFilter(new ConfigAllFilter());
 
         Util.initSearchDirs();
 
@@ -113,15 +117,16 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public void buildMenuBar() {
         JMenu logMenu = new JMenu("Actions");
         logMenu.setMnemonic(KeyEvent.VK_A);
-        logMenu.add(new OpenConfigAction(this, "Open", null, new Integer(KeyEvent.VK_O)));
-        logMenu.add(new SaveConfigAction(this, "Save", null, new Integer(KeyEvent.VK_S)));
-
+        logMenu.add(new OpenConfigAction (this, "Open",  null, new Integer(KeyEvent.VK_O)));
+        logMenu.add(new MergeConfigAction(this, "Merge", null, new Integer(KeyEvent.VK_R)));
+        logMenu.add(new SaveConfigAction (this, "Save",  null, new Integer(KeyEvent.VK_S)));
         logMenu.add(new JSeparator());
         logMenu.add(new BatchConfigAction(this, "Batch Config", null, new Integer(KeyEvent.VK_B)));
+        logMenu.add(new JSeparator());
         logMenu.add(new RemoveNonExecutedAction (this, "Remove Non-executed Entries",  null, new Integer(KeyEvent.VK_N)));
         logMenu.add(new RemoveMovementAction    (this, "Remove Movement Entries",      null, new Integer(KeyEvent.VK_M)));
-        logMenu.add(new RemoveNonCandidateAction(this, "Remove Non-candidate Entries", null, new Integer(KeyEvent.VK_M)));
-        
+        logMenu.add(new RemoveNonCandidateAction(this, "Remove Non-candidate Entries", null, new Integer(KeyEvent.VK_C)));
+
         JMenu viewMenu = new JMenu("View");
         viewMenu.setMnemonic(KeyEvent.VK_V);
         viewMenu.add(new ExpandRowsAction(this, "Expand All",     null, null, "all"));
@@ -556,6 +561,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     }
                 } else {
                     // TODO: do something with misc config entries?
+                    // we don't want to just add them in because they might
+                    // conflict with existing entries
                     //mainConfigMiscEntries.add(curLine);
                 }
             }
@@ -572,11 +579,25 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
 
         setTitle(DEFAULT_TITLE + " - (multiple files)");
-        filenameLabel.setText("(multiple files)");
+        filenameLabel.setText("(multiple files)");          // saveConfigFile() depends on this string
+        mainTree.repaint();
+        refreshKeyLabels();
     }
     
     public void saveConfigFile() {
         if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
+
+        // make sure the user is aware if they are saving multiple merged files
+        // to a single file
+        if (filenameLabel.getText().equals("(multiple files)")) {
+            int rval = JOptionPane.showConfirmDialog(this,
+                    "Multiple files are open, but this will save the merged contents to \""
+                    + mainConfigFile.getName() + "\". Overwrite it?",
+                    DEFAULT_TITLE, JOptionPane.YES_NO_OPTION);
+            if (rval == JOptionPane.NO_OPTION) {
+                return;
+            }
+        }
 
         try {
             PrintWriter wrt = new PrintWriter(mainConfigFile);
@@ -653,6 +674,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             JOptionPane.showMessageDialog(null, "Error: " + ex.getMessage());
             ex.printStackTrace();
         }
+        mainTree.repaint();
+        refreshKeyLabels();
     }
 
     public void mergeTestedFile(File file) {

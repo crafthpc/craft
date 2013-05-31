@@ -250,9 +250,12 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         //System.out.println("Merging: " + Status2Str(status) + "  " + label);
         //System.out.println("   with: " + Status2Str(node.status) + "  " + node.label);
 
-        if (status == CNStatus.CANDIDATE || node.status == CNStatus.CANDIDATE) {
-            //System.out.println("Marking " + label + " as candidate!");
-            candidate = true;  // don't overwrite other status with "candidate"
+        if (candidate && node.status != CNStatus.CANDIDATE) {
+            // set new status (remains tagged as candidate)
+            status = node.status;
+        } else if (node.status == CNStatus.CANDIDATE) {
+            // tag as candidate
+            candidate = true;
         } else if (status == CNStatus.IGNORE || node.status == CNStatus.IGNORE) {
             status = CNStatus.IGNORE;
         } else if (status == CNStatus.DOUBLE || node.status == CNStatus.DOUBLE) {
