@@ -1,80 +1,21 @@
-FPCONF_CLASSES=ConfigEditorApp.class \
-    ConfigFilter.class \
-	ConfigTreeNode.class \
-	ConfigTreeIterator.class \
-	ConfigTreeListener.class \
-	ConfigTreeRenderer.class \
-	OpenConfigAction.class \
-	SaveConfigAction.class \
-	BatchConfigAction.class \
-	RemoveMovementAction.class \
-	RemoveNonExecutedAction.class \
-	RemoveNonCandidateAction.class \
-	ExpandRowsAction.class \
-	TestedResult.class \
-	TestedResultFile.class \
-	SourceCodeViewer.class \
-	SourceFileInfo.class
+# Makefile for CRAFT viewer
+#
+# Included in case the user doesn't have Ant installed.
+# The Ant project is the preferred method of building this project.
+#
 
-FPVIEW_CLASSES=CancellationReport.class \
-	ColumnResizer.class \
-	InstructionComparator.class \
-	InstructionHeaderRenderer.class \
-	InstructionListener.class \
-	InstructionModel.class \
-	InstructionFuncReport.class \
-	InstructionTypeReport.class \
-	InstructionExecuteFuncReport.class \
-	InstructionExecuteTypeReport.class \
-	InstructionAssemblyReport.class \
-	LFrame.class \
-	LineNumberedBorder.class \
-	LInstruction.class \
-	LLogFile.class \
-	LMessage.class \
-	LogFileHandler.class \
-	LogFilter.class \
-	LShadowValue.class \
-	LTrace.class \
-	MatrixCellListener.class \
-	MatrixModeListener.class \
-	MergeLogAction.class \
-	MessageComparator.class \
-	MessageFilterListener.class \
-	MessageFilterModel.class \
-	MessageHeaderRenderer.class \
-	MessageListener.class \
-	MessageModel.class \
-	OpenLogAction.class \
-	ProgFilter.class \
-	Report.class \
-	ReportAction.class \
-	ResetAction.class \
-	RunProgramAction.class \
-	ShadowValueComparator.class \
-	ShadowValueModel.class \
-	SummaryReport.class \
-	TableHeaderListener.class \
-	TabListener.class \
-	TraceFrameListener.class \
-	Util.class \
-	VariableHeaderRenderer.class \
-	VariableListener.class \
-	ViewerApp.class
-
-build: $(FPVIEW_CLASSES) $(FPCONF_CLASSES)
-
-view: $(FPVIEW_CLASSES)
-	java ViewerApp
-
-conf: $(FPCONF_CLASSES)
-	java ConfigEditorApp
-
-%.class : %.java
-	javac *.java
+build:
+	mkdir -p classes
+	javac -d classes src/*.java
+	echo "Main-Class: ViewerApp" >fpview.mf
+	echo "Main-Class: ConfigEditorApp" >fpconfed.mf
+	cd classes && jar cfm ../fpview.jar ../fpview.mf *.class
+	cd classes && jar cfm ../fpconfed.jar ../fpconfed.mf *.class
+	rm -f fpview.mf fpconfed.mf
 
 clean:
-	rm -f $(FPVIEW_CLASSES) $(FPCONF_CLASSES)
+	@rm -rf classes
+	@rm -f fpview.jar fpconfed.jar
 
-.PHONY: build view conf clean
+.PHONY: build clean
 

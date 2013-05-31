@@ -11,7 +11,6 @@ import javax.swing.*;
 
 public class InstructionExecuteFuncReport implements Report {
 
-    private Map<String, Integer> funcCounts;
     private String resultText;
 
     public void runReport(LLogFile log) {
@@ -44,8 +43,9 @@ public class InstructionExecuteFuncReport implements Report {
             }
         }
         StringBuffer buffer = new StringBuffer();
-        for (String filename : instrumentedFuncCounts.keySet()) {
-            Map<String, BigInteger> filenameCounts = instrumentedFuncCounts.get(filename);
+        for (Map.Entry<String, Map<String, BigInteger>> ientry : instrumentedFuncCounts.entrySet()) {
+            String filename = ientry.getKey();
+            Map<String, BigInteger> filenameCounts = ientry.getValue();
             buffer.append("\nExecuted from ");
             buffer.append(filename);
             buffer.append(":  [" + totalModuleCounts.get(filename).toString() + " total]\n");

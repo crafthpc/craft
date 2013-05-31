@@ -4,9 +4,10 @@
  * handles comparison of shadow values (for sorting)
  */
 
+import java.io.*;
 import java.util.*;
 
-public class ShadowValueComparator implements Comparator<LShadowValue> {
+public class ShadowValueComparator implements Comparator<LShadowValue>, Serializable {
 
     private int column;
     private boolean ascending;
@@ -111,10 +112,6 @@ public class ShadowValueComparator implements Comparator<LShadowValue> {
         if (!ascending)
             order = -order;
         return order;
-    }
-
-    public boolean equals(Object o) {
-        return false;
     }
 
 }

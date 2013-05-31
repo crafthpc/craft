@@ -3,8 +3,8 @@
 BACKGROUND="y"
 
 if [ "$BACKGROUND" = "y" ]; then
-    java -Xmx1024M -cp $DYNINST_ROOT/craft/viewer ConfigEditorApp $@ &
+    java -Xmx1024M -jar $DYNINST_ROOT/craft/viewer/fpconfed.jar $@ &
 else
-    java -Xmx1024M -cp $DYNINST_ROOT/craft/viewer ConfigEditorApp $@
+    java -Xmx1024M -jar $DYNINST_ROOT/craft/viewer/fpconfed.jar $@
 fi
 

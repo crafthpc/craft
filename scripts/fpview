@@ -15,8 +15,8 @@ for p in $@; do
 done
 
 if [ "$BACKGROUND" = "y" ]; then
-    java -Xmx1024M -cp $DYNINST_ROOT/craft/viewer ViewerApp $@ &
+    java -Xmx1024M -jar $DYNINST_ROOT/craft/viewer/fpview.jar $@ &
 else
-    java -Xmx1024M -cp $DYNINST_ROOT/craft/viewer ViewerApp $@
+    java -Xmx1024M -jar $DYNINST_ROOT/craft/viewer/fpview.jar $@
 fi
 

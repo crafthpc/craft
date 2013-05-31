@@ -11,7 +11,6 @@ import javax.swing.*;
 
 public class InstructionTypeReport implements Report {
 
-    private Map<String, Integer> typeCounts;
     private String resultText;
 
     public void runReport(LLogFile log) {
@@ -22,7 +21,7 @@ public class InstructionTypeReport implements Report {
         // mnemonic => count
         Map<String, BigInteger> ignoredTypeCounts = new TreeMap<String, BigInteger>();
         BigInteger totalIgnored = BigInteger.ZERO;
-        String instPatternStr = "^Inserted ([\\w ]*) instrumentation.*";
+        String instPatternStr = "^Inserted ([\\w ]*) ([\\w-]*)instrumentation.*";
         Pattern instPattern = Pattern.compile(instPatternStr);
         resultText = "";
         if (log == null || log.messages == null) return;
@@ -61,8 +60,9 @@ public class InstructionTypeReport implements Report {
             }
         }
         StringBuffer buffer = new StringBuffer();
-        for (String itype : instrumentedTypeCounts.keySet()) {
-            Map<String, BigInteger> itypeCounts = instrumentedTypeCounts.get(itype);
+        for (Map.Entry<String, Map<String, BigInteger>> ientry : instrumentedTypeCounts.entrySet()) {
+            String itype = ientry.getKey();
+            Map<String, BigInteger> itypeCounts = ientry.getValue();
             buffer.append("\nInstrumented (");
             buffer.append(itype);
             buffer.append("):  [" + totalInstrumentedCounts.get(itype).toString() + " total]\n");

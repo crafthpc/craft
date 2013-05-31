@@ -11,7 +11,6 @@ import javax.swing.*;
 
 public class InstructionFuncReport implements Report {
 
-    private Map<String, Integer> funcCounts;
     private String resultText;
 
     public void runReport(LLogFile log) {
@@ -19,7 +18,7 @@ public class InstructionFuncReport implements Report {
         Map<String, Map<String, BigInteger>> instrumentedFuncCounts = new TreeMap<String, Map<String, BigInteger>>();
         // filename => total_count
         Map<String, BigInteger> totalModuleCounts = new TreeMap<String, BigInteger>();
-        String instPatternStr = "^Inserted ([\\w ]*) instrumentation.*";
+        String instPatternStr = "^Inserted ([\\w ]*) ([\\w-]*)instrumentation.*";
         resultText = "";
         if (log == null || log.messages == null) return;
         for (LMessage msg : log.messages) {
@@ -44,8 +43,9 @@ public class InstructionFuncReport implements Report {
             }
         }
         StringBuffer buffer = new StringBuffer();
-        for (String filename : instrumentedFuncCounts.keySet()) {
-            Map<String, BigInteger> filenameCounts = instrumentedFuncCounts.get(filename);
+        for (Map.Entry<String, Map<String, BigInteger>> ientry : instrumentedFuncCounts.entrySet()) {
+            String filename = ientry.getKey();
+            Map<String, BigInteger> filenameCounts = ientry.getValue();
             buffer.append("\nInstrumented ");
             buffer.append(filename);
             buffer.append(":  [" + totalModuleCounts.get(filename).toString() + " total]\n");

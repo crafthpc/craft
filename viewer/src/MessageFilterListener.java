@@ -10,11 +10,9 @@ import javax.swing.*;
 public class MessageFilterListener implements ActionListener {
 
     private JTable messageTable;
-    private JLabel messageLabel;
 
-    public MessageFilterListener(JTable table, JLabel label) {
+    public MessageFilterListener(JTable table) {
         messageTable = table;
-        messageLabel = label;
     }
 
     public void actionPerformed(ActionEvent e) {
@@ -34,7 +32,6 @@ public class MessageFilterListener implements ActionListener {
             model.setTypeFilter(type);
             model.refreshData();
             messageTable.revalidate();
-            //messageLabel.setText(model.getSize() + " message(s):");
         }
     }
 

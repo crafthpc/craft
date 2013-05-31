@@ -50,7 +50,7 @@ public class ConfigTreeListener extends MouseAdapter implements TreeExpansionLis
         if (obj instanceof ConfigTreeNode) {
             ConfigTreeNode node = (ConfigTreeNode)obj;
             if (node.type == ConfigTreeNode.CNType.FUNCTION) {
-                Enumeration<ConfigTreeNode> children = node.children();
+                Enumeration children = node.children();
                 while (children.hasMoreElements()) {
                     mainTree.expandPath(selPath.pathByAddingChild(children.nextElement()));
                 }

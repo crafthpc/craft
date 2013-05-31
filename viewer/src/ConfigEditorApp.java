@@ -47,7 +47,9 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public static final Color DEFAULT_COLOR_DCANCEL   = new Color(224, 162, 232);
     public static final Color DEFAULT_COLOR_DNAN      = new Color(224, 162, 232);
     public static final Color DEFAULT_COLOR_BORDER    = new Color(  0,   0, 225);
-    public static String fpconfOptions = "";
+
+    // app-wide variables
+    private static String fpconfOptions = "";
 
     // main data structures
     public File mainConfigFile;
@@ -56,6 +58,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
     // main interface elements
     public JFileChooser fileChooser;
+    public JFileChooser fileAllChooser;
     public JPanel mainPanel;
     public JPanel topPanel;
     public JLabel filenameLabel;
@@ -99,7 +102,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
         fileChooser = new JFileChooser();
         fileChooser.setCurrentDirectory(new File("."));
-        fileChooser.addChoosableFileFilter(new ConfigFilter());
+        fileChooser.setFileFilter(new ConfigFilter());
+        fileAllChooser = new JFileChooser();
+        fileAllChooser.setCurrentDirectory(new File("."));
+        fileAllChooser.setFileFilter(new ConfigAllFilter());
 
         Util.initSearchDirs();
 
@@ -111,26 +117,22 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     // {{{ initialize main interface
 
     public void buildMenuBar() {
-        JMenu logMenu = new JMenu("Actions");
-        logMenu.setMnemonic(KeyEvent.VK_A);
-        logMenu.add(new OpenConfigAction(this, "Open", null, new Integer(KeyEvent.VK_O)));
-        logMenu.add(new SaveConfigAction(this, "Save", null, new Integer(KeyEvent.VK_S)));
+        JMenu fileMenu = new JMenu("File");
+        fileMenu.setMnemonic(KeyEvent.VK_F);
+        fileMenu.add(new OpenConfigAction (this, "Open",  null, Integer.valueOf(KeyEvent.VK_O)));
+        fileMenu.add(new MergeConfigAction(this, "Merge", null, Integer.valueOf(KeyEvent.VK_R)));
+        fileMenu.add(new SaveConfigAction (this, "Save",  null, Integer.valueOf(KeyEvent.VK_S)));
 
-        logMenu.add(new JSeparator());
-        logMenu.add(new BatchConfigAction(this, "Batch Config", null, new Integer(KeyEvent.VK_B)));
-        logMenu.add(new RemoveNonExecutedAction (this, "Remove Non-executed Entries",  null, new Integer(KeyEvent.VK_N)));
-        logMenu.add(new RemoveMovementAction    (this, "Remove Movement Entries",      null, new Integer(KeyEvent.VK_M)));
-        logMenu.add(new RemoveNonCandidateAction(this, "Remove Non-candidate Entries", null, new Integer(KeyEvent.VK_M)));
-        
+        JMenu actionMenu = new JMenu("Actions");
+        actionMenu.setMnemonic(KeyEvent.VK_A);
+        actionMenu.add(new BatchConfigAction(this, "Batch Config", null, Integer.valueOf(KeyEvent.VK_B)));
+        actionMenu.add(new JSeparator());
+        actionMenu.add(new RemoveNonExecutedAction (this, "Remove Non-executed Entries",  null, Integer.valueOf(KeyEvent.VK_N)));
+        actionMenu.add(new RemoveMovementAction    (this, "Remove Movement Entries",      null, Integer.valueOf(KeyEvent.VK_M)));
+        actionMenu.add(new RemoveNonCandidateAction(this, "Remove Non-candidate Entries", null, Integer.valueOf(KeyEvent.VK_C)));
+
         JMenu viewMenu = new JMenu("View");
         viewMenu.setMnemonic(KeyEvent.VK_V);
-        viewMenu.add(new ExpandRowsAction(this, "Expand All",     null, null, "all"));
-        viewMenu.add(new ExpandRowsAction(this, "Collapse All",   null, null, "none"));
-        viewMenu.add(new ExpandRowsAction(this, "Expand Singles", null, null, "single"));
-        viewMenu.add(new ExpandRowsAction(this, "Expand Doubles", null, null, "double"));
-        viewMenu.add(new ExpandRowsAction(this, "Expand Ignore",  null, null, "ignore"));
-        viewMenu.add(new ExpandRowsAction(this, "Expand Tested",  null, null, "tested"));
-        viewMenu.add(new JSeparator());
         showEffectiveMenu = new JCheckBoxMenuItem("View Effective Status");
         showEffectiveMenu.addActionListener(this);
         viewMenu.add(showEffectiveMenu);
@@ -140,10 +142,19 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         showErrorMenu = new JCheckBoxMenuItem("View Reported Error");
         showErrorMenu.addActionListener(this);
         viewMenu.add(showErrorMenu);
+        viewMenu.add(new JSeparator());
+        viewMenu.add(new ExpandRowsAction(this, "Expand All",     null, null, "all"));
+        viewMenu.add(new ExpandRowsAction(this, "Collapse All",   null, null, "none"));
+        viewMenu.add(new ExpandRowsAction(this, "Expand Singles", null, null, "single"));
+        viewMenu.add(new ExpandRowsAction(this, "Expand Doubles", null, null, "double"));
+        viewMenu.add(new ExpandRowsAction(this, "Expand Ignore",  null, null, "ignore"));
+        viewMenu.add(new ExpandRowsAction(this, "Expand Tested",  null, null, "tested"));
+
 
         JMenuBar menuBar = new JMenuBar();
-        menuBar.add(logMenu);
+        menuBar.add(fileMenu);
         menuBar.add(viewMenu);
+        menuBar.add(actionMenu);
         setJMenuBar(menuBar);
     }
 
@@ -154,7 +165,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         //topPanel.add(filenameLabel);  // kind of redundant; it's in the window title
         topPanel.add(new JLabel("   "));
         topPanel.add(new JLabel("Search:"));
-        searchBox = new JTextField(10);
+        searchBox = new JTextField(20);
         searchBox.addActionListener(this);
         searchBox.getDocument().addDocumentListener(this);
         topPanel.add(searchBox);
@@ -319,7 +330,6 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                 }
 
                 // run fpconf to generate initial configuration
-                cfgFile.createNewFile();
                 Process proc = Runtime.getRuntime().exec(cmd);
                 BufferedReader rdr = new BufferedReader(
                         new InputStreamReader(proc.getInputStream()));
@@ -487,10 +497,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
                     } else if (curNode.type == ConfigTreeNode.CNType.MODULE) {
                         curModNode = curNode;
-                        Enumeration<ConfigTreeNode> origModules = origAppNode.children();
+                        Enumeration origModules = origAppNode.children();
                         boolean found = false;
                         while (origModules.hasMoreElements()) {
-                            ConfigTreeNode mod = origModules.nextElement();
+                            ConfigTreeNode mod = (ConfigTreeNode)origModules.nextElement();
                             if (mod.label.equals(curModNode.label)) {
                                 mod.merge(curModNode);
                                 origModNode = mod;
@@ -505,10 +515,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     } else if (curNode.type == ConfigTreeNode.CNType.FUNCTION &&
                                curModNode != null && origModNode != null) {
                         curFuncNode = curNode;
-                        Enumeration<ConfigTreeNode> origFuncs = origModNode.children();
+                        Enumeration origFuncs = origModNode.children();
                         boolean found = false;
                         while (origFuncs.hasMoreElements()) {
-                            ConfigTreeNode func = origFuncs.nextElement();
+                            ConfigTreeNode func = (ConfigTreeNode)origFuncs.nextElement();
                             if (func.label.equals(curFuncNode.label)) {
                                 func.merge(curFuncNode);
                                 origFuncNode = func;
@@ -523,10 +533,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     } else if (curNode.type == ConfigTreeNode.CNType.BASIC_BLOCK &&
                                curFuncNode != null && origFuncNode != null) {
                         curBlockNode = curNode;
-                        Enumeration<ConfigTreeNode> origBlocks = origFuncNode.children();
+                        Enumeration origBlocks = origFuncNode.children();
                         boolean found = false;
                         while (origBlocks.hasMoreElements()) {
-                            ConfigTreeNode block = origBlocks.nextElement();
+                            ConfigTreeNode block = (ConfigTreeNode)origBlocks.nextElement();
                             if (block.label.equals(curBlockNode.label)) {
                                 block.merge(curBlockNode);
                                 origBlockNode = block;
@@ -540,10 +550,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
                     } else if (curNode.type == ConfigTreeNode.CNType.INSTRUCTION &&
                                curBlockNode != null && origBlockNode != null) {
-                        Enumeration<ConfigTreeNode> origInsns = origBlockNode.children();
+                        Enumeration origInsns = origBlockNode.children();
                         boolean found = false;
                         while (origInsns.hasMoreElements()) {
-                            ConfigTreeNode insn = origInsns.nextElement();
+                            ConfigTreeNode insn = (ConfigTreeNode)origInsns.nextElement();
                             if (insn.label.equals(curNode.label)) {
                                 insn.merge(curNode);
                                 found = true;
@@ -556,6 +566,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     }
                 } else {
                     // TODO: do something with misc config entries?
+                    // we don't want to just add them in because they might
+                    // conflict with existing entries
                     //mainConfigMiscEntries.add(curLine);
                 }
             }
@@ -572,11 +584,25 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
 
         setTitle(DEFAULT_TITLE + " - (multiple files)");
-        filenameLabel.setText("(multiple files)");
+        filenameLabel.setText("(multiple files)");          // saveConfigFile() depends on this string
+        mainTree.repaint();
+        refreshKeyLabels();
     }
     
     public void saveConfigFile() {
         if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return;
+
+        // make sure the user is aware if they are saving multiple merged files
+        // to a single file
+        if (filenameLabel.getText().equals("(multiple files)")) {
+            int rval = JOptionPane.showConfirmDialog(this,
+                    "Multiple files are open, but this will save the merged contents to \""
+                    + mainConfigFile.getName() + "\". Overwrite it?",
+                    DEFAULT_TITLE, JOptionPane.YES_NO_OPTION);
+            if (rval == JOptionPane.NO_OPTION) {
+                return;
+            }
+        }
 
         try {
             PrintWriter wrt = new PrintWriter(mainConfigFile);
@@ -653,6 +679,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             JOptionPane.showMessageDialog(null, "Error: " + ex.getMessage());
             ex.printStackTrace();
         }
+        mainTree.repaint();
+        refreshKeyLabels();
     }
 
     public void mergeTestedFile(File file) {
@@ -805,6 +833,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     case INSTRUCTION:
                         rm = node.label.contains("mov");
                         break;
+                    default:
+                        break;
                 }
                 return rm;
             }
@@ -828,6 +858,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     case INSTRUCTION:
                         rm = !node.candidate;
                         break;
+                    default:
+                        break;
                 }
                 return rm;
             }
@@ -847,6 +879,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     case FUNCTION:
                     case BASIC_BLOCK:
                         rm = (node.getChildCount() == 0);
+                        break;
+                    default:
                         break;
                 }
                 return rm;
@@ -890,9 +924,9 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public boolean shouldExpandRow(TreeNode parent, ConfigTreeNode.CNStatus status) {
         if (parent == null || !(parent instanceof ConfigTreeNode)) return false;
         ConfigTreeNode child = null;
-        Enumeration<ConfigTreeNode> children = parent.children();
+        Enumeration children = parent.children();
         while (children.hasMoreElements()) {
-            child = children.nextElement();
+            child = (ConfigTreeNode)children.nextElement();
             if (child.status == status ||
                     shouldExpandRow(child, status)) {
                 return true;

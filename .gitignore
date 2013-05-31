@@ -3,6 +3,7 @@
 *.depends
 *.bak
 *.swp
+*.jar
 testsuite/arith
 testsuite/calllib
 testsuite/compare

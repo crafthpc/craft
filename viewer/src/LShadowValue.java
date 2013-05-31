@@ -66,8 +66,8 @@ public class LShadowValue extends AbstractTableModel {
             sumRelError += rel;
             avgAbsError = sumAbsError / getSubElementCount();
             avgRelError = sumRelError / getSubElementCount();
-            absError = (new Double(sumAbsError)).toString();
-            relError = (new Double(sumRelError)).toString();
+            absError = (Double.valueOf(sumAbsError)).toString();
+            relError = (Double.valueOf(sumRelError)).toString();
 
             // TODO: fix address comparison (Java doesn't parse "0x"-prepended
             // hex addresses properly)
