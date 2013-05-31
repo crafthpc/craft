@@ -102,7 +102,8 @@ public class ShadowValueModel extends AbstractTableModel {
                         values.add(val);
                     }
                 } catch (Exception ex) {
-                    System.out.println(ex.getMessage() + "\n" + ex.getStackTrace().toString());
+                    System.out.println(ex.getMessage());
+                    ex.printStackTrace();
                 }
             }
         }

@@ -32,6 +32,7 @@ public class ReportAction extends AbstractAction {
         JDialog reportDialog = new JDialog(appInst, reportInst.getTitle(), false);
         reportDialog.getContentPane().add(mainPanel);
         reportDialog.setSize(600, 800);
+        reportDialog.setLocationRelativeTo(null);
         reportDialog.setVisible(true);
     }
 

@@ -33,10 +33,10 @@ public class ViewerApp extends JFrame implements ActionListener, DocumentListene
     // {{{ member variables
 
     // shared interface elements
-    private final String DEFAULT_TITLE = "FPAnalysis Log Viewer";
-    private final Font DEFAULT_FONT_SANS_PLAIN = new Font("SansSerif", Font.PLAIN, 10);
-    private final Font DEFAULT_FONT_SANS_BOLD = new Font("SansSerif", Font.BOLD, 10);
-    private final Font DEFAULT_FONT_MONO_PLAIN = new Font("Monospaced", Font.PLAIN, 12);
+    private static final String DEFAULT_TITLE = "FPAnalysis Log Viewer";
+    private static final Font DEFAULT_FONT_SANS_PLAIN = new Font("SansSerif", Font.PLAIN, 10);
+    private static final Font DEFAULT_FONT_SANS_BOLD = new Font("SansSerif", Font.BOLD, 10);
+    private static final Font DEFAULT_FONT_MONO_PLAIN = new Font("Monospaced", Font.PLAIN, 12);
 
     // main log file data structure
     public LLogFile mainLogFile;
@@ -101,29 +101,34 @@ public class ViewerApp extends JFrame implements ActionListener, DocumentListene
     // {{{ initialize main interface
 
     public void buildMenuBar() {
-        JMenu logMenu = new JMenu("Actions");
-        logMenu.setMnemonic(KeyEvent.VK_A);
-        logMenu.add(new OpenLogAction(this, "Open Log", null, new Integer(KeyEvent.VK_O)));
-        logMenu.add(new MergeLogAction(this, "Merge Log", null, new Integer(KeyEvent.VK_M)));
-        logMenu.add(new ResetAction(this, "Close All", null, new Integer(KeyEvent.VK_C)));
-        logMenu.addSeparator();
-        logMenu.add(new ReportAction(this, new InstructionFuncReport(), 
-                    "Instructions by Function Report", null, null));
-        logMenu.add(new ReportAction(this, new InstructionTypeReport(), 
-                    "Instructions by Type Report", null, null));
-        logMenu.addSeparator();
-        logMenu.add(new ReportAction(this, new CancellationReport(),
-                    "Cancellation Report", null, null));
-        logMenu.add(new ReportAction(this, new InstructionExecuteFuncReport(), 
-                    "Instructions by Function Report (Runtime)", null, null));
-        logMenu.add(new ReportAction(this, new InstructionExecuteTypeReport(), 
-                    "Instructions by Type Report (Runtime)", null, null));
+        JMenu logMenu = new JMenu("File");
+        logMenu.setMnemonic(KeyEvent.VK_F);
+        logMenu.add(new OpenLogAction(this, "Open", null, Integer.valueOf(KeyEvent.VK_O)));
+        logMenu.add(new MergeLogAction(this, "Merge", null, Integer.valueOf(KeyEvent.VK_M)));
+        logMenu.add(new ResetAction(this, "Close All", null, Integer.valueOf(KeyEvent.VK_C)));
 
-        //logMenu.addSeparator();
-        //logMenu.add(new RunProgramAction(this, "Run Program", null, new Integer(KeyEvent.VK_R)));
+        JMenu reportMenu = new JMenu("Reports");
+        reportMenu.setMnemonic(KeyEvent.VK_R);
+        reportMenu.add(new ReportAction(this, new InstructionFuncReport(), 
+                    "Instructions by Function Report (Instrumentation)", null, null));
+        reportMenu.add(new ReportAction(this, new InstructionTypeReport(), 
+                    "Instructions by Type Report (Instrumentation)", null, null));
+        reportMenu.addSeparator();
+        reportMenu.add(new ReportAction(this, new CancellationReport(),
+                    "Cancellation Report (Runtime)", null, null));
+        reportMenu.add(new ReportAction(this, new InstructionExecuteFuncReport(), 
+                    "Instructions by Function Report (Runtime)", null, null));
+        reportMenu.add(new ReportAction(this, new InstructionExecuteTypeReport(), 
+                    "Instructions by Type Report (Runtime)", null, null));
+        reportMenu.add(new ReportAction(this, new InstructionAssemblyReport(), 
+                    "Instructions by Assembly Report (Runtime)", null, null));
+
+        //reportMenu.addSeparator();
+        //reportMenu.add(new RunProgramAction(this, "Run Program", null, Integer.valueOf(KeyEvent.VK_R)));
         
         JMenuBar menuBar = new JMenuBar();
         menuBar.add(logMenu);
+        menuBar.add(reportMenu);
         setJMenuBar(menuBar);
     }
 
@@ -197,7 +202,7 @@ public class ViewerApp extends JFrame implements ActionListener, DocumentListene
         //messageFilter = new JComboBox(messageTypes);
         messageFilter = new JComboBox(new MessageFilterModel());
         messageFilter.setFont(DEFAULT_FONT_SANS_PLAIN);
-        messageFilter.addActionListener(new MessageFilterListener(messageList, messageLabel));
+        messageFilter.addActionListener(new MessageFilterListener(messageList));
         filterPanel.add(filterLabel);
         filterPanel.add(messageFilter);
         JPanel messageTopPanel = new JPanel();
@@ -293,9 +298,9 @@ public class ViewerApp extends JFrame implements ActionListener, DocumentListene
     public JComponent buildVariablesTab() {
 
         // matrix mode selection
-        JComboBox matrixModeBox = new JComboBox(MatrixModeListener.VALID_OPTIONS);
+        JComboBox matrixModeBox = new JComboBox(MatrixModeListener.getValidOptions());
         matrixModeBox.addActionListener(new MatrixModeListener(matrixTable));
-        matrixModeBox.setSelectedItem(MatrixModeListener.mainMode);
+        matrixModeBox.setSelectedItem(MatrixModeListener.getMainMode());
         JPanel matrixModePanel = new JPanel();
         matrixModePanel.setBackground(Color.WHITE);
         matrixModePanel.add(new JLabel("Show in matrix view:"));
@@ -416,14 +421,7 @@ public class ViewerApp extends JFrame implements ActionListener, DocumentListene
                 if (addr != null) {
                     LInstruction insn = mainLogFile.instructionsByAddress.get(addr);
                     if (insn != null) {
-                        ConfigTreeNode.CNStatus status = node.getEffectiveStatus();
-                        switch (status) {
-                            case NONE:      insn.rstatus = "";        break;
-                            case IGNORE:    insn.rstatus = "-";       break;
-                            case SINGLE:    insn.rstatus = "flt";     break;
-                            case DOUBLE:    insn.rstatus = "double";  break;
-                            case CANDIDATE: insn.rstatus = "?";       break;
-                        }
+                        insn.rstatus = ConfigTreeNode.status2Str(node.getEffectiveStatus());
                     }
                 }
             }
@@ -444,7 +442,6 @@ public class ViewerApp extends JFrame implements ActionListener, DocumentListene
             LogFileHandler fileLoader = new LogFileHandler();
             parser.parse(file, fileLoader);
             LLogFile logfile = fileLoader.getLogFile();
-            logfile.file = file;
 
             if (mainLogFile == null) {
 
@@ -577,6 +574,7 @@ public class ViewerApp extends JFrame implements ActionListener, DocumentListene
                         nextLine = reader.readLine();
                         lineCount++;
                     }
+                    reader.close();
                     sourceCode.setText(code.toString());
                     sourceCode.select(selStart, selStop);
                 } catch (Exception ex) {

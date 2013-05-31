@@ -4,9 +4,10 @@
  * handles comparison of instructions (for sorting)
  */
 
+import java.io.*;
 import java.util.*;
 
-public class InstructionComparator implements Comparator<LInstruction> {
+public class InstructionComparator implements Comparator<LInstruction>, Serializable {
 
     private int column;
     private boolean ascending;
@@ -79,10 +80,6 @@ public class InstructionComparator implements Comparator<LInstruction> {
         if (!ascending)
             order = -order;
         return order;
-    }
-
-    public boolean equals(Object o) {
-        return false;
     }
 
 }

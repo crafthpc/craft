@@ -4,9 +4,10 @@
  * handles comparison of messages (for sorting)
  */
 
+import java.io.*;
 import java.util.*;
 
-public class MessageComparator implements Comparator<LMessage> {
+public class MessageComparator implements Comparator<LMessage>, Serializable {
     
     private int column;
     private boolean ascending;
@@ -53,10 +54,6 @@ public class MessageComparator implements Comparator<LMessage> {
         if (!ascending)
             order = -order;
         return order;
-    }
-
-    public boolean equals(Object o) {
-        return false;
     }
 
 }

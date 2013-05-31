@@ -191,6 +191,8 @@ public class SourceCodeViewer extends JFrame
                     nextLine = reader.readLine();
                     lineCount++;
                 }
+                reader.close();
+
                 sourceCode.setText(code.toString());
                 sourceCode.select(selStart, selStop);
             } catch (Exception ex) {
@@ -262,9 +264,9 @@ public class SourceCodeViewer extends JFrame
 
             // it's not an instruction; recurse on its child nodes
             ConfigTreeNode child = null;
-            Enumeration<ConfigTreeNode> children = node.children();
+            Enumeration children = node.children();
             while (children.hasMoreElements()) {
-                child = children.nextElement();
+                child = (ConfigTreeNode)children.nextElement();
                 scanConfigInfo(child);
             }
         }

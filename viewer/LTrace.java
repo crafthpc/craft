@@ -30,11 +30,11 @@ public class LTrace implements ListModel {
     }
 
     public String toString() {
-        String str = "";
+        StringBuffer str = new StringBuffer();
         for (LFrame frame : frames) {
-            str += "\n   " + frame.toString();
+            str.append("\n   " + frame.toString());
         }
-        return str;
+        return str.toString();
     }
 
 }

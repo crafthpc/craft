@@ -130,7 +130,7 @@ public class LogFileHandler extends DefaultHandler {
                     int time = Integer.parseInt(currentMessage.time) - initialTime;
                     time = time / 1000;
                     currentMessage.time = 
-                        (new Integer(time)).toString();
+                        (Integer.valueOf(time)).toString();
                 } catch (NumberFormatException e) {}
             }
             logfile.messages.add(currentMessage);
@@ -163,63 +163,63 @@ public class LogFileHandler extends DefaultHandler {
             data.append(ch[i]);
         }
         str = data.toString();
-        if (parseStatus.get("app") == Boolean.TRUE) {
+        if (parseStatus.get("app").equals(Boolean.TRUE)) {
             logfile.appname += str;
-        } else if (parseStatus.get("time") == Boolean.TRUE) {
+        } else if (parseStatus.get("time").equals(Boolean.TRUE)) {
             currentMessage.time += str;
-        } else if (parseStatus.get("priority") == Boolean.TRUE) {
+        } else if (parseStatus.get("priority").equals(Boolean.TRUE)) {
             currentMessage.priority += str;
-        } else if (parseStatus.get("type") == Boolean.TRUE) {
+        } else if (parseStatus.get("type").equals(Boolean.TRUE)) {
             currentMessage.type += str;
-        } else if (parseStatus.get("trace_id") == Boolean.TRUE) {
+        } else if (parseStatus.get("trace_id").equals(Boolean.TRUE)) {
             currentMessage.backtraceID += str;
-        } else if (parseStatus.get("inst_id") == Boolean.TRUE) {
+        } else if (parseStatus.get("inst_id").equals(Boolean.TRUE)) {
             currentMessage.instructionID += str;
-        } else if (parseStatus.get("label") == Boolean.TRUE) {
+        } else if (parseStatus.get("label").equals(Boolean.TRUE)) {
             currentMessage.label += str;
-        } else if (parseStatus.get("details") == Boolean.TRUE) {
+        } else if (parseStatus.get("details").equals(Boolean.TRUE)) {
             currentMessage.details += str;
-        } else if (parseStatus.get("id") == Boolean.TRUE &&
-                   parseStatus.get("trace") == Boolean.TRUE) {
+        } else if (parseStatus.get("id").equals(Boolean.TRUE) &&
+                   parseStatus.get("trace").equals(Boolean.TRUE)) {
             currentTrace.id += str;
-        } else if (parseStatus.get("id") == Boolean.TRUE &&
-                   parseStatus.get("instruction") == Boolean.TRUE) {
+        } else if (parseStatus.get("id").equals(Boolean.TRUE) &&
+                   parseStatus.get("instruction").equals(Boolean.TRUE)) {
             currentInstruction.id += str;
-        } else if (parseStatus.get("disassembly") == Boolean.TRUE) {
+        } else if (parseStatus.get("disassembly").equals(Boolean.TRUE)) {
             currentInstruction.disassembly += str;
-        } else if (parseStatus.get("level") == Boolean.TRUE) {
+        } else if (parseStatus.get("level").equals(Boolean.TRUE)) {
             currentFrame.level += str;
-        } else if (parseStatus.get("address") == Boolean.TRUE &&
-                   parseStatus.get("frame") == Boolean.TRUE) {
+        } else if (parseStatus.get("address").equals(Boolean.TRUE) &&
+                   parseStatus.get("frame").equals(Boolean.TRUE)) {
             currentFrame.address += str;
-        } else if (parseStatus.get("address") == Boolean.TRUE &&
-                   parseStatus.get("instruction") == Boolean.TRUE) {
+        } else if (parseStatus.get("address").equals(Boolean.TRUE) &&
+                   parseStatus.get("instruction").equals(Boolean.TRUE)) {
             currentInstruction.address += str;
-        } else if (parseStatus.get("function") == Boolean.TRUE &&
-                   parseStatus.get("frame") == Boolean.TRUE) {
+        } else if (parseStatus.get("function").equals(Boolean.TRUE) &&
+                   parseStatus.get("frame").equals(Boolean.TRUE)) {
             currentFrame.function += str;
-        } else if (parseStatus.get("function") == Boolean.TRUE &&
-                   parseStatus.get("instruction") == Boolean.TRUE) {
+        } else if (parseStatus.get("function").equals(Boolean.TRUE) &&
+                   parseStatus.get("instruction").equals(Boolean.TRUE)) {
             currentInstruction.function += str;
-        } else if (parseStatus.get("file") == Boolean.TRUE &&
-                   parseStatus.get("frame") == Boolean.TRUE) {
+        } else if (parseStatus.get("file").equals(Boolean.TRUE) &&
+                   parseStatus.get("frame").equals(Boolean.TRUE)) {
             currentFrame.file += str;
-        } else if (parseStatus.get("file") == Boolean.TRUE &&
-                   parseStatus.get("instruction") == Boolean.TRUE) {
+        } else if (parseStatus.get("file").equals(Boolean.TRUE) &&
+                   parseStatus.get("instruction").equals(Boolean.TRUE)) {
             currentInstruction.file += str;
-        } else if (parseStatus.get("lineno") == Boolean.TRUE &&
-                   parseStatus.get("frame") == Boolean.TRUE) {
+        } else if (parseStatus.get("lineno").equals(Boolean.TRUE) &&
+                   parseStatus.get("frame").equals(Boolean.TRUE)) {
             currentFrame.lineno += str;
-        } else if (parseStatus.get("lineno") == Boolean.TRUE &&
-                   parseStatus.get("instruction") == Boolean.TRUE) {
+        } else if (parseStatus.get("lineno").equals(Boolean.TRUE) &&
+                   parseStatus.get("instruction").equals(Boolean.TRUE)) {
             currentInstruction.lineno += str;
-        } else if (parseStatus.get("module") == Boolean.TRUE &&
-                   parseStatus.get("frame") == Boolean.TRUE) {
+        } else if (parseStatus.get("module").equals(Boolean.TRUE) &&
+                   parseStatus.get("frame").equals(Boolean.TRUE)) {
             currentFrame.module += str;
-        } else if (parseStatus.get("module") == Boolean.TRUE &&
-                   parseStatus.get("instruction") == Boolean.TRUE) {
+        } else if (parseStatus.get("module").equals(Boolean.TRUE) &&
+                   parseStatus.get("instruction").equals(Boolean.TRUE)) {
             currentInstruction.module += str;
-        } else if (parseStatus.get("text") == Boolean.TRUE) {
+        } else if (parseStatus.get("text").equals(Boolean.TRUE)) {
             currentInstruction.text += str;
         }
     }

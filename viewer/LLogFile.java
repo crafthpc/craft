@@ -15,7 +15,6 @@ public class LLogFile {
     public Map<String, LInstruction> instructions;
     public Map<String, LInstruction> instructionsByAddress;
     public String appname;
-    public File file;
 
     public LLogFile() {
         messages = new ArrayList<LMessage>();
@@ -23,7 +22,6 @@ public class LLogFile {
         instructions = new HashMap<String, LInstruction>();
         instructionsByAddress = new HashMap<String, LInstruction>();
         appname = "";
-        file = null;
     }
 
     public void merge(LLogFile logfile) {
@@ -47,7 +45,7 @@ public class LLogFile {
                         }
                     }
                     if (msg.backtraceID.equals(oldTraceID)) {
-                        String newTraceID = (new Integer(traces.size()+1)).toString();
+                        String newTraceID = (Integer.valueOf(traces.size()+1)).toString();
                         oldTrace.id = newTraceID;
                         traces.put(newTraceID, oldTrace);
                         traceMapping.put(oldTraceID, newTraceID);
@@ -71,7 +69,7 @@ public class LLogFile {
                         }
                     }
                     if (msg.instructionID.equals(oldInstrID)) {
-                        String newInstrID = (new Integer(instructions.size()+1)).toString();
+                        String newInstrID = (Integer.valueOf(instructions.size()+1)).toString();
                         oldInstr.id = newInstrID;
                         instructions.put(newInstrID, oldInstr);
                         // no need to re-insert into instructionsByAddress
@@ -91,7 +89,7 @@ public class LLogFile {
                 }
             }
             if (!found) {
-                String newInstrID = (new Integer(instructions.size()+1)).toString();
+                String newInstrID = (Integer.valueOf(instructions.size()+1)).toString();
                 instr.id = newInstrID;
                 instructions.put(instr.id, instr);
                 instructionsByAddress.put(instr.address, instr);
@@ -100,25 +98,26 @@ public class LLogFile {
     }
 
     public String toString() {
-        String str = "Log for " + appname + "\n";
+        StringBuffer str = new StringBuffer();
+        str.append("Log for " + appname + "\n");
         for (LMessage msg : messages) {
-            str += msg.toString() + "\n";
+            str.append(msg.toString() + "\n");
         }
         /*
         for (String i : traces.keySet()) {
-            str += "Backtrace " + i.toString() + ":";
+            str.append("Backtrace " + i.toString() + ":");
             for (LFrame frame : traces.get(i)) {
-                str += "\n   " + frame.toString();
+                str.append("\n   " + frame.toString());
             }
         }
         */
         /*
         for (String i : instructions.keySet()) {
-            str += "Instruction " + i.toString() + ":";
-            str += "\n" + instructions.get(i).toString();
+            str.append("Instruction " + i.toString() + ":");
+            str.append("\n" + instructions.get(i).toString());
         }
         */
-        return str;
+        return str.toString();
     }
 
 }

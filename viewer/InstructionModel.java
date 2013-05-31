@@ -85,26 +85,26 @@ public class InstructionModel extends AbstractTableModel {
             case 3: return instr.getSource();
             case 4: return instr.disassembly;
             case 5: return instr.rstatus;
-            //case 6: return (new Integer(instr.count)).toString();
-            case 6: return new Integer(instr.count);
+            //case 6: return (Integer.valueOf(instr.count)).toString();
+            case 6: return Integer.valueOf(instr.count);
             case 7: if (instr.totalCancels > 0)
-                        //return (new Integer(instr.totalCancels)).toString();
-                        return new Integer(instr.totalCancels);
+                        //return (Integer.valueOf(instr.totalCancels)).toString();
+                        return Integer.valueOf(instr.totalCancels);
                     else
-                        //return (new Integer(instr.cancellations)).toString();
-                        return new Integer(instr.cancellations);
-            //case 8: return (new Integer(instr.cancellations)).toString();
-            case 8: return new Integer(instr.cancellations);
+                        //return (Integer.valueOf(instr.cancellations)).toString();
+                        return Integer.valueOf(instr.cancellations);
+            //case 8: return (Integer.valueOf(instr.cancellations)).toString();
+            case 8: return Integer.valueOf(instr.cancellations);
             //case 9: return ratioFormatter.format(instr.ratio);
             //case 10: return avgDigitsFormatter.format(instr.averageDigits);
-            case 9: return new Double(instr.ratio);
-            case 10: return new Double(instr.averageDigits);
-            //case 11: return (new Double(instr.min)).toString();
-            //case 12: return (new Double(instr.max)).toString();
-            //case 13: return (new Double(instr.range)).toString();
-            case 11: return new Double(instr.min);
-            case 12: return new Double(instr.max);
-            case 13: return new Double(instr.range);
+            case 9: return Double.valueOf(instr.ratio);
+            case 10: return Double.valueOf(instr.averageDigits);
+            //case 11: return (Double.valueOf(instr.min)).toString();
+            //case 12: return (Double.valueOf(instr.max)).toString();
+            //case 13: return (Double.valueOf(instr.range)).toString();
+            case 11: return Double.valueOf(instr.min);
+            case 12: return Double.valueOf(instr.max);
+            case 13: return Double.valueOf(instr.range);
             default: return "";
         }
     }

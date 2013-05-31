@@ -20,7 +20,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         TRANGE, NULL, CINST, DCANCEL, DNAN
     }
 
-    public static String Type2Str(CNType type) {
+    public static String type2Str(CNType type) {
         String str = "UNKNOWN";
         switch (type) {
             case APPLICATION:       str = "APPL";    break;
@@ -28,11 +28,12 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             case FUNCTION:          str = "FUNC";    break;
             case BASIC_BLOCK:       str = "BBLK";    break;
             case INSTRUCTION:       str = "INSN";    break;
+            default:                                 break;
         }
         return str;
     }
 
-    public static String Status2Str(CNStatus status) {
+    public static String status2Str(CNStatus status) {
         String str = "UNKNOWN";
         switch (status) {
             case NONE:      str = "NONE";    break;
@@ -45,6 +46,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             case CINST:     str = "CINS";    break;
             case DCANCEL:   str = "DCAN";    break;
             case DNAN:      str = "DNAN";    break;
+            default:                         break;
         }
         return str;
     }
@@ -198,13 +200,15 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
                 case MODULE:
                 case FUNCTION:
                 case BASIC_BLOCK:
-                    Enumeration<ConfigTreeNode> children = children();
+                    Enumeration children = children();
                     while (children.hasMoreElements()) {
-                        count += children.nextElement().getInsnCount();
+                        count += ((ConfigTreeNode)children.nextElement()).getInsnCount();
                     }
                     break;
                 case INSTRUCTION:
                     count = 1;
+                    break;
+                default:
                     break;
             }
             insnCount = count;
@@ -247,8 +251,8 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     }
 
     public void merge(ConfigTreeNode node) {
-        //System.out.println("Merging: " + Status2Str(status) + "  " + label);
-        //System.out.println("   with: " + Status2Str(node.status) + "  " + node.label);
+        //System.out.println("Merging: " + status2Str(status) + "  " + label);
+        //System.out.println("   with: " + status2Str(node.status) + "  " + node.label);
 
         if (candidate && node.status != CNStatus.CANDIDATE) {
             // set new status (remains tagged as candidate)
@@ -309,10 +313,10 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
 
     public void setError(double err) {
         error = err;
-        Enumeration<ConfigTreeNode> childNodes = children();
+        Enumeration childNodes = children();
         ConfigTreeNode child = null;
         while (childNodes.hasMoreElements()) {
-            child = childNodes.nextElement();
+            child = (ConfigTreeNode)childNodes.nextElement();
             child.setError(err);
         }
     }
@@ -322,20 +326,20 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     }
 
     public void preManipulate(ConfigTreeIterator iterator) {
-        Enumeration<ConfigTreeNode> children = children();
+        Enumeration children = children();
         ConfigTreeNode child = null;
         iterator.manipulate(this);
         while (children.hasMoreElements()) {
-            child = children.nextElement();
+            child = (ConfigTreeNode)children.nextElement();
             child.preManipulate(iterator);
         }
     }
 
     public void postManipulate(ConfigTreeIterator iterator) {
-        Enumeration<ConfigTreeNode> children = children();
+        Enumeration children = children();
         ConfigTreeNode child = null;
         while (children.hasMoreElements()) {
-            child = children.nextElement();
+            child = (ConfigTreeNode)children.nextElement();
             child.postManipulate(iterator);
         }
         iterator.manipulate(this);
@@ -343,25 +347,25 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
 
     public void getRegexTagLookups(Map<String,ConfigTreeNode> lookup) {
         lookup.put(regexTag, this);
-        Enumeration<ConfigTreeNode> children = children();
+        Enumeration children = children();
         ConfigTreeNode child = null;
         while (children.hasMoreElements()) {
-            child = children.nextElement();
+            child = (ConfigTreeNode)children.nextElement();
             child.getRegexTagLookups(lookup);
         }
     }
 
     public void getStatusCounts(Map<CNStatus,Long> counts) {
-        Enumeration<ConfigTreeNode> children = children();
+        Enumeration children = children();
         ConfigTreeNode child = null;
         while (children.hasMoreElements()) {
-            child = children.nextElement();
+            child = (ConfigTreeNode)children.nextElement();
             child.getStatusCounts(counts);
         }
         if (type == CNType.INSTRUCTION) {
-            Long count = new Long(1);
+            Long count = Long.valueOf(1);
             if (counts.containsKey(status)) {
-                count = new Long(1 + counts.get(status).longValue());
+                count = Long.valueOf(1 + counts.get(status).longValue());
             }
             counts.put(status, count);
         }
@@ -380,15 +384,15 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             if (totalExecCount > 0) {
                 insnExecCount = 1;      // code coverage
             }
-            execCount.put(status, new Long(totalExecCount));
+            execCount.put(status, Long.valueOf(totalExecCount));
         } else {
-            Enumeration<ConfigTreeNode> children = children();
+            Enumeration children = children();
             ConfigTreeNode child = null;
             resetExecCounts();
             while (children.hasMoreElements()) {
 
                 // recurse
-                child = children.nextElement();
+                child = (ConfigTreeNode)children.nextElement();
                 child.updateExecCounts(logfile);
 
                 // update aggregate counts
@@ -399,17 +403,17 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
                     if (execCount.containsKey(entry.getKey())) {
                         newCount += execCount.get(entry.getKey()).longValue();
                     }
-                    execCount.put(entry.getKey(), new Long(newCount));
+                    execCount.put(entry.getKey(), Long.valueOf(newCount));
                 }
             }
         }
     }
 
     public void batchConfig(CNStatus orig, CNStatus dest) {
-        Enumeration<ConfigTreeNode> children = children();
+        Enumeration children = children();
         ConfigTreeNode child = null;
         while (children.hasMoreElements()) {
-            child = children.nextElement();
+            child = (ConfigTreeNode)children.nextElement();
             child.batchConfig(orig, dest);
         }
         if (type == CNType.INSTRUCTION && status == orig) {
@@ -419,10 +423,10 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
 
     public void removeChildren(ConfigTreeIterator iterator) {
         Set<ConfigTreeNode> nodesToRemove = new HashSet<ConfigTreeNode>();
-        Enumeration<ConfigTreeNode> children = children();
+        Enumeration children = children();
         ConfigTreeNode child = null;
         while (children.hasMoreElements()) {
-            child = children.nextElement();
+            child = (ConfigTreeNode)children.nextElement();
             child.removeChildren(iterator);
             if (iterator.test(child)) {
                 nodesToRemove.add(child);
@@ -459,17 +463,17 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             if (insnCount > 0) {
                 coverage = insnExecCount * 100 / insnCount;
             }
-            Long sgl = new Long(0), dbl = new Long(0), ign = new Long(0);
-            Long gsgl = new Long(0), gdbl = new Long(0), gign = new Long(0);
+            Long sgl = Long.valueOf(0), dbl = Long.valueOf(0), ign = Long.valueOf(0);
+            Long gsgl = Long.valueOf(0), gdbl = Long.valueOf(0), gign = Long.valueOf(0);
             if (totalExecCount > 0) {
                 if (execCount.containsKey(ConfigTreeNode.CNStatus.SINGLE)) {
-                    sgl = execCount.get(ConfigTreeNode.CNStatus.SINGLE) * 100 / new Long(totalExecCount);
+                    sgl = execCount.get(ConfigTreeNode.CNStatus.SINGLE) * 100 / totalExecCount;
                 }
                 if (execCount.containsKey(ConfigTreeNode.CNStatus.DOUBLE)) {
-                    dbl = execCount.get(ConfigTreeNode.CNStatus.DOUBLE) * 100 / new Long(totalExecCount);
+                    dbl = execCount.get(ConfigTreeNode.CNStatus.DOUBLE) * 100 / totalExecCount;
                 }
                 if (execCount.containsKey(ConfigTreeNode.CNStatus.IGNORE)) {
-                    ign = execCount.get(ConfigTreeNode.CNStatus.IGNORE) * 100 / new Long(totalExecCount);
+                    ign = execCount.get(ConfigTreeNode.CNStatus.IGNORE) * 100 / totalExecCount;
                 }
             }
             TreeNode root = this;
@@ -480,13 +484,13 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
                 long rootExecCount = ((ConfigTreeNode)root).totalExecCount;
                 if (rootExecCount > 0) {
                     if (execCount.containsKey(ConfigTreeNode.CNStatus.SINGLE)) {
-                        gsgl = execCount.get(ConfigTreeNode.CNStatus.SINGLE) * 100 / new Long(rootExecCount);
+                        gsgl = execCount.get(ConfigTreeNode.CNStatus.SINGLE) * 100 / rootExecCount;
                     }
                     if (execCount.containsKey(ConfigTreeNode.CNStatus.DOUBLE)) {
-                        gdbl = execCount.get(ConfigTreeNode.CNStatus.DOUBLE) * 100 / new Long(rootExecCount);
+                        gdbl = execCount.get(ConfigTreeNode.CNStatus.DOUBLE) * 100 / rootExecCount;
                     }
                     if (execCount.containsKey(ConfigTreeNode.CNStatus.IGNORE)) {
-                        gign = execCount.get(ConfigTreeNode.CNStatus.IGNORE) * 100 / new Long(rootExecCount);
+                        gign = execCount.get(ConfigTreeNode.CNStatus.IGNORE) * 100 / rootExecCount;
                     }
                 }
             }

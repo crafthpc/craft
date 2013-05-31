@@ -11,7 +11,7 @@ import javax.swing.*;
 
 public class RunProgramAction extends AbstractAction {
 
-    public final String PROFILER_PATH = "/fs/dyninst/lam/git-fpinst/fprofiler";
+    public static final String PROFILER_PATH = "/fs/dyninst/lam/git-fpinst/fprofiler";
 
     ViewerApp appInst;
 
@@ -65,6 +65,7 @@ public class RunProgramAction extends AbstractAction {
                 catch (InterruptedException ex) {
                     System.err.println(ex);
                 }
+                bufferedreader.close();
 
                 //command = "\nLOGFILE=" + mutatee + ".log " + mutatee + ".mutant";
                 //JOptionPane.showMessageDialog(null, command);
