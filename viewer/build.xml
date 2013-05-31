@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<project name="CRAFT Viewers" basedir="." default="all">
+
+    <property name="src.dir" value="src"/>
+    <property name="classes.dir" value="classes"/>
+    <property name="jar.fpview" value="fpview"/>
+    <property name="jar.fpconfed" value="fpconfed"/>
+
+    <target name="all" description="Build everything" depends="compile,fpview,fpconfed"/>
+
+    <target name="compile" description="Build all class files">
+        <mkdir dir="${classes.dir}"/>
+        <javac includeantruntime="false" srcdir="${src.dir}" destdir="${classes.dir}"/>
+    </target>
+
+    <target name="fpview" description="Build fpview jar file" depends="compile">
+        <jar destfile="${jar.fpview}.jar" basedir="${classes.dir}">
+            <manifest>
+                <attribute name="Main-Class" value="ViewerApp"/>
+            </manifest>
+        </jar>
+    </target>
+
+    <target name="fpconfed" description="Build fpconfed jar file" depends="compile">
+        <jar destfile="${jar.fpconfed}.jar" basedir="${classes.dir}">
+            <manifest>
+                <attribute name="Main-Class" value="ConfigEditorApp"/>
+            </manifest>
+        </jar>
+    </target>
+
+    <target name="clean" description="Delete class files">
+        <delete dir="${classes.dir}"/>
+        <delete file="${jar.fpview}.jar"/>
+        <delete file="${jar.fpconfed}.jar"/>
+    </target>
+            
+</project>
+
