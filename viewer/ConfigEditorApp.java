@@ -154,7 +154,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         //topPanel.add(filenameLabel);  // kind of redundant; it's in the window title
         topPanel.add(new JLabel("   "));
         topPanel.add(new JLabel("Search:"));
-        searchBox = new JTextField(10);
+        searchBox = new JTextField(20);
         searchBox.addActionListener(this);
         searchBox.getDocument().addDocumentListener(this);
         topPanel.add(searchBox);
