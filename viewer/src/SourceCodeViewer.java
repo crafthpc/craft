@@ -39,6 +39,11 @@ public class SourceCodeViewer extends JFrame
     public JSplitPane mainPanel;
 
 
+    public SourceCodeViewer() {
+        allFiles = new TreeMap<String, SourceFileInfo>();
+        initialize();
+    }
+
     public SourceCodeViewer(ConfigTreeNode node) {
         this(node, null);
     }

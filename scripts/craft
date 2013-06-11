@@ -1222,7 +1222,7 @@ def run_baseline_performance
     end
     Dir.chdir($perf_path)
     $baseline_error = 0.0
-    $baseline_runtime = 0
+    $baseline_runtime = 1
     cmd = "#{$search_path}#{$craft_driver} #{$binary_path}"
     io_in, io_out, io_err = Open3.popen3(cmd)
     io_err.each_line do |line| end
@@ -1236,7 +1236,7 @@ def run_baseline_performance
             $baseline_error = $1.to_f
         end
         if line =~ /time:\s*(.+)/i then
-            $baseline_runtime = $1.to_i
+            $baseline_runtime = [1, $1.to_i].max
         end
     end
     Dir.chdir($search_path)

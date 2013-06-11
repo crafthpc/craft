@@ -531,7 +531,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
                 //str.append(" execution(s)");
                 str.append("]");
             }
-        } else if (type == CNType.INSTRUCTION) {
+        } else if (type == CNType.INSTRUCTION && showCodeCoverage) {
             while (str.length() < 50) {
                 str.append(' ');
             }

@@ -1,0 +1,37 @@
+#!/usr/bin/ruby
+
+overheads = Array.new
+sum = 0.0
+count = 0
+min = 1000000.0
+max = 0.0
+
+ARGF.each_line do |line|
+    if line =~ /Success.* (\d+\.\d+)X/
+    #if line =~ /^(\d+\.\d+)X/ then
+        overhead = $1.to_f
+        sum   += overhead
+        count += 1
+        overheads << overhead
+    end
+end
+
+overheads.sort!
+mean   = sum / count.to_f
+if count.odd? then
+    median = overheads[count.to_i/2]
+else
+    puts count
+    puts count.to_i/2
+    median = (overheads[(count.to_i/2)-1] + overheads[(count.to_i/2)]) / 2.0
+end
+
+stddev = 0.0
+overheads.each { |x| stddev += ((x-mean)*(x-mean)) }
+stddev = Math.sqrt(stddev/count.to_f)
+
+puts "Count:  #{count}"
+puts "Mean:   #{mean}"
+puts "Median: #{median}"
+puts "Stddev: #{stddev}"
+

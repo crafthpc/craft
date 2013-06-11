@@ -81,6 +81,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public JButton setSingleButton;
     public JButton setDoubleButton;
     public JButton setNullButton;
+    public JButton sourceButton;
     public JButton saveButton;
     public JTree mainTree;
     public ConfigTreeRenderer mainRenderer;
@@ -197,6 +198,9 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         showErrorBox.addActionListener(this);
         //topPanel.add(showErrorBox);
         topPanel.add(new JLabel("   "));
+        sourceButton = new JButton("Show Source");
+        sourceButton.addActionListener(this);
+        topPanel.add(sourceButton);
         saveButton = new JButton("Save");
         saveButton.addActionListener(this);
         topPanel.add(saveButton);
@@ -996,6 +1000,16 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         sourceWindow.refreshInterface();
     }
 
+    public void openSourceWindow() {
+        SourceCodeViewer sourceWindow = new SourceCodeViewer();
+        if (mainTree.getModel().getRoot() instanceof ConfigTreeNode) {
+            ConfigTreeNode appNode = (ConfigTreeNode)mainTree.getModel().getRoot();
+            sourceWindow.addConfigInfo(appNode);
+        }
+        sourceWindow.setVisible(true);
+        sourceWindow.refreshInterface();
+    }
+
     void setShowEffectiveStatus(boolean value) {
         mainRenderer.setShowEffectiveStatus(value);
         refreshTreeLabels();
@@ -1075,6 +1089,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             setSelection(ConfigTreeNode.CNStatus.DOUBLE);
         } else if (e.getSource() == setNullButton) {
             setSelection(ConfigTreeNode.CNStatus.NULL);
+        } else if (e.getSource() == sourceButton) {
+            openSourceWindow();
         } else if (e.getSource() == saveButton) {
             saveConfigFile();
         }
