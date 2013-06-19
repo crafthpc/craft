@@ -23,6 +23,8 @@ require 'fileutils.rb'
 
 # {{{ top-level: global constants
 
+$CRAFT_VERSION = "0.1 (beta)"                            # release version
+
 $RESULT_PASS  = "Success!"                          # test result possibilities
 $RESULT_FAIL  = "FAILED!"
 $RESULT_ERROR = "ERROR!!!"
@@ -627,9 +629,10 @@ def main
         # this is a supervisor process
 
         puts ""
-        puts "CRAFT"
-        puts "Autoconfiguring #{$binary_name} ..."
+        puts "CRAFT #{$CRAFT_VERSION}"
+        puts "Executable:  #{$binary_name}"
         puts "Working dir: #{$search_path}"
+        puts ""
 
         if $main_mode == "start" then
             # this is the first invocation of this analysis; initialize everything
@@ -718,7 +721,7 @@ def initialize_search
         puts "Aborting search."
         exit
     end
-    puts " [Base error: #{$baseline_error}  walltime: #{format_time($baseline_runtime.to_f)}]"
+    puts "Done.  [Base error: #{$baseline_error}  walltime: #{format_time($baseline_runtime.to_f)}]"
 
     # generate initial configuration by calling fpconf
     # and initialize global data structures
@@ -868,7 +871,7 @@ def run_main_search_loop
                         add_to_mainlog("    Skipping non-executed config #{child.label}.")
                         child.attrs["result"] = $RESULT_PASS
                         child.attrs["skipped"] = "yes"
-                        calculate_orig_stats(child)
+                        calculate_pct_stats(child)
                         add_tested_config(child)
                         rebuild_final_config
                         add_child = false
@@ -1330,7 +1333,7 @@ end
 # {{{ configuration testing
 
 
-def calculate_orig_stats (cfg)
+def calculate_pct_stats (cfg)
     pct_icount = 0
     pct_cinst = 0
     cfg.exceptions.keys.each do |k|
@@ -1519,7 +1522,7 @@ def load_settings
     $base_type = f.gets.chomp
     $skip_nonexecuted = (f.gets.chomp == true.to_s)
     $initial_cfg_fn = f.gets.chomp
-    $perf_log_fn = f.gets.chomp
+    line = f.gets; $perf_log_fn = (line != nil ? line.chomp : "")
     f.close
 end
 
@@ -1534,7 +1537,7 @@ def add_to_workqueue_bulk(configs)
     end
 
     configs.each do |cfg|
-        calculate_orig_stats(cfg)
+        calculate_pct_stats(cfg)
         queue << cfg
         puts "Added config #{cfg.label} to workqueue."
     end
@@ -1557,7 +1560,7 @@ def add_to_workqueue(cfg)
         queue << doc
     end
 
-    calculate_orig_stats(cfg)
+    calculate_pct_stats(cfg)
     queue << cfg
     queue.sort!
     
@@ -1897,7 +1900,7 @@ end
 def rebuild_final_config
     $final_config = $strategy.build_final_config(get_tested_configs)
     $program.build_config_file($final_config, $final_config_fn)
-    calculate_orig_stats($final_config)
+    calculate_pct_stats($final_config)
 end
 
 
