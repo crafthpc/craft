@@ -1,4 +1,4 @@
-#!/usr/bin/ruby
+#!/usr/bin/env ruby
 #
 # craft
 #
@@ -1741,6 +1741,8 @@ def print_usage
     puts "   -j <np>        spawn <np> worker threads"
     puts "   -l             resume search at lower level (e.g., INSN instead of BBLK)"
     puts "   -n             resume search and restart in-process tests"
+    puts " "
+    puts "Using Ruby #{RUBY_VERSION} #{RUBY_RELEASE_DATE}"
     puts " "
 end
 
