@@ -22,6 +22,9 @@ public class SourceCodeViewer extends JFrame
     public static final String REGEX = "\\[([^\\[:]*):(\\d+)\\]";
     public static final Pattern REGEX_PATTERN = Pattern.compile(REGEX);
 
+    // placeholder to use when the source file can't be found
+    public static final SourceFileInfo BLANK_FILE_INFO = new SourceFileInfo("");
+
     // stores source file info (path, replacements, etc.)
     // cached for efficiency (shouldn't need to re-scan config tree
     // every time we switch between files)
@@ -205,7 +208,9 @@ public class SourceCodeViewer extends JFrame
             }
         } else {
             sourceCode.setText("Cannot find file: " + filename);
+            sourceBorder.setFileInfo(BLANK_FILE_INFO);
         }
+        sourceCode.repaint();
     }
 
     private void appendReplacementInfo(StringBuffer code, int lineno, SourceFileInfo fileInfo) {
