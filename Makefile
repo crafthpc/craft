@@ -67,16 +67,14 @@ EXTERN_LIBS =
 
 # general targets
 
-all: $(TARGETS) fpviewer
-	@echo -e "Build of FPAnalysis complete."
-
-fpviewer: viewer/*.java
-	cd viewer && make
+all: $(TARGETS)
+	@echo -e "Build of CRAFT complete."
+	@echo -e "To build the GUI, run \"ant\" or \"make\" in the \"viewer\" subfolder."
 
 tags: 
 	ctags --no-members src/*.cpp
 	ctags --no-members -a h/*.h
-	ctags --no-members -a viewer/*.java
+	ctags --no-members -a viewer/src/*.java
 
 
 # specific targets
@@ -131,7 +129,7 @@ clean:
 cleandepend:
 	rm -f $(DEPEND_FILES)
 
-.PHONY: clean cleandepend all fpviewer tags
+.PHONY: clean cleandepend all tags
 
 -include $(DEPEND_FILES)
 
