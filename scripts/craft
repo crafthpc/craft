@@ -766,7 +766,9 @@ def initialize_search
 
     # initialize strategy object
     # depends on $program being initialized
+    print "Initializing search strategy ... "
     initialize_strategy
+    puts "Done.  [#{$total_candidates} candidates]"
 
     # save project settings to file (for workers to load)
     save_settings
@@ -1005,6 +1007,7 @@ def finalize_search
     # finalize report
     elapsed = Time.now.to_f - $start_time.to_f
     summary = get_tested_configs_summary
+    report << "Total candidates:          #{"%11d" % $total_candidates}"
     report << "Total configs tested:      #{"%11d" % summary["total"]}"
     report << "  Total passed:            #{"%11d" % summary["pass"]}"
     report << "    Total skipped:         #{"%11d" % summary["skipped"]}"
@@ -1215,6 +1218,11 @@ def initialize_strategy
         exit
     end
     $strategy.basetype = $base_type
+    if $program.attrs.has_key?("icount") then
+        $total_candidates = $program.attrs["icount"]
+    else
+        $total_candidates = 0
+    end
 end
 
 
@@ -1501,6 +1509,7 @@ def save_settings
     f.puts $skip_nonexecuted
     f.puts $initial_cfg_fn
     f.puts $perf_log_fn
+    f.puts $total_candidates
     f.close
 end
 def load_settings
@@ -1523,6 +1532,7 @@ def load_settings
     $skip_nonexecuted = (f.gets.chomp == true.to_s)
     $initial_cfg_fn = f.gets.chomp
     line = f.gets; $perf_log_fn = (line != nil ? line.chomp : "")
+    line = f.gets; $total_candidates = (line != nil ? line.chomp.to_i : 0)
     f.close
 end
 
@@ -1803,6 +1813,7 @@ def print_status
         #status_text << "#{indent}Fortran mode:  #{"%24s" % ($fortran_mode ? "Y" : "N")}"
         status_text << "#{indent}Base type:  #{"%28s" % $base_type}"
         status_text << "#{indent}Worker threads:            #{"%13d" % nworkers}"
+        status_text << "#{indent}Total candidates:          #{"%13d" % $total_candidates}"
         summary = get_tested_configs_summary
         status_text << "#{indent}Total configs tested:      #{"%13d" % summary["total"]}"
         status_text << "#{indent}   Total passed:           #{"%13d" % summary["pass"]}"
