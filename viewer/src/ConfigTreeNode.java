@@ -176,6 +176,18 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     }
 
     public CNStatus getEffectiveStatus() {
+        CNStatus fromParent = getEffectiveStatusFromParent();
+        if (fromParent != status) {
+            return fromParent;
+        }
+        CNStatus fromChildren = getEffectiveStatusFromChildren();
+        if (fromChildren != status) {
+            return fromChildren;
+        }
+        return status;
+    }
+
+    public CNStatus getEffectiveStatusFromParent() {
         if (getParent() != null) {
             TreeNode parent = getParent();
             if (parent instanceof ConfigTreeNode) {
@@ -186,6 +198,24 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             }
         }
         return status;
+    }
+
+    public CNStatus getEffectiveStatusFromChildren() {
+        /* TODO: optimize this by caching; right now this is very inefficient
+         * since it traverses the tree excessively */
+        if (getChildCount() > 0) {
+            Enumeration children = children();
+            CNStatus effectiveStatus = ((ConfigTreeNode)children.nextElement()).getEffectiveStatusFromChildren();
+            while (children.hasMoreElements()) {
+                CNStatus tempStatus = ((ConfigTreeNode)children.nextElement()).getEffectiveStatusFromChildren();
+                if (tempStatus != effectiveStatus) {
+                    return status;
+                }
+            }
+            return effectiveStatus;
+        } else {
+            return status;
+        }
     }
 
     public void resetInsnCount() {
