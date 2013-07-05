@@ -1,0 +1,62 @@
+#!/usr/bin/env ruby
+
+require 'open3.rb'
+
+iterations = ARGV.shift.to_i
+ucmd = ARGV.join(' ')
+cmd = '/usr/bin/time -v ' + ucmd
+
+time_user = Array.new
+time_sys  = Array.new
+time_wall = Array.new
+mem_mrs   = Array.new
+mem_major_faults = Array.new
+mem_minor_faults = Array.new
+
+iterations.times do
+    io_in, io_out, io_err = Open3.popen3(cmd)
+    io_out.each_line do |line|
+        puts line
+    end
+    io_err.each_line do |line|
+        if line =~ /User time \(seconds\): ([\.\d]+)/ then
+            time_user << $1.to_f
+        elsif line =~ /System time \(seconds\): ([\.\d]+)/ then
+            time_sys << $1.to_f
+        elsif line =~ /Elapsed \(wall clock\) time \(h:mm:ss or m:ss\): ((\d+):)?(\d+):(\d+)(\.?\d+)?/ then
+            hr   = ($2 == '' ? 0 : $2.to_i)
+            min  = $3.to_i
+            sec  = $4.to_i
+            msec = ($5 == '' ? 0.0 : $5.to_f)
+            tsec = (hr * 3600.0) + (min * 60.0) + (sec.to_f) + (msec)
+            #puts "#{hr}:#{min}:#{sec} + #{msec} = #{tsec}"
+            time_wall << tsec
+        elsif line =~ /Maximum resident set size \(kbytes\): (\d+)/ then
+            mem_mrs << $1.to_i
+        elsif line =~ /Major \(requiring I\/O\) page faults: (\d+)/ then
+            mem_major_faults << $1.to_i
+        elsif line =~ /Minor \(reclaiming a frame\) page faults: (\d+)/ then
+            mem_minor_faults << $1.to_i
+        end
+    end
+end
+
+puts ""
+puts "== SUMMARY =="
+puts ""
+puts "Command:     #{ucmd}"
+puts "Iterations:  #{iterations}"
+puts ""
+puts "Average user time (seconds):    #{time_user.reduce(:+) / iterations.to_f}"
+puts "Average system time (seconds):  #{time_sys.reduce(:+)  / iterations.to_f}"
+puts "Average wall time (seconds):    #{'%.3f'%(time_wall.inject(:+) / iterations.to_f)}"
+puts "Average wall time (minutes):    #{'%.3f'%(time_wall.reduce(:+) / iterations.to_f / 60.0)}"
+puts "Average wall time (hours):      #{'%.3f'%(time_wall.reduce(:+) / iterations.to_f / 60.0 / 60.0)}"
+puts ""
+puts "Average MRS size (kbytes):      #{(mem_mrs.reduce(:+)  / iterations.to_f).to_i}"
+puts "Average MRS size (Mbytes):      #{'%.3f'%(mem_mrs.reduce(:+)  / iterations.to_f / 1024.0)}"
+puts "Average MRS size (Gbytes):      #{'%.3f'%(mem_mrs.reduce(:+)  / iterations.to_f / 1024.0 / 1024.0)}"
+puts "Average major page faults:      #{(mem_major_faults.reduce(:+) / iterations.to_f).to_i}"
+puts "Average minor page faults:      #{(mem_minor_faults.reduce(:+) / iterations.to_f).to_i}"
+puts ""
+
