@@ -297,7 +297,7 @@ int main(int argc, char *argv[])
     // add the instrumentation library
     libObj = ((BPatch_binaryEdit*)app)->loadLibrary("libdyntest.so");
 	if (libObj == NULL) {
-		printf("ERROR: Unable to open libfpanalysis.so.\n");
+		printf("ERROR: Unable to open libdyntest.so.\n");
         exit(EXIT_FAILURE);
     }
 
