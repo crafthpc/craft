@@ -55,6 +55,9 @@ class FPBinaryBlobInplace : public FPBinaryBlob, public Snippet {
 
         FPBinaryBlobInplace(FPSemantics *inst, FPSVPolicy *mainPolicy);
 
+        void enableLockPrefix();
+        void disableLockPrefix();
+
         size_t buildSpecialOp(unsigned char *pos,
                 FPOperation *op, bool packed, bool &replaced);
         void addBlobInputEntry(vector<FPInplaceBlobInputEntry> &inputs,
@@ -96,6 +99,8 @@ class FPBinaryBlobInplace : public FPBinaryBlob, public Snippet {
         FPSVPolicy *mainPolicy;
         FPRegister temp_gpr1, temp_gpr2;    // for initializing/testing operands
         FPRegister temp_gpr3;               // for PINSR/PEXTR equivalents
+
+        bool useLockPrefix;               // add LOCK prefix to INC instructions
 
         string debug_assembly;
         unsigned char debug_code[256];
@@ -148,6 +153,9 @@ class FPAnalysisInplace : public FPAnalysis
         void handleReplacement(FPSemantics *inst);
 
         bool isSupportedOp(FPOperation *op);
+
+        void enableLockPrefix();
+        void disableLockPrefix();
 
         bool buildBinaryBlob(Dyninst::Address addr,
                 const BPatch_Vector<Dyninst::MachRegister> &input_regs,
@@ -235,6 +243,8 @@ class FPAnalysisInplace : public FPAnalysis
 
         bool reportAllGlobals;
         vector<FPShadowEntry*> shadowEntries;
+
+        bool useLockPrefix;               // add LOCK prefix to INC instructions
 
         size_t *instCountSingle;
         size_t *instCountDouble;

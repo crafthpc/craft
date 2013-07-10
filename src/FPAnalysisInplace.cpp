@@ -68,6 +68,7 @@ FPAnalysisInplace* FPAnalysisInplace::getInstance()
 
 FPAnalysisInplace::FPAnalysisInplace()
 {
+    useLockPrefix = false;
     instCountSize = 0;
     instCountSingle = NULL;
     instCountDouble = NULL;
@@ -120,6 +121,9 @@ void FPAnalysisInplace::configure(FPConfig *config, FPDecoder *decoder,
     }
     if (config->getValue("enable_debug_print") == "yes") {
         enableDebugPrint();
+    }
+    if (config->getValue("use_lock_prefix") == "yes") {
+        enableLockPrefix();
     }
     if (config->hasValue("svinp_icount_ptr_sgl")) {
         const char *ptr = config->getValueC("svinp_icount_ptr_sgl");
@@ -372,6 +376,27 @@ FPBinaryBlobInplace::FPBinaryBlobInplace(FPSemantics *inst, FPSVPolicy *policy)
     : FPBinaryBlob(inst)
 {
     this->mainPolicy = policy;
+    this->useLockPrefix = false;
+}
+
+void FPBinaryBlobInplace::enableLockPrefix()
+{
+    useLockPrefix = true;
+}
+
+void FPBinaryBlobInplace::disableLockPrefix()
+{
+    useLockPrefix = false;
+}
+
+void FPAnalysisInplace::enableLockPrefix()
+{
+    useLockPrefix = true;
+}
+
+void FPAnalysisInplace::disableLockPrefix()
+{
+    useLockPrefix = false;
 }
 
 size_t FPBinaryBlobInplace::buildInitBlobSingle(unsigned char *pos,
@@ -1161,6 +1186,10 @@ size_t FPBinaryBlobInplace::buildReplacedOperation(unsigned char *pos,
     } else if (replacementType == SVT_IEEE_Double) {
         count_ptr = _INST_svinp_inst_count_ptr_dbl;
     }
+    unsigned char prefix = 0x0;
+    if (useLockPrefix) {
+        prefix = 0xf0;  // add LOCK prefix if requested
+    }
     if (count_ptr != NULL) {
         // grab the array pointer
         pos += mainGen->buildMovImm64ToGPR64(pos, 
@@ -1169,7 +1198,7 @@ size_t FPBinaryBlobInplace::buildReplacedOperation(unsigned char *pos,
         pos += mainGen->buildInstruction(pos, 0, true, false,
                 0x8b, temp_gpr2, temp_gpr1, true, 0);
         // increment appropriate count slot
-        pos += mainGen->buildInstruction(pos, 0, true, false,
+        pos += mainGen->buildInstruction(pos, prefix, true, false,
                 0xff, REG_NONE, temp_gpr2, true,
                 (uint32_t)(inst->getIndex() * sizeof(size_t)));
     }
@@ -1478,7 +1507,11 @@ Snippet::Ptr FPAnalysisInplace::buildReplacementCode(FPSemantics *inst,
         }
 
         //printf("binary blob replacement: %s\n", inst->getDisassembly().c_str());
-        return Snippet::Ptr(new FPBinaryBlobInplace(inst, mainPolicy));
+        FPBinaryBlobInplace *blob = new FPBinaryBlobInplace(inst, mainPolicy);
+        if (useLockPrefix) {
+            blob->enableLockPrefix();
+        }
+        return Snippet::Ptr(blob);
 
     } else {
         printf("        default replacement: %s\n", inst->getDisassembly().c_str());
