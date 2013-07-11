@@ -75,6 +75,7 @@ bool profiling = false;         // enable profiling output
 bool disableSampling = false;   // disable logarithmic cancellation sampling
 bool instrFrames = false;       // add instrumentation stack frames
 bool fortranMode = false;       // switch up instrumentation for FORTRAN programs
+bool multicoreMode = false;     // use the LOCK prefix for INC instructions
 
 // function/instruction indices and counts
 size_t midx = 0, fidx = 0, bbidx = 0, iidx = 0;
@@ -317,6 +318,9 @@ void setup_config_file(FPConfig *configuration)
     }
     if (disableSampling) {
         configuration->setValue("enable_sampling", "no");
+    }
+    if (multicoreMode) {
+        configuration->setValue("use_lock_prefix", "yes");
     }
 }
 
@@ -2101,6 +2105,7 @@ void usage()
     printf("  -l                   list all instrumented functions\n");
     printf("  -L <filename>        write to specified log file\n");
     printf("  -m                   detect mismatches (only activated with shadow/pointer value analyses)\n");
+    printf("  -M                   multicore mode (use LOCK prefix for INC instructions)\n");
     printf("  -N                   enable FORTRAN mode (instrument inst_fortran_report instead of printf)\n");
     printf("  -o <filename>        output to specified filename (default is \"mutant\")\n");
     printf("  -p                   run as process instead of using binary rewriter\n");
@@ -2158,6 +2163,8 @@ bool parseCommandLine(unsigned argc, char *argv[])
 			fastInst = true;
 		} else if (strcmp(argv[i], "-m")==0) {
 			mismatches = true;
+		} else if (strcmp(argv[i], "-M")==0) {
+			multicoreMode = true;
 		} else if (strcmp(argv[i], "-N")==0) {
 			fortranMode = true;
 		} else if (strcmp(argv[i], "-d")==0) {

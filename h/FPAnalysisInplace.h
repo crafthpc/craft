@@ -55,14 +55,30 @@ class FPBinaryBlobInplace : public FPBinaryBlob, public Snippet {
 
         FPBinaryBlobInplace(FPSemantics *inst, FPSVPolicy *mainPolicy);
 
+        void enableLockPrefix();
+        void disableLockPrefix();
+
+        size_t buildSpecialOp(unsigned char *pos,
+                FPOperation *op, bool packed, bool &replaced);
+        void addBlobInputEntry(vector<FPInplaceBlobInputEntry> &inputs,
+                FPOperand *input, bool packed, FPRegister &replacementRM);
+        size_t buildReplacedOperation(unsigned char *pos,
+                        FPOperation *op, FPSVType replacementType,
+                        unsigned char *orig_code, size_t origNumBytes,
+                        vector<FPInplaceBlobInputEntry> &inputs, FPRegister replacementRM, 
+                        bool packed, bool only_movement, bool mem_output, bool xmm_output,
+                        bool &special, bool &replaced);
+
         bool generate(Point *pt, Buffer &buf);
 
         size_t buildInitBlobSingle(unsigned char *pos, FPRegister dest, long tag);
         size_t buildInitBlobDouble(unsigned char *pos, FPRegister dest, long tag);
         size_t buildFlagTestBlob(unsigned char *pos, FPRegister dest, long tag);
-        size_t buildOperandInitBlob(unsigned char *pos, FPInplaceBlobInputEntry entry);
-        size_t buildReplacedInstruction(unsigned char *pos, FPSemantics *inst,
-                unsigned char *orig_bytes, FPRegister replacementRM, bool changePrecision);
+        size_t buildOperandInitBlob(unsigned char *pos,
+                FPInplaceBlobInputEntry entry, FPSVType replacementType);
+        size_t buildReplacedInstruction(unsigned char *pos,
+                FPSemantics *inst, unsigned char *orig_bytes,
+                FPSVType replacementType, FPRegister replacementRM, bool changePrecision);
         size_t buildFixSSEQuadOutput(unsigned char *pos, FPRegister xmm);
 
         // AND/OR/mask versions
@@ -77,13 +93,14 @@ class FPBinaryBlobInplace : public FPBinaryBlob, public Snippet {
         size_t buildSpecialCvtsd2ss(unsigned char *pos, unsigned char orig_prefix, unsigned char orig_modrm);
         size_t buildSpecialNegate(unsigned char *pos, FPOperand *src, FPOperand *dest);
         size_t buildSpecialZero(unsigned char *pos, FPOperand *dest);
-        size_t buildSpecialMove(unsigned char *pos, FPOperand *src, FPOperand *dest);
 
     private:
 
         FPSVPolicy *mainPolicy;
         FPRegister temp_gpr1, temp_gpr2;    // for initializing/testing operands
         FPRegister temp_gpr3;               // for PINSR/PEXTR equivalents
+
+        bool useLockPrefix;               // add LOCK prefix to INC instructions
 
         string debug_assembly;
         unsigned char debug_code[256];
@@ -136,6 +153,9 @@ class FPAnalysisInplace : public FPAnalysis
         void handleReplacement(FPSemantics *inst);
 
         bool isSupportedOp(FPOperation *op);
+
+        void enableLockPrefix();
+        void disableLockPrefix();
 
         bool buildBinaryBlob(Dyninst::Address addr,
                 const BPatch_Vector<Dyninst::MachRegister> &input_regs,
@@ -224,7 +244,10 @@ class FPAnalysisInplace : public FPAnalysis
         bool reportAllGlobals;
         vector<FPShadowEntry*> shadowEntries;
 
-        size_t *instCount;
+        bool useLockPrefix;               // add LOCK prefix to INC instructions
+
+        size_t *instCountSingle;
+        size_t *instCountDouble;
         size_t instCountSize;
 
         size_t insnsInstrumentedSingle;
