@@ -621,7 +621,7 @@ inline bool isSegmentRegister(unsigned char prefix) {
 }
 
 size_t FPBinaryBlobInplace::buildReplacedInstruction(unsigned char *pos,
-        FPSemantics *inst, unsigned char *orig_code,
+        FPSemantics * /*inst*/, unsigned char *orig_code,
         FPSVType replacementType, FPRegister replacementRM, bool changePrecision)
 {
     // emits a replaced version of an instruction that replaces any memory
