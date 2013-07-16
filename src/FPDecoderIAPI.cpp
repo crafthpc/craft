@@ -136,6 +136,13 @@ FPSemantics* FPDecoderIAPI::lookup(unsigned long iidx)
     return instCacheArray[iidx];
 }
 
+FPSemantics* FPDecoderIAPI::lookupByAddr(void* addr)
+{
+    // TODO: implement
+    assert(0);
+    return NULL;
+}
+
 FPSemantics* FPDecoderIAPI::build(unsigned long index, void *addr, unsigned char *bytes, size_t nbytes)
 {
     // misc data structures

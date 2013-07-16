@@ -35,8 +35,10 @@ bool detectNaN = false;
 bool trackRange = false;
 bool pointerSV = false;
 bool inplaceSV = false;
+bool reducePrec = false;
 char* pointerSVType = NULL;
 char* inplaceSVType = NULL;
+unsigned long reducePrecDefaultPrec = 0;
 vector<FPAnalysis*> allAnalyses;
 
 // instrumentation file options
@@ -82,7 +84,6 @@ size_t midx = 0, fidx = 0, bbidx = 0, iidx = 0;
 size_t total_replacements = 0;
 size_t total_modules = 0;
 size_t total_functions = 0;
-size_t instructions_in_curr_func = 0;
 size_t total_basicblocks = 0;
 size_t total_fp_instructions = 0;
 size_t total_instrumented_instructions = 0;
@@ -288,6 +289,16 @@ void setup_config_file(FPConfig *configuration)
         configuration->setValue("sv_inp_type", inplaceSVType);
         configuration->setValue("tag", string("sv_inp_") + string(inplaceSVType));
     }
+    if (configuration->hasValue("r_prec") && configuration->getValue("r_prec") == "yes") {
+        reducePrec = true;
+        assert(configuration->hasValue("r_prec_default_precision"));
+        configuration->setValue("tag", string("r_prec_") + configuration->getValue("r_prec_default_precision"));
+    } else if (reducePrec) {
+        stringstream ss(""); ss << reducePrecDefaultPrec;
+        configuration->setValue("r_prec", "yes");
+        configuration->setValue("r_prec_default_precision", ss.str());
+        configuration->setValue("tag", string("r_prec_") + configuration->getValue("r_prec_default_precision"));
+    }
     if (logFile) {
         configuration->setValue("log_file", string(logFile));
     }
@@ -348,6 +359,10 @@ void initializeAnalyses() {
     if (inplaceSV) {
         allAnalyses.push_back(FPAnalysisInplace::getInstance());
         FPAnalysisInplace::getInstance()->configure(configuration, mainDecoder, logfile, NULL);
+    }
+    if (reducePrec) {
+        allAnalyses.push_back(FPAnalysisRPrec::getInstance());
+        FPAnalysisRPrec::getInstance()->configure(configuration, mainDecoder, logfile, NULL);
     }
 }
 
@@ -1539,6 +1554,9 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
         } else if (tag == RETAG_SINGLE || tag == RETAG_DOUBLE) {
             buildReplacement(addr, inst, block, FPAnalysisInplace::getInstance());
             replaced = true;
+        } else if (tag == RETAG_RPREC) {
+            buildReplacement(addr, inst, block, FPAnalysisRPrec::getInstance());
+            replaced = true;
         } else if (tag == RETAG_IGNORE || tag == RETAG_NONE) {
             // do nothing
         }
@@ -1593,7 +1611,6 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
 
     if (replaced || (preHandlers.size() + postHandlers.size() > 0)) {
         // update instrumentation counts
-        instructions_in_curr_func++;
         total_instrumented_instructions++;
         return true;
     } else {
@@ -1607,9 +1624,6 @@ void instrumentInstruction(void* addr, unsigned char *bytes, size_t nbytes,
         PatchFunction *func, PatchBlock *block,
         BPatch_Vector<BPatch_snippet*> &initSnippets)
 {
-    iidx++;
-    total_fp_instructions++;
-    
     // debug printing
     /*
      *printf("Instrumenting instruction at %p - %u bytes:", addr, (unsigned)nbytes);
@@ -1619,15 +1633,7 @@ void instrumentInstruction(void* addr, unsigned char *bytes, size_t nbytes,
      */
 
     // decode instruction
-    FPSemantics *inst = mainDecoder->decode(iidx, addr, bytes, nbytes);
-
-    if (listFuncs) {
-        printf("      POINT %lu: bbidx=%lu fidx=%lu \"%s\" [", 
-                iidx, bbidx, fidx,
-                (inst ? inst->getDisassembly().c_str() : ""));
-        FPDecoderXED::printInstBytes(stdout, bytes, nbytes);
-        printf("]\n");
-    }
+    FPSemantics *inst = mainDecoder->lookupByAddr(addr);
 
     // insert instrumentation
     if (!inst || !inst->isValid()) {
@@ -1655,27 +1661,20 @@ void instrumentInstruction(void* addr, unsigned char *bytes, size_t nbytes,
             // get instruction bytes and save to mutatee address
             // space
             //printf("saving instruction registration #%ld [%p]:  %s\n",
-                    //iidx, addr, inst->getDisassembly().c_str());
+                    //inst->getIndex(), addr, inst->getDisassembly().c_str());
             BPatch_constExpr *bytesExpr = saveStringToBinary((char*)bytes, nbytes);
             assert(bytesExpr != NULL);
             //FPDecoderXED::printInstBytes(stdout, bytes, nbytes);
 
             // add registration call to init snippets
             BPatch_Vector<BPatch_snippet*> *regArgs = new BPatch_Vector<BPatch_snippet*>();
-            regArgs->push_back(new BPatch_constExpr(iidx));
+            regArgs->push_back(new BPatch_constExpr(inst->getIndex()));
             regArgs->push_back(new BPatch_constExpr(addr));
             regArgs->push_back(bytesExpr);
             regArgs->push_back(new BPatch_constExpr(nbytes));
             BPatch_funcCallExpr *regInst = new BPatch_funcCallExpr(*regFunc, *regArgs);
             initSnippets.push_back(regInst);
 
-            if (listFuncs) {
-                /*
-                 *if (inst) {
-                 *    printf("%s", inst->getDecoderDebugData().c_str());
-                 *}
-                 */
-            }
         }
     }
 }
@@ -1690,14 +1689,9 @@ void instrumentBasicBlock(BPatch_function * function, BPatch_basicBlock *block,
     unsigned char bytes[MAX_RAW_INSN_SIZE];
     size_t nbytes, i;
 
-    bbidx++;
-    total_basicblocks++;
-
-    // get all floating-point instructions
+    // iterate backwards (PatchAPI restriction)
     PatchBlock::Insns insns;
     PatchAPI::convert(block)->getInsns(insns);
-
-    // now instrument each point separately
     //PatchBlock::Insns::iterator j;
     PatchBlock::Insns::reverse_iterator j;
     //for (j = insns.begin(); j != insns.end(); j++) {
@@ -1720,21 +1714,11 @@ void instrumentBasicBlock(BPatch_function * function, BPatch_basicBlock *block,
                     initSnippets);
         }
     }
-
-    if (listFuncs) {
-        printf("    BASIC BLOCK %lu: fidx=%lu start=%lx end=%lx size=%u\n", bbidx, fidx,
-                block->getStartAddress(), block->getEndAddress(), block->size());
-    }
 }
 
-void instrumentFunction(BPatch_function *function, BPatch_Vector<BPatch_snippet*> &initSnippets,
-        const char *name)
+void instrumentFunction(BPatch_function *function, BPatch_Vector<BPatch_snippet*> &initSnippets)
 {
-    fidx++;
-    total_functions++;
-    instructions_in_curr_func = 0;
-
-    // get all basic blocks
+    // iterate backwards (PatchAPI restriction)
     std::set<BPatch_basicBlock*> blocks;
     //std::set<BPatch_basicBlock*>::iterator b;
     std::set<BPatch_basicBlock*>::reverse_iterator b;
@@ -1744,59 +1728,33 @@ void instrumentFunction(BPatch_function *function, BPatch_Vector<BPatch_snippet*
     for (b = blocks.rbegin(); b != blocks.rend(); b++) {
         instrumentBasicBlock(function, *b, initSnippets);
     }
-
-    if (listFuncs) {
-        Address start, end;
-        function->getAddressRange(start, end);
-        printf("  FUNCTION %lu: name=%s base=%p size=%u %s (%lu instruction(s) instrumented)\n\n", fidx,
-                name, function->getBaseAddr(),
-                (unsigned)end - (unsigned)start,
-                (function->isSharedLib() ? "[shared] " : ""),
-                instructions_in_curr_func);
-    }
 }
 
-void instrumentModule(BPatch_module *module, BPatch_Vector<BPatch_snippet*> &initSnippets,
-        const char *name)
+void instrumentModule(BPatch_module *module, BPatch_Vector<BPatch_snippet*> &initSnippets)
 {
 	char funcname[BUFFER_STRING_LEN];
-    midx++;
-    total_modules++;
-
-	// get list of all functions
 	std::vector<BPatch_function *>* functions;
 	functions = module->getProcedures();
-	//printf("Instrumenting functions.\n");
-
-	// for each function ...
 	for (unsigned i = 0; i < functions->size(); i++) {
 		BPatch_function *function = functions->at(i);
 		function->getName(funcname, BUFFER_STRING_LEN);
 
         // CRITERIA FOR INSTRUMENTATION:
         // don't instrument
-        //   - main() or memset() or call_gmon_start() or frame_dummy()
+        //   - memset() or call_gmon_start() or frame_dummy()
         //   - functions that begin with an underscore
-        //   - functions that begin with "targ"
         // AND
         // if there's a preset list of functions to instrument,
         //   make sure the current function is on it
         // (and the inverse for excluded functions)
-		if ( /* (strcmp(funcname,"main")!=0) && */ (strcmp(funcname,"memset")!=0)
-                && (strcmp(funcname,"call_gmon_start")!=0) && (strcmp(funcname,"frame_dummy")!=0)
-                && funcname[0] != '_' &&
-                //!(strlen(funcname) > 4 && funcname[0]=='t' && funcname[1]=='a' && funcname[2]=='r' && funcname[3]=='g') &&
+		if ( (strcmp(funcname,"memset")!=0) && (strcmp(funcname,"call_gmon_start")!=0)
+                && (strcmp(funcname,"frame_dummy")!=0) && funcname[0] != '_' &&
                 !(restrictFuncs == 'F' && find(funcs.begin(), funcs.end(), string(funcname)) != funcs.end()) &&
                 (restrictFuncs != 'f' || find(funcs.begin(), funcs.end(), string(funcname)) != funcs.end())) {
 
-            instrumentFunction(function, initSnippets, funcname);
+            instrumentFunction(function, initSnippets);
 		}
 	}
-
-    if (listFuncs) {
-        printf("MODULE %lu: name=%s base=%p\n\n", midx,
-                name, module->getBaseAddr());
-    }
 }
 
 void instrumentApplication()
@@ -1826,17 +1784,6 @@ void instrumentApplication()
     } else {
         bpatch->setSaveFPR(false);
     }
-
-    /*
-     *BPatch_Vector<BPatch_function *>allFuncs;
-     *BPatch_Vector<BPatch_function *>::iterator fit;
-     *mainImg->getProcedures(allFuncs);
-     *printf("%d function(s): ", allFuncs.size());
-     *for (fit = allFuncs.begin(); fit != allFuncs.end(); fit++) {
-     *    (*fit)->getName(name, BUFFER_STRING_LEN);
-     *    printf(" FUNC %s\n", name);
-     *}
-     */
 
     mainApp->beginInsertionSet();
 
@@ -1890,65 +1837,20 @@ void instrumentApplication()
     for (m = modules->begin(); m != modules->end(); m++) {
         (*m)->getName(modname, BUFFER_STRING_LEN);
 
-        // don't config our own library or libm
+        // don't instrument our own library or libc/libm
         if (strcmp(modname, "libfpanalysis.so") == 0 ||
             strcmp(modname, "libm.so.6") == 0 ||
             strcmp(modname, "libc.so.6") == 0) {
             continue;
         }
 
-        // don't config shared libs unless requested
+        // don't instrument shared libs unless requested
         if ((*m)->isSharedLib() && !instShared) {
             continue;
         }
 
-        instrumentModule(*m, initSnippets, modname);
+        instrumentModule(*m, initSnippets);
     }
-
-#if 0
-    // OLD METHOD (ALL FUNCTIONS)
-
-    // get list of all functions
-	char modname[BUFFER_STRING_LEN];
-	char funcname[BUFFER_STRING_LEN];
-    std::vector<BPatch_function *>* functions;
-    functions = mainImg->getProcedures();
-    printf("Instrumenting functions.\n");
-
-    // for each function ...
-    for (unsigned i = 0; i < functions->size(); i++) {
-        BPatch_function *function = functions->at(i);
-        function->getName(funcname, BUFFER_STRING_LEN);
-        function->getModule()->getName(modname, BUFFER_STRING_LEN);
-
-        // don't instrument functions in our own library or libm
-        if (strcmp(modname, "libfpanalysis.so") == 0 ||
-            strcmp(modname, "libm.so.6") == 0) {
-            //printf(" skipping %s [%s]\n", funcname, modname);
-            continue;
-        }
-
-        // CRITERIA FOR INSTRUMENTATION:
-        // don't instrument functions from shared libraries (unless requested)
-        //   or main() or memset() or call_gmon_start() or frame_dummy()
-        //   or functions that begin with an underscore
-        //   or functions that begin with "targ"
-        // AND
-        // if there's a preset list of functions to instrument,
-        //   make sure the current function is on it
-        // (and the inverse for excluded functions)
-        if (/*!function->getModule()->isSharedLib() && */
-            (instShared || !function->getModule()->isSharedLib())
-            /* && (strcmp(funcname,"main")!=0) */ && (strcmp(funcname,"memset")!=0)
-            && (strcmp(funcname,"call_gmon_start")!=0) && (strcmp(funcname,"frame_dummy")!=0)
-            && funcname[0] != '_' &&
-            !(strlen(funcname) > 4 && funcname[0]=='t' && funcname[1]=='a' && funcname[2]=='r' && funcname[3]=='g') &&
-            !(restrictFuncs == 'F' && find(funcs.begin(), funcs.end(), string(funcname)) != funcs.end()) &&
-            (restrictFuncs != 'f' || find(funcs.begin(), funcs.end(), string(funcname)) != funcs.end())) {
-                instrumentFunction(function, initSnippets, funcname);
-        }
-    }
-#endif
 
     // embed configuration entries and add an initialization call for each;
     // since we need to insert them at the very beginning of initSnippets,
@@ -2069,6 +1971,156 @@ void instrumentApplication()
 
 // }}}
 
+// {{{ decoding helper functions
+
+/**
+ * NOTE: the decoding pass is separate from instrumentation pass because the
+ * instrumentation must work backwards (PatchAPI limitations), but we still want
+ * the instruction IDs to be sequential to match config files created by fpconf.
+ */
+
+void decodeInstruction(void* addr, unsigned char *bytes, size_t nbytes)
+{
+    iidx++;
+    total_fp_instructions++;
+    
+    FPSemantics *inst = mainDecoder->decode(iidx, addr, bytes, nbytes);
+
+    if (listFuncs) {
+        printf("      POINT %lu: bbidx=%lu fidx=%lu \"%s\" [", 
+                iidx, bbidx, fidx,
+                (inst ? inst->getDisassembly().c_str() : ""));
+        FPDecoderXED::printInstBytes(stdout, bytes, nbytes);
+        printf("]\n");
+    }
+}
+
+void decodeBasicBlock(BPatch_basicBlock *block)
+{
+    static size_t MAX_RAW_INSN_SIZE = 16;
+
+    Instruction::Ptr iptr;
+    void *addr;
+    unsigned char bytes[MAX_RAW_INSN_SIZE];
+    size_t nbytes, i;
+
+    bbidx++;
+    total_basicblocks++;
+
+    if (listFuncs) {
+        printf("    BASIC BLOCK %lu: fidx=%lu start=%lx end=%lx size=%u\n", bbidx, fidx,
+                block->getStartAddress(), block->getEndAddress(), block->size());
+    }
+
+    PatchBlock::Insns insns;
+    PatchAPI::convert(block)->getInsns(insns);
+    PatchBlock::Insns::iterator j;
+    for (j = insns.begin(); j != insns.end(); j++) {
+
+        // get instruction bytes
+        addr = (void*)((*j).first);
+        iptr = (*j).second;
+        nbytes = iptr->size();
+        assert(nbytes <= MAX_RAW_INSN_SIZE);
+        for (i=0; i<nbytes; i++) {
+            bytes[i] = iptr->rawByte(i);
+        }
+        bytes[nbytes] = '\0';
+
+        // apply filter
+        if (mainDecoder->filter(bytes, nbytes)) {
+            decodeInstruction(addr, bytes, nbytes);
+        }
+    }
+}
+
+void decodeFunction(BPatch_function *function, const char *name)
+{
+    fidx++;
+    total_functions++;
+
+    if (listFuncs) {
+        Address start, end;
+        function->getAddressRange(start, end);
+        printf("  FUNCTION %lu: name=%s base=%p size=%u %s\n", fidx,
+                name, function->getBaseAddr(),
+                (unsigned)end - (unsigned)start,
+                (function->isSharedLib() ? "[shared] " : ""));
+    }
+
+    // get all basic blocks
+    std::set<BPatch_basicBlock*> blocks;
+    std::set<BPatch_basicBlock*>::iterator b;
+    BPatch_flowGraph *cfg = function->getCFG();
+    cfg->getAllBasicBlocks(blocks);
+    for (b = blocks.begin(); b != blocks.end(); b++) {
+        decodeBasicBlock(*b);
+    }
+}
+
+void decodeModule(BPatch_module *module, const char *name)
+{
+    midx++;
+    total_modules++;
+
+    if (listFuncs) {
+        printf("MODULE %lu: name=%s base=%p\n", midx,
+                name, module->getBaseAddr());
+    }
+
+	std::vector<BPatch_function *>* functions;
+	functions = module->getProcedures();
+	char funcname[BUFFER_STRING_LEN];
+	for (unsigned i = 0; i < functions->size(); i++) {
+		BPatch_function *function = functions->at(i);
+		function->getName(funcname, BUFFER_STRING_LEN);
+
+        // CRITERIA FOR INSTRUMENTATION:
+        // don't instrument
+        //   - memset() or call_gmon_start() or frame_dummy()
+        //   - functions that begin with an underscore
+        // AND
+        // if there's a preset list of functions to instrument,
+        //   make sure the current function is on it
+        // (and the inverse for excluded functions)
+		if ( (strcmp(funcname,"memset")!=0) && (strcmp(funcname,"call_gmon_start")!=0)
+                && (strcmp(funcname,"frame_dummy")!=0) && funcname[0] != '_' &&
+                !(restrictFuncs == 'F' && find(funcs.begin(), funcs.end(), string(funcname)) != funcs.end()) &&
+                (restrictFuncs != 'f' || find(funcs.begin(), funcs.end(), string(funcname)) != funcs.end())) {
+
+            decodeFunction(function, funcname);
+		}
+    }
+}
+
+void decodeApplication()
+{
+	char modname[BUFFER_STRING_LEN];
+
+    std::vector<BPatch_module *>* modules;
+    std::vector<BPatch_module *>::iterator m;
+    modules = mainImg->getModules();
+    for (m = modules->begin(); m != modules->end(); m++) {
+        (*m)->getName(modname, BUFFER_STRING_LEN);
+
+        // don't decode our own library or libc/libm
+        if (strcmp(modname, "libfpanalysis.so") == 0 ||
+            strcmp(modname, "libm.so.6") == 0 ||
+            strcmp(modname, "libc.so.6") == 0) {
+            continue;
+        }
+
+        // don't decode shared libs unless requested
+        if ((*m)->isSharedLib() && !instShared) {
+            continue;
+        }
+
+        decodeModule(*m, modname);
+    }
+}
+
+// }}}
+
 // {{{ command-line parsing and help text
 
 void usage()
@@ -2087,6 +2139,7 @@ void usage()
     //printf("                         valid policies: \"single\", \"double\"\n");
     printf("  --svinp <policy>     in-place replacement shadow value analysis\n");
     printf("                         valid policies: \"single\", \"double\", \"mem_single\", \"mem_double\", \"config\"\n");
+    printf("  --rprec <bits>       reduced precision analysis\n");
     printf("\n");
     printf(" Options:\n");
     printf("\n");
@@ -2201,6 +2254,9 @@ bool parseCommandLine(unsigned argc, char *argv[])
 		} else if (strcmp(argv[i], "--svinp")==0) {
             inplaceSV = true;
             inplaceSVType = argv[++i];
+		} else if (strcmp(argv[i], "--rprec")==0) {
+            reducePrec = true;
+            reducePrecDefaultPrec = strtoul(argv[++i], NULL, 10);
 		} else if (strcmp(argv[i], "-c")==0 && i < argc-1) {
             configFile = argv[++i];
 		} else if (strcmp(argv[i], "-L")==0 && i < argc-1) {
@@ -2340,6 +2396,7 @@ int main(int argc, char *argv[])
     // perform instrumentation (agnostic to process/rewrite status)
     printf("Configuration:\n%s", configuration->getSummary().c_str());
     printf("Instrumenting application ...\n");
+    decodeApplication();
     instrumentApplication();
     printf("Instrumentation complete!\n");
 

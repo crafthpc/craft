@@ -23,7 +23,8 @@ enum FPReplaceEntryTag {
     RETAG_CINST,        // instruction counting
     RETAG_DCANCEL,      // cancellation detection
     RETAG_DNAN,         // NaN detection
-    RETAG_TRANGE        // range tracking
+    RETAG_TRANGE,       // range tracking
+    RETAG_RPREC         // reduced precision
 };
 
 /**

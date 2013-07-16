@@ -37,6 +37,7 @@
 #include "FPAnalysisDNan.h"
 #include "FPAnalysisTRange.h"
 #include "FPAnalysisInplace.h"
+#include "FPAnalysisRPrec.h"
 
 using namespace std;
 using namespace Dyninst;

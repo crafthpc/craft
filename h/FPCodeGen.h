@@ -111,6 +111,7 @@ class FPCodeGen {
                 uint64_t imm, FPRegister gpr);
 
         size_t buildAndGPR64WithGPR64(unsigned char *pos, FPRegister reg, FPRegister rm);
+        size_t buildAndXMMWithXMM(unsigned char *pos, FPRegister reg, FPRegister rm);
         size_t buildOrGPR64WithGPR64(unsigned char *pos, FPRegister reg, FPRegister rm);
         size_t buildXorGPR64WithGPR64(unsigned char *pos, FPRegister reg, FPRegister rm);
 
@@ -118,7 +119,7 @@ class FPCodeGen {
 
         size_t buildAddGPR64ToGPR64(unsigned char *pos, FPRegister reg, FPRegister rm);
 
-        size_t buildIncMem64(unsigned char *pos, int32_t offset);
+        size_t buildIncMem64(unsigned char *pos, int32_t offset, bool lock = false);
 
         size_t buildJumpNear32(unsigned char *pos,
                 int32_t offset, int32_t* &offset_pos);

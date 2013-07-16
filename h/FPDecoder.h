@@ -24,6 +24,7 @@ class FPDecoder
         virtual bool filter(unsigned char *bytes, size_t nbytes) = 0;
         virtual FPSemantics* decode(unsigned long iidx, void *addr, unsigned char *bytes, size_t nbytes) = 0;
         virtual FPSemantics* lookup(unsigned long iidx) = 0;
+        virtual FPSemantics* lookupByAddr(void* addr) = 0;
         virtual ~FPDecoder() { }
 };
 
