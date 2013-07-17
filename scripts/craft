@@ -57,7 +57,8 @@ $STATUS_NULL      = "x"
 $STATUS_CINST     = "i"
 $STATUS_DCANCEL   = "c"
 $STATUS_DNAN      = "n"
-$STATUS_TRANGE    = "r"
+$STATUS_TRANGE    = "t"
+$STATUS_RPREC     = "r"
 
 $FINALCFG_CUID = "FINAL"                            # special config; represents "best" final results
 
@@ -75,6 +76,7 @@ $FINALCFG_CUID = "FINAL"                            # special config; represents
 # {{{ PPoint
 class PPoint
     attr_accessor :uid              # unique regex identifier; e.g. "INSN #34: 0x804d3f"
+    attr_accessor :id               # program component identifier; e.g. 34 in line above
     attr_accessor :type             # module, function, instruction, etc.
     attr_accessor :orig_status      # single, double, ignore, candidate, none
     attr_accessor :parent           # PPoint
@@ -85,6 +87,10 @@ class PPoint
 
     def initialize (uid, type, orig_status)
         @uid = uid
+        @id = 0
+        if @uid =~ /#(\d+)/ then
+            @id = $1.to_i
+        end
         @type = type
         @orig_status = orig_status
         @parent = nil
@@ -102,7 +108,7 @@ class PPoint
         if @attrs.has_key?("prolog") then
             fout << @attrs["prolog"]
         end
-        output(config, fout, nil)
+        output(config, fout, nil, nil)
         fout.close
     end
 
@@ -135,25 +141,30 @@ class PPoint
         return @uid
     end
 
-    def build_label
+    def build_label(tag = nil)
         # build human-readable label
         label = @uid
-        if @uid.include?($TYPE_APPLICATION) then
-            label = "APP #{@attrs["desc"]}"
-        elsif @uid.include?($TYPE_MODULE) then
-            label = "MOD #{@attrs["desc"]}"
-        elsif @uid.include?($TYPE_FUNCTION) then
-            label = "FUNC #{@attrs["desc"]}"
-        elsif @uid.include?($TYPE_BASICBLOCK) then
-            label = "BBLK #{@attrs["addr"]}"
-        elsif @uid.include?($TYPE_INSTRUCTION) then
-            label = "INSN #{@attrs["addr"]} \"#{@attrs["desc"]}\""
+        if tag.nil? then
+            tag = ""
+        else
+            tag += " "
         end
-        return label
+        if @uid.include?($TYPE_APPLICATION) then
+            label = "APP #{tag}#{@attrs["desc"]}"
+        elsif @uid.include?($TYPE_MODULE) then
+            label = "MOD #{tag}#{@attrs["desc"]}"
+        elsif @uid.include?($TYPE_FUNCTION) then
+            label = "FUNC #{tag}#{@attrs["desc"]}"
+        elsif @uid.include?($TYPE_BASICBLOCK) then
+            label = "BBLK #{@attrs["addr"]} #{tag}"
+        elsif @uid.include?($TYPE_INSTRUCTION) then
+            label = "INSN #{@attrs["addr"]} #{tag}\"#{@attrs["desc"]}\""
+        end
+        return label.strip
     end
 
-
-    def output (config, fout, overload)
+    def output (config, fout, overload, overload_prec)
+        prec_line = nil
         fout.print("^")
         if type == $TYPE_INSTRUCTION then
             if @orig_status == $STATUS_CANDIDATE then
@@ -161,10 +172,12 @@ class PPoint
                 if not overload.nil? then
                     # status overridden by something higher up the tree
                     fout.print(overload)
+                    prec_line = "inst#{@id}_precision=#{overload_prec}"
                 else
                     if config.exceptions.has_key?(@uid) then
                         # status overridden by current config
                         fout.print(config.exceptions[@uid])
+                        prec_line = "inst#{@id}_precision=#{config.precisions[@uid]}"
                     else
                         # no override; output configuration default
                         fout.print(config.default)
@@ -178,6 +191,7 @@ class PPoint
                 if config.exceptions.has_key?(@uid) then
                     # children status overridden by current config
                     overload = config.exceptions[@uid]
+                    overload = config.precisions[@uid]
                 elsif not @orig_status == $STATUS_NONE then
                     # children status overridden by original config
                     overload = @orig_status
@@ -194,8 +208,11 @@ class PPoint
             fout.print("\"")
         end
         fout.print("\n")
+        if not prec_line.nil? then
+            fout.puts prec_line
+        end
         @children.each do |pt|
-            pt.output(config, fout, overload)
+            pt.output(config, fout, overload, overload_prec)
         end
     end
 end # }}}
@@ -217,12 +234,17 @@ class AppConfig
     attr_accessor :exceptions       # cuid -> status
     attr_accessor :attrs            # string => string
 
+    attr_accessor :defprec          # default precision (int)
+    attr_accessor :precisions       # cuid -> int
+
     def initialize (cuid, label, default)
         @cuid = cuid
         @label = label
         @default = default
         @exceptions = Hash.new
         @attrs = Hash.new
+        @defprec = 52
+        @precisions = Hash.new
     end
 
     def <=> (c2)
@@ -287,6 +309,15 @@ class AppConfig
         fn << ".cfg"
         return fn
     end
+
+    def add_pt_info(pt)
+        if pt.attrs.has_key?("cinst") then
+            @attrs["cinst"] = pt.attrs["cinst"]
+        else
+            @attrs["cinst"] = 0
+        end
+    end
+
 end # }}}
 
 
@@ -333,6 +364,7 @@ class Strategy
         # try to replace the entire program
         configs = Array.new
         cfg = AppConfig.new(@program.build_cuid, @program.build_label, @alternate)
+        cfg.add_pt_info(@program)
         cfg.exceptions[@program.uid] = @preferred
         cfg.attrs["level"] = $TYPE_APPLICATION
         configs << cfg
@@ -356,6 +388,7 @@ class Strategy
                     end
 
                     cfg = AppConfig.new(child_pt.build_cuid, child_pt.build_label, config.default)
+                    cfg.add_pt_info(pt)
                     cfg.exceptions[child_pt.uid] = v
                     cfg.attrs["level"] = child_pt.type
                     configs << cfg
@@ -403,12 +436,8 @@ class BinaryStrategy < Strategy
             config.exceptions.each_pair do |k,v|
                 pt = @program.lookup_by_uid(k)
                 cfg = AppConfig.new(pt.build_cuid, pt.build_label, config.default)
+                cfg.add_pt_info(pt)
                 cfg.exceptions[pt.uid] = v
-                if pt.attrs.has_key?("cinst") then
-                    cfg.attrs["cinst"] = pt.attrs["cinst"]
-                else
-                    cfg.attrs["cinst"] = 0
-                end
                 cfg.attrs["level"] = pt.type
                 configs << cfg
             end
@@ -430,13 +459,9 @@ class BinaryStrategy < Strategy
                         end
 
                         cfg = AppConfig.new(child_pt.build_cuid, child_pt.build_label, config.default)
+                        cfg.add_pt_info(child_pt)
                         #puts "ADDING #{cfg.cuid} #{child_pt.type}"
                         cfg.exceptions[child_pt.uid] = v
-                        if child_pt.attrs.has_key?("cinst") then
-                            cfg.attrs["cinst"] = child_pt.attrs["cinst"]
-                        else
-                            cfg.attrs["cinst"] = 0
-                        end
                         cfg.attrs["level"] = child_pt.type
                         configs << cfg
                     end
@@ -500,6 +525,7 @@ class ExhaustiveStrategy < Strategy
     def find_configs(pt, configs)
         if pt.type == @basetype then
             cfg = AppConfig.new(pt.build_cuid, pt.build_label, @alternate)
+            cfg.add_pt_info(pt)
             cfg.exceptions[pt.uid] = @preferred
             cfg.attrs["level"] = pt.type
             configs << cfg
@@ -516,6 +542,143 @@ class ExhaustiveStrategy < Strategy
     end
 
 end # }}}
+
+
+# RPrecStrategy
+#
+# Search algorithm that find the lowest reduced-precision level for each
+# instruction that allows the entire program to pass verification. Performs a
+# binary search on the precision level to speed convergence.
+#
+# {{{ RPrecStrategy
+class RPrecStrategy < Strategy
+
+    attr_accessor :lower_bound
+    attr_accessor :upper_bound
+
+    def initialize(program, pref, alt)
+        super(program, pref, alt)
+        @lower_bound = Hash.new(-1)
+        @upper_bound = Hash.new(52)
+    end
+
+    def reload_bounds_from_results(results)
+        @lower_bound = Hash.new(-1)
+        @upper_bound = Hash.new(52)
+        results.each do |cfg|
+            cfg.precisions.each_pair do |uid, prec|
+                if cfg.attrs["result"] == $RESULT_PASS then
+                    @upper_bound[uid] = prec
+                else
+                    @lower_bound[uid] = prec
+                end
+            end
+        end
+    end
+
+    def build_initial_configs
+        # find all basetype-level points
+        configs = Array.new
+        find_configs(@program, configs)
+        return configs
+    end
+
+    def find_configs(pt, configs)
+        if pt.type == @basetype then
+
+            # add upper bound config
+            #label = pt.build_label("%02d" % @upper_bound[pt.uid])
+            #cfg = AppConfig.new(pt.build_cuid, label, @alternate)
+            #cfg.add_pt_info(pt)
+            #cfg.exceptions[pt.uid] = @preferred
+            #cfg.precisions[pt.uid] = @upper_bound[pt.uid]
+            #cfg.attrs["level"] = pt.type
+            #cfg.attrs["prec"] = pt.type
+            #configs << cfg
+
+            # add lower bound config
+            #label = pt.build_label("%02d" % @lower_bound[pt.uid])
+            #cfg = AppConfig.new(pt.build_cuid, label, @alternate)
+            #cfg.add_pt_info(pt)
+            #cfg.exceptions[pt.uid] = @preferred
+            #cfg.precisions[pt.uid] = @lower_bound[pt.uid]
+            #cfg.attrs["level"] = pt.type
+            #cfg.attrs["prec"] = pt.type
+            #configs << cfg
+
+            # add midpoint config
+            mid = (@upper_bound[pt.uid] + @lower_bound[pt.uid])/2 + @lower_bound[pt.uid]
+            label = pt.build_label("%02d" % mid)
+            cfg = AppConfig.new(pt.build_cuid, label, @alternate)
+            cfg.add_pt_info(pt)
+            cfg.exceptions[pt.uid] = @preferred
+            cfg.precisions[pt.uid] = mid
+            cfg.attrs["level"] = pt.type
+            cfg.attrs["prec"] = mid
+            configs << cfg
+            
+        else
+            pt.children.each do |child|
+                find_configs(child, configs)
+            end
+        end
+    end
+
+    def add_midpoint_cfg(pt, configs)
+        mid = (@upper_bound[pt.uid] - @lower_bound[pt.uid])/2 + @lower_bound[pt.uid]
+        if (@upper_bound[pt.uid] > @lower_bound[pt.uid]+1) and
+                (mid != @upper_bound[pt.uid]) and (mid != @lower_bound[pt.uid]) then
+            #puts "  new mid to test = #{mid}"
+            label = pt.build_label("%02d" % mid)
+            cfg = AppConfig.new(pt.build_cuid, label, @alternate)
+            cfg.add_pt_info(pt)
+            cfg.exceptions[pt.uid] = @preferred
+            cfg.precisions[pt.uid] = mid
+            cfg.attrs["level"] = pt.type
+            cfg.attrs["prec"] = mid
+            configs << cfg
+        #else
+            #puts "  found lowest passing precision = #{@upper_bound[pt.uid]}"
+        end
+    end
+
+    def split_config(cfg)
+        configs = Array.new
+
+        # adjust bounds and add new midpoint configs
+        if cfg.attrs["result"] == $RESULT_PASS then
+            cfg.exceptions.each_key do |k|
+                pt = @program.lookup_by_uid(k)
+                #puts "old bounds: #{cfg.attrs["prec"]} in [#{@lower_bound[pt.uid]},#{@upper_bound[pt.uid]}]  passed"
+                @upper_bound[pt.uid] = cfg.attrs["prec"]
+                add_midpoint_cfg(pt, configs)
+            end
+        else
+            cfg.exceptions.each_key do |k|
+                pt = @program.lookup_by_uid(k)
+                #puts "old bounds: #{cfg.attrs["prec"]} in [#{@lower_bound[pt.uid]},#{@upper_bound[pt.uid]}]  failed"
+                @lower_bound[pt.uid] = cfg.attrs["prec"]
+                add_midpoint_cfg(pt, configs)
+            end
+        end
+
+        return configs
+    end
+
+    def build_final_config(results)
+        reload_bounds_from_results(results)
+        # simple union of all passing configs
+        cfg = AppConfig.new($FINALCFG_CUID, "Final Configuration", @alternate)
+        @upper_bound.each_pair do |uid, prec|
+            cfg.exceptions[uid] = $STATUS_RPREC
+            cfg.precisions[uid] = prec
+        end
+        return cfg
+    end
+
+end
+# }}}
+
 
 # App entry point
 
@@ -807,7 +970,16 @@ def resume_lower_search
     configs = Array.new
     old_configs = get_tested_configs
     old_configs.each do |cfg|
-        if cfg.attrs["result"] != $RESULT_PASS and is_single_base(cfg, old_base_type) then
+        if $strategy_name == "rprec" then
+            cfg.precisions.each_key do |uid|
+                pt = $program.lookup_by_uid(uid)
+                pt.children.each do |child|
+                    # at this, point we assume that $strategy is an RPrecStrategy
+                    # (guarded by $strategy_name check above)
+                    $strategy.add_midpoint_cfg(child, configs)
+                end
+            end
+        elsif cfg.attrs["result"] != $RESULT_PASS and is_single_base(cfg, old_base_type) then
             $strategy.split_config(cfg).each do |c|
                 configs << c
             end
@@ -837,24 +1009,33 @@ def run_main_search_loop
         $max_queue_length = queue_length if queue_length > $max_queue_length
 
         puts "Testing config #{cfg.label} ..."
+        result = run_config(cfg)
+        add_tested_config(cfg)
+        remove_from_inproc(cfg)
+        rebuild_final_config
 
-        if run_config(cfg) == $RESULT_PASS then
+        add_children = true
 
-            # this config passed
+        if $strategy_name != "rprec" then
 
-        else
-
-            # check to see if we're at the base type; stop if so
-            add_children = true
-            if is_single_base(cfg, $base_type) then
+            # check to see if we passed
+            if result == $RESULT_PASS then
                 add_children = false
             end
 
-            # add any children we need to test
-            if add_children then
-                configs = $strategy.split_config(cfg)
-                configs.each do |child|
-                    add_child = true
+            # check to see if we're at the base type; stop if so
+            if is_single_base(cfg, $base_type) then
+                add_children = false
+            end
+        end
+
+        # add any children we need to test
+        if add_children then
+            configs = $strategy.split_config(cfg)
+            configs.each do |child|
+                add_child = true
+
+                if $strategy_name != "rprec" then
 
                     # skip single-exception configs where the only exception
                     # is lower than the base type; currently there is no
@@ -865,31 +1046,32 @@ def run_main_search_loop
                             add_child = false
                         end
                     end
+                end
 
-                    # skip non-executed instructions if desired; assume they
-                    # will pass
-                    if $skip_nonexecuted and child.attrs["cinst"].to_i == 0 then
-                        puts "Skipping non-executed config #{child.label}."
-                        add_to_mainlog("    Skipping non-executed config #{child.label}.")
-                        child.attrs["result"] = $RESULT_PASS
-                        child.attrs["skipped"] = "yes"
-                        calculate_pct_stats(child)
-                        add_tested_config(child)
-                        rebuild_final_config
-                        add_child = false
+                # skip non-executed instructions if desired; assume they
+                # will pass
+                if $skip_nonexecuted and child.attrs["cinst"].to_i == 0 then
+                    puts "Skipping non-executed config #{child.label}."
+                    add_to_mainlog("    Skipping non-executed config #{child.label}.")
+                    child.attrs["result"] = $RESULT_PASS
+                    child.attrs["skipped"] = "yes"
+                    if $strategy_name == "rprec" then
+                        child.precisions.each_key do |k|
+                            child.precisions[k] = 0
+                        end
                     end
-                    if add_child then
-                        add_to_workqueue(child)
-                        puts "Added config #{child.label} to workqueue."
-                    end
+                    calculate_pct_stats(child)
+                    add_tested_config(child)
+                    rebuild_final_config
+                    add_child = false
+                end
+
+                if add_child then
+                    add_to_workqueue(child)
+                    puts "Added config #{child.label} to workqueue."
                 end
             end
-
         end
-
-        add_tested_config(cfg)
-        remove_from_inproc(cfg)
-        rebuild_final_config
 
         cfg = get_next_workqueue_item
     end
@@ -1007,6 +1189,7 @@ def finalize_search
     # finalize report
     elapsed = Time.now.to_f - $start_time.to_f
     summary = get_tested_configs_summary
+    report << " "
     report << "Total candidates:          #{"%11d" % $total_candidates}"
     report << "Total configs tested:      #{"%11d" % summary["total"]}"
     report << "  Total passed:            #{"%11d" % summary["pass"]}"
@@ -1076,6 +1259,14 @@ def parse_command_line
     $main_mode = ARGV.shift.strip.downcase
     if $main_mode == "search" then
         $main_mode = "start"
+    end
+    if $main_mode == "test" then
+        $main_mode = "start"
+        $status_preferred = $STATUS_RPREC
+        $status_alternate = $STATUS_IGNORE
+        $fpconf_options = "-c --rprec 52"
+        $strategy_name = "rprec"
+        #$skip_nonexecuted = false
     end
     if not ["start","resume","worker","status","help","clean"].include?($main_mode) then
         puts "Invalid mode: #{$main_mode}"
@@ -1212,6 +1403,8 @@ def initialize_strategy
         $strategy = BinaryStrategy.new($program, $status_preferred, $status_alternate)
     elsif $strategy_name == "exhaustive" then
         $strategy = ExhaustiveStrategy.new($program, $status_preferred, $status_alternate)
+    elsif $strategy_name == "rprec" then
+        $strategy = RPrecStrategy.new($program, $status_preferred, $status_alternate)
     else
         puts "Unrecognized search strategy \"#{$strategy_name}\""
         puts "Aborting search."
@@ -1829,10 +2022,11 @@ def print_status
 
     # best results so far and current in-process configs
     if full_output then
-        build_best_report(8).each do |rl|
+        report = build_best_report(8)
+        report.each do |rl|
             status_text << rl
         end
-        status_text << hbar
+        status_text << hbar if report.size > 0
         if get_inproc_length > 0 or get_workqueue_length > 0 then
             inproc = get_inproc_configs
             queue = get_workqueue_configs
@@ -1928,6 +2122,25 @@ end
 
 
 def build_best_report(num,copy_files=false)
+    if $strategy_name == "rprec" then
+        return Array.new
+    else
+        return build_best_regular_report(num,copy_files)
+    end
+end
+
+def build_reduced_prec_report(num,copy_files=false)
+    results = get_tested_configs
+    $strategy.reload_bounds_from_results(results)
+    report = Array.new
+
+    # TODO: iterate over $program and find the best bounds for each instruction
+    #       then merge this with the icount and cinst info and report it all
+
+    return report
+end
+
+def build_best_regular_report(num,copy_files=false)
     # find best individual configs
     results = get_tested_configs
     inst_passed_cfgs = Array.new
