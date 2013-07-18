@@ -41,11 +41,12 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public static final Color DEFAULT_COLOR_CANDIDATE = new Color(105, 210, 231); // (125, 175, 225);
     public static final Color DEFAULT_COLOR_SINGLE    = new Color(209, 242, 165); // (125, 255, 125);
     public static final Color DEFAULT_COLOR_DOUBLE    = new Color(252, 157, 154); // (255, 120, 120);
+    public static final Color DEFAULT_COLOR_RPREC     = new Color(255, 212, 120);
     public static final Color DEFAULT_COLOR_NULL      = new Color(224, 224, 224);
-    public static final Color DEFAULT_COLOR_TRANGE    = new Color(224, 162, 232);
-    public static final Color DEFAULT_COLOR_CINST     = new Color(224, 162, 232);
-    public static final Color DEFAULT_COLOR_DCANCEL   = new Color(224, 162, 232);
-    public static final Color DEFAULT_COLOR_DNAN      = new Color(224, 162, 232);
+    public static final Color DEFAULT_COLOR_TRANGE    = new Color(244, 182, 252);
+    public static final Color DEFAULT_COLOR_CINST     = new Color(244, 182, 252);
+    public static final Color DEFAULT_COLOR_DCANCEL   = new Color(244, 182, 252);
+    public static final Color DEFAULT_COLOR_DNAN      = new Color(244, 182, 252);
     public static final Color DEFAULT_COLOR_BORDER    = new Color(  0,   0, 225);
 
     // app-wide variables
@@ -55,6 +56,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public File mainConfigFile;
     public java.util.List<ConfigTreeNode> mainConfigEntries;
     public java.util.List<String> mainConfigMiscEntries;
+    public Map<Integer, ConfigTreeNode> nodeOfInsnID;
 
     // main interface elements
     public JFileChooser fileChooser;
@@ -74,6 +76,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public JCheckBoxMenuItem showEffectiveMenu;
     public JCheckBoxMenuItem showCodeCoverageMenu;
     public JCheckBoxMenuItem showErrorMenu;
+    public JCheckBoxMenuItem showPrecisionMenu;
     public JButton toggleButton;
     public JButton setNoneButton;
     public JButton setIgnoreButton;
@@ -90,6 +93,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public JLabel candidateKeyLabel;
     public JLabel singleKeyLabel;
     public JLabel doubleKeyLabel;
+    public JLabel rprecKeyLabel;
     public JLabel nullKeyLabel;
     public JLabel miscKeyLabel;
     public JPanel bottomPanel;
@@ -143,6 +147,9 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         showErrorMenu = new JCheckBoxMenuItem("View Reported Error");
         showErrorMenu.addActionListener(this);
         viewMenu.add(showErrorMenu);
+        showPrecisionMenu = new JCheckBoxMenuItem("View Reduced Precision Levels");
+        showPrecisionMenu.addActionListener(this);
+        viewMenu.add(showPrecisionMenu);
         viewMenu.add(new JSeparator());
         viewMenu.add(new ExpandRowsAction(this, "Expand All",     null, null, "all"));
         viewMenu.add(new ExpandRowsAction(this, "Collapse All",   null, null, "none"));
@@ -221,37 +228,43 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         noneKeyLabel = new JLabel("NONE");
         noneKeyLabel.setFont(DEFAULT_FONT_MONO_BOLD);
         bottomPanel.add(noneKeyLabel);
-        bottomPanel.add(new JLabel("  "));
+        bottomPanel.add(new JLabel(" "));
         ignoreKeyLabel = new JLabel("IGNORE");
         ignoreKeyLabel.setBackground(DEFAULT_COLOR_IGNORE);
         ignoreKeyLabel.setFont(DEFAULT_FONT_MONO_BOLD);
         ignoreKeyLabel.setOpaque(true);
         bottomPanel.add(ignoreKeyLabel);
-        bottomPanel.add(new JLabel("  "));
+        bottomPanel.add(new JLabel(" "));
         candidateKeyLabel = new JLabel("CANDIDATE");
         candidateKeyLabel.setBackground(DEFAULT_COLOR_CANDIDATE);
         candidateKeyLabel.setFont(DEFAULT_FONT_MONO_BOLD);
         candidateKeyLabel.setOpaque(true);
         bottomPanel.add(candidateKeyLabel);
-        bottomPanel.add(new JLabel("  "));
+        bottomPanel.add(new JLabel(" "));
         singleKeyLabel = new JLabel("SINGLE");
         singleKeyLabel.setBackground(DEFAULT_COLOR_SINGLE);
         singleKeyLabel.setFont(DEFAULT_FONT_MONO_BOLD);
         singleKeyLabel.setOpaque(true);
         bottomPanel.add(singleKeyLabel);
-        bottomPanel.add(new JLabel("  "));
+        bottomPanel.add(new JLabel(" "));
         doubleKeyLabel = new JLabel("DOUBLE");
         doubleKeyLabel.setBackground(DEFAULT_COLOR_DOUBLE);
         doubleKeyLabel.setFont(DEFAULT_FONT_MONO_BOLD);
         doubleKeyLabel.setOpaque(true);
         bottomPanel.add(doubleKeyLabel);
-        bottomPanel.add(new JLabel("  "));
+        bottomPanel.add(new JLabel(" "));
+        rprecKeyLabel = new JLabel("RPREC");
+        rprecKeyLabel.setBackground(DEFAULT_COLOR_RPREC);
+        rprecKeyLabel.setFont(DEFAULT_FONT_MONO_BOLD);
+        rprecKeyLabel.setOpaque(true);
+        bottomPanel.add(rprecKeyLabel);
+        bottomPanel.add(new JLabel(" "));
         nullKeyLabel = new JLabel("NULL");
         nullKeyLabel.setBackground(DEFAULT_COLOR_NULL);
         nullKeyLabel.setFont(DEFAULT_FONT_MONO_BOLD);
         nullKeyLabel.setOpaque(true);
         bottomPanel.add(nullKeyLabel);
-        bottomPanel.add(new JLabel("  "));
+        bottomPanel.add(new JLabel(" "));
         miscKeyLabel = new JLabel("MISC");
         miscKeyLabel.setBackground(DEFAULT_COLOR_TRANGE);
         miscKeyLabel.setFont(DEFAULT_FONT_MONO_BOLD);
@@ -307,6 +320,21 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     // }}}
 
     // {{{ helper/utility functions
+
+    private static final String RPREC_REGEX = "inst(\\d+)_precision=(\\d+)";
+
+    private void parseReducedPrecisionConfig(String line) {
+        String id = Util.extractRegex(line, RPREC_REGEX, 1);
+        if (nodeOfInsnID != null && id != null) {
+            Integer ii = Integer.valueOf(id);
+            if (nodeOfInsnID.containsKey(ii)) {
+                ConfigTreeNode node = nodeOfInsnID.get(ii);
+                String prec = Util.extractRegex(line, RPREC_REGEX, 2);
+                node.precision = Long.parseLong(prec);
+                setShowPrecision(true);
+            }
+        }
+    }
 
     public void openFile(File file) {
         if (file.getName().endsWith(".cfg")) {
@@ -365,6 +393,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         mainConfigFile = file;
         mainConfigEntries = new ArrayList<ConfigTreeNode>();
         mainConfigMiscEntries = new ArrayList<String>();
+        nodeOfInsnID = new HashMap<Integer, ConfigTreeNode>();
 
         ConfigTreeNode appNode = new ConfigTreeNode();
         ConfigTreeNode curModNode = null;
@@ -427,6 +456,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                                curBlockNode != null) {
                         curBlockNode.add(curNode);
                         mainConfigEntries.add(curNode);
+                        nodeOfInsnID.put(Integer.valueOf(curNode.number), curNode);
                     }
                 } else {
                     mainConfigMiscEntries.add(curLine);
@@ -437,6 +467,11 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         } catch (IOException e) {
             System.err.println("ERROR: " + e.getMessage());
         }
+
+        for (String s : mainConfigMiscEntries) {
+            parseReducedPrecisionConfig(s);
+        }
+        appNode.updatePrecision();
 
         setTitle(DEFAULT_TITLE + " - " + mainConfigFile.getName());
         filenameLabel.setText(mainConfigFile.getName());
@@ -715,6 +750,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         long candidateCount = 0;
         long singleCount    = 0;
         long doubleCount    = 0;
+        long rprecCount     = 0;
         long nullCount      = 0;
         long miscCount      = 0;
         if (allCounts.containsKey(ConfigTreeNode.CNStatus.NONE)) {
@@ -731,6 +767,9 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         }
         if (allCounts.containsKey(ConfigTreeNode.CNStatus.DOUBLE)) {
             doubleCount    += (allCounts.get(ConfigTreeNode.CNStatus.DOUBLE).longValue());
+        }
+        if (allCounts.containsKey(ConfigTreeNode.CNStatus.RPREC)) {
+            rprecCount     += (allCounts.get(ConfigTreeNode.CNStatus.RPREC).longValue());
         }
         if (allCounts.containsKey(ConfigTreeNode.CNStatus.NULL)) {
             nullCount      += (allCounts.get(ConfigTreeNode.CNStatus.NULL).longValue());
@@ -752,6 +791,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         candidateKeyLabel.setText(" CANDIDATE (" + candidateCount + ") ");
         singleKeyLabel.setText   (" SINGLE ("    + singleCount    + ") ");
         doubleKeyLabel.setText   (" DOUBLE ("    + doubleCount    + ") ");
+        rprecKeyLabel.setText    (" RPREC ("     + rprecCount     + ") ");
         nullKeyLabel.setText     (" NULL ("      + nullCount      + ") ");
         miscKeyLabel.setText     (" MISC ("      + miscCount      + ") ");
     }
@@ -1034,6 +1074,14 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         showErrorMenu.setSelected(value);
     }
 
+    void setShowPrecision(boolean value) {
+        mainRenderer.setShowPrecision(value);
+        refreshTreeLabels();
+        refreshKeyLabels();
+        showPrecisionMenu.setSelected(value);
+    }
+
+
     // }}}
 
     // {{{ event listeners
@@ -1075,6 +1123,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             setShowError(showErrorBox.isSelected());
         } else if (e.getSource() == showErrorMenu) {
             setShowError(showErrorMenu.isSelected());
+        } else if (e.getSource() == showPrecisionMenu) {
+            setShowPrecision(showPrecisionMenu.isSelected());
         } else if (e.getSource() == toggleButton) {
             toggleSelection();
         } else if (e.getSource() == setNoneButton) {
