@@ -98,7 +98,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     public ConfigTreeNode(String configLine) {
         super();
 
-        int pos = -1;
+        int pos = -1, pos2;
 
         if (configLine.contains("APPLICATION")) {
             type = CNType.APPLICATION;
@@ -140,7 +140,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         if (pos >= 0) {
             pos++;
             if (Character.isDigit(configLine.charAt(pos))) {
-                int pos2 = pos;
+                pos2 = pos;
                 while ((pos2 < configLine.length()) && Character.isDigit(configLine.charAt(pos2))) {
                     pos2++;
                 }
@@ -151,17 +151,19 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         }
         regexTag += " #" + number;
 
-        if (configLine.length() > 2) {
-            pos = configLine.indexOf(':');
-            if (pos >= 0 && pos < configLine.length()-1) {
-                label = configLine.substring(pos+1).trim();
-            }
-        } else {
-            label = "(empty)";
-        }
-
         address = Util.extractRegex(configLine, "(0x[0-9a-fA-F]+)", 0);
         regexTag += ": " + address;
+
+        label = "(empty)";
+        if (configLine.length() > 2) {
+            pos = configLine.indexOf('"');
+            if (pos >= 0 && pos < configLine.length()-1) {
+                pos2 = configLine.indexOf('"', pos+1);
+                if (pos2 > pos) {
+                    label = address + "  " + configLine.substring(pos, pos2+1);
+                }
+            }
+        }
 
         insnCount = -1;
         resetExecCounts();

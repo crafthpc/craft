@@ -24,7 +24,7 @@ WARN_FLAGS = -Wall -W -Wcast-align -Wno-deprecated-declarations
 
 # Dyninst flags
 DYNINST_CFLAGS  = -I$(DYNINST_ROOT)/$(PLATFORM)/include -I$(DYNINST_ROOT)/dyninst $(LOCAL_INC_DIRS)
-DYNINST_LDFLAGS = -L$(DYNINST_ROOT)/$(PLATFORM)/lib $(LOCAL_LIB_DIRS) \
+DYNINST_LDFLAGS = -L$(DYNINST_ROOT)/$(PLATFORM)/lib $(LOCAL_LIB_DIRS) -ldwarf \
                   -ldyninstAPI -lstackwalk -lpcontrol -lpatchAPI -lparseAPI -linstructionAPI \
 				  -lsymtabAPI -lsymLite -ldynDwarf -ldynElf -lcommon -pthread -ldl
 

@@ -1,0 +1,15 @@
+#!/bin/bash
+#
+# compiles all result files from a CRAFT search run into a gzip'ed tarball
+#
+
+RESPATH=$1
+TARFILE=$1.tar
+ZIPFILE=$1.tar.gz
+
+tar -cvf $TARFILE $RESPATH/craft_*.cfg          # orig and final configs
+tar -rvf $TARFILE $RESPATH/profile/*.log        # profiling data
+tar -rvf $TARFILE $RESPATH/src/*                # source code (optional)
+
+gzip -f $TARFILE
+

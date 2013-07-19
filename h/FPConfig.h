@@ -51,17 +51,29 @@ class FPConfig
 
     private:
 
-        static const char RE_FLAG      = '^';
-        static const char RE_NONE      = ' ';
-        static const char RE_IGNORE    = '!';
-        static const char RE_SINGLE    = 's';
-        static const char RE_DOUBLE    = 'd';
-        static const char RE_CANDIDATE = '?';
-        static const char RE_NULL      = 'x';
-        static const char RE_CINST     = 'i';
-        static const char RE_DCANCEL   = 'c';
-        static const char RE_DNAN      = 'n';
-        static const char RE_TRANGE    = 'r';
+
+        /**
+         * MASTER LIST OF CONFIG FILE FLAGS
+         *
+         * These used to be only for replacement (thus the "RE_" nomenclature),
+         * but now they can be used to configure a mutatee for all types of analysis.
+         */
+        static const char RE_FLAG      = '^';       // flag indicating a mutatee config entry
+        static const char RE_NONE      = ' ';       // empty flag
+        static const char RE_IGNORE    = '!';       // ignore (do not instrument or replace)
+        static const char RE_NULL      = 'x';       // null instrumentation (only Dyninst overhead)
+
+        // Replacement-based analyses:
+        static const char RE_TRANGE    = 'r';       // range tracking replacement
+        static const char RE_CANDIDATE = '?';       // candidate for replacement
+        static const char RE_SINGLE    = 's';       // single-precision replacement
+        static const char RE_DOUBLE    = 'd';       // double-precision replacement
+
+        // Instrumentation-based analyses:
+        static const char RE_CINST     = 'i';       // instruction counting
+        static const char RE_DCANCEL   = 'c';       // cancellation detection
+        static const char RE_DNAN      = 'n';       // NaN detection
+
 
         static const string RE_APP;
         static const string RE_MODULE;
