@@ -191,7 +191,7 @@ class PPoint
                 if config.exceptions.has_key?(@uid) then
                     # children status overridden by current config
                     overload = config.exceptions[@uid]
-                    overload = config.precisions[@uid]
+                    overload_prec = config.precisions[@uid]
                 elsif not @orig_status == $STATUS_NONE then
                     # children status overridden by original config
                     overload = @orig_status
