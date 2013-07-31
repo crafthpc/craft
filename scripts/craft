@@ -711,7 +711,7 @@ def main
     $fpinst_invoke = "fpinst"               # invoke mutator
 
     # check command-line options
-    if ARGV.size == 0 or ARGV.include?("-h") then
+    if ARGV.size == 0 or ARGV[0] == "help" or ARGV.include?("-h") then
         $main_mode = "help"
         print_usage
         exit
@@ -1260,14 +1260,6 @@ def parse_command_line
     if $main_mode == "search" then
         $main_mode = "start"
     end
-    if $main_mode == "test" then
-        $main_mode = "start"
-        $status_preferred = $STATUS_RPREC
-        $status_alternate = $STATUS_IGNORE
-        $fpconf_options = "-c --rprec 52"
-        $strategy_name = "rprec"
-        #$skip_nonexecuted = false
-    end
     if not ["start","resume","worker","status","help","clean"].include?($main_mode) then
         puts "Invalid mode: #{$main_mode}"
         exit
@@ -1297,9 +1289,18 @@ def parse_command_line
             elsif opt == "-c" then
                 # initial configuration
                 $initial_cfg_fn = ARGV.shift
+            elsif opt == "-C" then
+                # initial fpconf options
+                $fpconf_options = ARGV.shift
             elsif opt == '-m' then
                 # memory-based analysis
                 $fpconf_options = "-c --svinp mem_double "
+            elsif opt == '-r' then
+                # reduced-precision analysis
+                $status_preferred = $STATUS_RPREC
+                $status_alternate = $STATUS_IGNORE
+                $fpconf_options = "-c --rprec 52"
+                $strategy_name = "rprec"
             elsif opt == '-a' then
                 # skip non-executed configs
                 $skip_nonexecuted = false
@@ -1919,31 +1920,41 @@ end
 
 def print_usage
     puts " "
-    puts "Usage:  #{$self_invoke} start [start-options] <binary>    (supervisor process)"
+    puts "CRAFT #{$CRAFT_VERSION}"
+    puts "Automatic search script"
+    puts " "
+    puts "Usage:  #{$self_invoke} start [start-options] <binary>     (supervisor process)"
     puts "        #{$self_invoke} search [start-options] <binary>    (supervisor process)"
     puts "          or"
-    puts "        #{$self_invoke} resume [resume-options]           (resume supervisor process)"
+    puts "        #{$self_invoke} resume [resume-options]            (resume supervisor process)"
     puts "          or"
-    puts "        #{$self_invoke} status                            (display search status)"
+    puts "        #{$self_invoke} status                             (display search status)"
     puts "          or"
-    puts "        #{$self_invoke} clean                             (reset search)"
+    puts "        #{$self_invoke} clean                              (reset search)"
     puts "          or"
-    puts "        #{$self_invoke} worker <id> <dir>                 (worker process; used internally)"
+    puts "        #{$self_invoke} worker <id> <dir>                  (worker process; used internally)"
     puts " "
-    puts "Valid initial options:"
+    puts "Shortcut mode modifications:"
+    puts "   <default>      operation-based mixed-precision analysis"
+    puts "   -m             memory-based mixed-precision analysis"
+    puts "                    equivalent to '-C \"-c --svinp mem_double\"'"
+    puts "   -r             reduced-precision analysis"
+    puts "                    equivalent to '-d #{$STATUS_RPREC} -s \"rprec\" -C \"-c --rprec 52\"'"
+    puts " "
+    puts "Initiation options:"
     puts "   -a             test all generated configs (don't skip non-executed instructions)"
     puts "   -b             stop splitting configs at the basic block level"
     puts "   -c <file>      use <file> as initial base configuration"
+    puts "   -C \"<opts>\"    pass the given options to fpconf to generate initial base configuration"
     puts "   -d <p>         debug mode (<p> -> ignore instead of double->single)"
     puts "   -D <p> <a>     debug mode (<p> -> <a> instead of double->single)"
     puts "   -f             stop splitting configs at the function level"
     puts "   -j <np>        spawn <np> worker threads"
-    puts "   -m             memory-based analysis"
     puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
-    puts "                    valid strategies:  \"simple\", \"bin_simple\", and \"exhaustive\""
+    puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"rprec\""
     puts " "
-    puts "Valid resumption options:"
+    puts "Resumption options:"
     puts "   -j <np>        spawn <np> worker threads"
     puts "   -l             resume search at lower level (e.g., INSN instead of BBLK)"
     puts "   -n             resume search and restart in-process tests"
