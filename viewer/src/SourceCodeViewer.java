@@ -269,8 +269,8 @@ public class SourceCodeViewer extends JFrame
                 if (node.status == ConfigTreeNode.CNStatus.DOUBLE) {
                     fi.incrementDouble(lineno);
                 }
-                if (node.status == ConfigTreeNode.CNStatus.RPREC) {
-                    fi.setMaxPrecision(lineno, node.precision);
+                if (node.getEffectivePrecision() > -1) {
+                    fi.setMaxPrecision(lineno, node.getEffectivePrecision());
                 }
             }
         } else {
