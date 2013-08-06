@@ -100,7 +100,7 @@ class PPoint
         @byaddr = Hash.new
     end
 
-    def build_config_file (config, fn)
+    def build_config_file (config, fn, only_insns=true)
         # write out a configuration file for this program and the given config
         # this method will only be called in an APPLICATION node; it calls
         # output() to recursively print the other levels
@@ -108,7 +108,11 @@ class PPoint
         if @attrs.has_key?("prolog") then
             fout << @attrs["prolog"]
         end
-        output(config, fout, nil, nil)
+        if only_insns then
+            output(config, fout, nil, nil)
+        else
+            output_all(config, fout)
+        end
         fout.close
     end
 
@@ -163,7 +167,42 @@ class PPoint
         return label.strip
     end
 
-    def output (config, fout, overload, overload_prec)
+    def output_all(config, fout)
+        prec_line = nil
+        fout.print("^")
+        if config.exceptions.has_key?(@uid) then
+            # status overridden by current config
+            fout.print(config.exceptions[@uid])
+            if config.exceptions[@uid] == $STATUS_RPREC then
+                prec_line = "#{type}_#{@id}_precision=#{config.precisions[@uid]}"
+            end
+        else
+            if @orig_status == $STATUS_CANDIDATE then
+                # candidate for replacement; output configuration default
+                fout.print(config.default)
+            else
+                # no override; output original default
+                fout.print(@orig_status)
+            end
+        end
+        fout.print(" ")
+        fout.print($TYPE_SPACES[@type])     # indentation
+        fout.print(@uid)
+        if @attrs.has_key?("desc") then
+            fout.print(" \"")
+            fout.print(@attrs["desc"])
+            fout.print("\"")
+        end
+        fout.print("\n")
+        if not prec_line.nil? then
+            fout.puts prec_line
+        end
+        @children.each do |pt|
+            pt.output_all(config, fout)
+        end
+    end
+
+    def output(config, fout, overload, overload_prec)
         prec_line = nil
         fout.print("^")
         if type == $TYPE_INSTRUCTION then
@@ -172,12 +211,16 @@ class PPoint
                 if not overload.nil? then
                     # status overridden by something higher up the tree
                     fout.print(overload)
-                    prec_line = "inst#{@id}_precision=#{overload_prec}"
+                    if overload == $STATUS_RPREC then
+                        prec_line = "#{type}_#{@id}_precision=#{overload_prec}"
+                    end
                 else
                     if config.exceptions.has_key?(@uid) then
                         # status overridden by current config
                         fout.print(config.exceptions[@uid])
-                        prec_line = "inst#{@id}_precision=#{config.precisions[@uid]}"
+                        if config.exceptions[@uid] == $STATUS_RPREC then
+                            prec_line = "#{type}_#{@id}_precision=#{config.precisions[@uid]}"
+                        end
                     else
                         # no override; output configuration default
                         fout.print(config.default)
@@ -191,7 +234,9 @@ class PPoint
                 if config.exceptions.has_key?(@uid) then
                     # children status overridden by current config
                     overload = config.exceptions[@uid]
-                    overload_prec = config.precisions[@uid]
+                    if overload == $STATUS_RPREC then
+                        overload_prec = config.precisions[@uid]
+                    end
                 elsif not @orig_status == $STATUS_NONE then
                     # children status overridden by original config
                     overload = @orig_status
@@ -337,7 +382,7 @@ class Strategy
     attr_accessor :program
     attr_accessor :preferred
     attr_accessor :alternate
-    attr_accessor :basetype
+    attr_accessor :base_type
 
     def initialize(program, pref, alt)
         @preferred = pref
@@ -454,7 +499,7 @@ class BinaryStrategy < Strategy
                         child_pt = child
 
                         # skip single-child nodes
-                        if child.children.size == 1 and child.type != @basetype then
+                        if child.children.size == 1 and child.type != @base_type then
                             child_pt = child.children.first
                         end
 
@@ -516,14 +561,14 @@ end # }}}
 class ExhaustiveStrategy < Strategy
 
     def build_initial_configs
-        # find all basetype-level points
+        # find all base_type-level points
         configs = Array.new
         find_configs(@program, configs)
         return configs
     end
 
     def find_configs(pt, configs)
-        if pt.type == @basetype then
+        if pt.type == @base_type then
             cfg = AppConfig.new(pt.build_cuid, pt.build_label, @alternate)
             cfg.add_pt_info(pt)
             cfg.exceptions[pt.uid] = @preferred
@@ -555,16 +600,19 @@ class RPrecStrategy < Strategy
 
     attr_accessor :lower_bound
     attr_accessor :upper_bound
+    attr_accessor :num_iterations
 
     def initialize(program, pref, alt)
         super(program, pref, alt)
         @lower_bound = Hash.new(-1)
         @upper_bound = Hash.new(52)
+        @num_iterations = Hash.new(52)
     end
 
     def reload_bounds_from_results(results)
         @lower_bound = Hash.new(-1)
         @upper_bound = Hash.new(52)
+        @num_iterations = Hash.new(0)
         results.each do |cfg|
             cfg.precisions.each_pair do |uid, prec|
                 if cfg.attrs["result"] == $RESULT_PASS then
@@ -572,19 +620,21 @@ class RPrecStrategy < Strategy
                 else
                     @lower_bound[uid] = prec
                 end
+                @num_iterations[uid] = @num_iterations[uid] + 1
             end
         end
     end
 
     def build_initial_configs
-        # find all basetype-level points
+        # find all base_type-level points
         configs = Array.new
-        find_configs(@program, configs)
+        #find_configs(@program, configs)
+        add_midpoint_cfg(@program, configs)
         return configs
     end
 
     def find_configs(pt, configs)
-        if pt.type == @basetype then
+        if pt.type == @base_type then
 
             # add upper bound config
             #label = pt.build_label("%02d" % @upper_bound[pt.uid])
@@ -626,7 +676,8 @@ class RPrecStrategy < Strategy
 
     def add_midpoint_cfg(pt, configs)
         mid = (@upper_bound[pt.uid] - @lower_bound[pt.uid])/2 + @lower_bound[pt.uid]
-        if (@upper_bound[pt.uid] > @lower_bound[pt.uid]+1) and
+        if (pt.attrs["icount"].to_i > 0 and 
+                @upper_bound[pt.uid] > @lower_bound[pt.uid]+1) and
                 (mid != @upper_bound[pt.uid]) and (mid != @lower_bound[pt.uid]) then
             #puts "  new mid to test = #{mid}"
             label = pt.build_label("%02d" % mid)
@@ -645,20 +696,41 @@ class RPrecStrategy < Strategy
     def split_config(cfg)
         configs = Array.new
 
+        max_upper_bound = 0
+
         # adjust bounds and add new midpoint configs
-        if cfg.attrs["result"] == $RESULT_PASS then
-            cfg.exceptions.each_key do |k|
-                pt = @program.lookup_by_uid(k)
-                #puts "old bounds: #{cfg.attrs["prec"]} in [#{@lower_bound[pt.uid]},#{@upper_bound[pt.uid]}]  passed"
+        cfg.exceptions.each_key do |k|
+            pt = @program.lookup_by_uid(k)
+            #puts "old bounds: #{cfg.attrs["prec"]} in [#{@lower_bound[pt.uid]},#{@upper_bound[pt.uid]}]"
+            if cfg.attrs["result"] == $RESULT_PASS then
                 @upper_bound[pt.uid] = cfg.attrs["prec"]
-                add_midpoint_cfg(pt, configs)
-            end
-        else
-            cfg.exceptions.each_key do |k|
-                pt = @program.lookup_by_uid(k)
-                #puts "old bounds: #{cfg.attrs["prec"]} in [#{@lower_bound[pt.uid]},#{@upper_bound[pt.uid]}]  failed"
+            else
                 @lower_bound[pt.uid] = cfg.attrs["prec"]
-                add_midpoint_cfg(pt, configs)
+            end
+            @num_iterations[pt.uid] = @num_iterations[pt.uid] + 1
+            max_upper_bound = [max_upper_bound, @upper_bound[pt.uid]].max
+            add_midpoint_cfg(pt, configs)
+        end
+
+        # done with this level; descend if above single-precision
+        if configs.size == 0 and max_upper_bound >= 23 then
+
+            cfg.exceptions.each_pair do |k,v|
+                pt = @program.lookup_by_uid(k)
+                pt.children.each do |child|
+
+                    # skip nodes with no FP instructions
+                    if child.attrs["icount"].to_i > 0 then
+                        child_pt = child
+
+                        # skip single-child nodes
+                        if child.children.size == 1 and child.type != @base_type then
+                            child_pt = child.children.first
+                        end
+
+                        add_midpoint_cfg(child_pt, configs)
+                    end
+                end
             end
         end
 
@@ -963,7 +1035,7 @@ def resume_lower_search
     else
         puts "Lowering base type from #{$base_type} to #{$TYPE_RRANK[new_base_rank]}."
         $base_type = $TYPE_RRANK[new_base_rank]
-        $strategy.basetype = $base_type
+        $strategy.base_type = $base_type
     end
 
     # look for new configurations
@@ -1411,7 +1483,7 @@ def initialize_strategy
         puts "Aborting search."
         exit
     end
-    $strategy.basetype = $base_type
+    $strategy.base_type = $base_type
     if $program.attrs.has_key?("icount") then
         $total_candidates = $program.attrs["icount"]
     else
@@ -2115,7 +2187,7 @@ end
 
 def rebuild_final_config
     $final_config = $strategy.build_final_config(get_tested_configs)
-    $program.build_config_file($final_config, $final_config_fn)
+    $program.build_config_file($final_config, $final_config_fn, false)
     calculate_pct_stats($final_config)
 end
 

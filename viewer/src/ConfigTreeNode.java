@@ -23,8 +23,8 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     public static String type2Str(CNType type) {
         String str = "UNKNOWN";
         switch (type) {
-            case APPLICATION:       str = "APPL";    break;
-            case MODULE:            str = "MODL";    break;
+            case APPLICATION:       str = "APPLICATION";    break;
+            case MODULE:            str = "MODULE";    break;
             case FUNCTION:          str = "FUNC";    break;
             case BASIC_BLOCK:       str = "BBLK";    break;
             case INSTRUCTION:       str = "INSN";    break;
@@ -209,9 +209,10 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     }
 
     public CNStatus getEffectiveStatusFromChildren() {
+        // implied status (all children match)
         /* TODO: optimize this by caching; right now this is very inefficient
          * since it traverses the tree excessively */
-        if (getChildCount() > 0) {
+        if (status == CNStatus.NONE && getChildCount() > 0) {
             Enumeration children = children();
             CNStatus effectiveStatus = ((ConfigTreeNode)children.nextElement()).getEffectiveStatusFromChildren();
             while (children.hasMoreElements()) {
@@ -224,6 +225,46 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         } else {
             return status;
         }
+    }
+
+    public long getEffectivePrecision() {
+        long fromChildren = getEffectivePrecisionFromChildren();
+        if (fromChildren != precision) {
+            return fromChildren;
+        }
+        long fromParent = getEffectivePrecisionFromParent();
+        if (precision == -1 && fromParent != precision) {
+            return fromParent;
+        }
+        return precision;
+    }
+
+    public long getEffectivePrecisionFromParent() {
+        if (getParent() != null) {
+            TreeNode parent = getParent();
+            if (parent instanceof ConfigTreeNode) {
+                long parentPrecision = ((ConfigTreeNode)parent).getEffectivePrecision();
+                if (parentPrecision != -1) {
+                    return parentPrecision;
+                }
+            }
+        }
+        return precision;
+    }
+
+    public long getEffectivePrecisionFromChildren() {
+        // implied precision (max of all children)
+        long maxPrec = precision;
+        Enumeration children = children();
+        ConfigTreeNode child = null;
+        while (children.hasMoreElements()) {
+            child = (ConfigTreeNode)children.nextElement();
+            long tempPrec = child.getEffectivePrecisionFromChildren();
+            if (tempPrec > maxPrec) {
+                maxPrec = tempPrec;
+            }
+        }
+        return maxPrec;
     }
 
     public void resetInsnCount() {
@@ -452,7 +493,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             }
         }
     }
-    
+
     public void updatePrecision() {
         long maxPrec = precision;
         Enumeration children = children();
@@ -464,7 +505,9 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
                 maxPrec = child.precision;
             }
         }
-        precision = maxPrec;
+        //if (precision == -1) {
+            //precision = maxPrec;
+        //}
     }
 
     public void batchConfig(CNStatus orig, CNStatus dest) {
@@ -499,10 +542,10 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     }
 
     public String toString() {
-        return toString(false, false, false);
+        return toString(false, false, false, false);
     }
 
-    public String toString(boolean showCodeCoverage, boolean showError, boolean showPrecision) {
+    public String toString(boolean showEffectiveStatus, boolean showCodeCoverage, boolean showError, boolean showPrecision) {
         StringBuffer str = new StringBuffer();
         switch (type) {
             case APPLICATION:       str.append("APPLICATION");    break;
@@ -527,7 +570,11 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
 
         if (showPrecision) {
             str.append("  Prec=");
-            str.append(precision);
+            if (showEffectiveStatus) {
+                str.append(getEffectivePrecision());
+            } else {
+                str.append(precision);
+            }
         }
 
         if (type == CNType.MODULE || type == CNType.FUNCTION) {

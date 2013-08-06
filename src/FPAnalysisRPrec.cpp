@@ -145,7 +145,7 @@ Snippet::Ptr FPAnalysisRPrec::buildReplacementCode(FPSemantics *inst,
     }
 
     instData[idx].precision = defaultPrecision;
-    ss.clear(); ss.str(""); ss << "inst" << dec << idx << "_precision";
+    ss.clear(); ss.str(""); ss << "INSN_" << dec << idx << "_precision";
     key = ss.str();
     //cout << "key=" << key << " ";
     if (configuration->hasValue(key)) {
@@ -157,7 +157,7 @@ Snippet::Ptr FPAnalysisRPrec::buildReplacementCode(FPSemantics *inst,
 
     instData[idx].count_addr = app->malloc(sizeof(unsigned long))->getBaseAddr();
 
-    ss.clear(); ss.str(""); ss << "inst" << dec << idx << "_count_addr";
+    ss.clear(); ss.str(""); ss << "INSN_" << dec << idx << "_count_addr";
     key = ss.str(); ss.str("");
     ss << hex << instData[idx].count_addr;
     value = ss.str(); ss.str("");
@@ -365,7 +365,7 @@ void FPAnalysisRPrec::registerInstruction(FPSemantics *inst)
     instData[idx].precision = defaultPrecision;
     instData[idx].count = 0;
 
-    ss.clear(); ss.str(""); ss << "inst" << dec << idx << "_precision";
+    ss.clear(); ss.str(""); ss << "INSN_" << dec << idx << "_precision";
     key = ss.str();
     //cout << "key=" << key << " ";
     if (configuration->hasValue(key)) {
@@ -373,7 +373,7 @@ void FPAnalysisRPrec::registerInstruction(FPSemantics *inst)
         ss >> instData[idx].precision;
     }
 
-    ss.clear(); ss.str(""); ss << "inst" << dec << idx << "_count_addr";
+    ss.clear(); ss.str(""); ss << "INSN_" << dec << idx << "_count_addr";
     key = ss.str();
     ss.clear(); ss.str(configuration->getValue(key));
     ss >> instData[idx].count_addr;

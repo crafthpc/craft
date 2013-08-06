@@ -61,7 +61,7 @@ public class ConfigTreeRenderer extends DefaultTreeCellRenderer {
         setFont(ConfigEditorApp.DEFAULT_FONT_MONO_PLAIN);
         if (value instanceof ConfigTreeNode) {
             ConfigTreeNode node = (ConfigTreeNode)value;
-            setText(node.toString(showCodeCoverage, showError, showPrecision));
+            setText(node.toString(showEffectiveStatus, showCodeCoverage, showError, showPrecision));
             ConfigTreeNode.CNStatus status = node.status;
             if (showEffectiveStatus) {
                 status = node.getEffectiveStatus();
@@ -107,7 +107,11 @@ public class ConfigTreeRenderer extends DefaultTreeCellRenderer {
                 setOpaque(true);
             }
             if (showPrecision) {
-                setBackground(Util.getPrecisionScaledColor(node.precision));
+                if (showEffectiveStatus) {
+                    setBackground(Util.getPrecisionScaledColor(node.getEffectivePrecision()));
+                } else {
+                    setBackground(Util.getPrecisionScaledColor(node.precision));
+                }
                 setOpaque(true);
             }
         } else {

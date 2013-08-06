@@ -56,7 +56,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public File mainConfigFile;
     public java.util.List<ConfigTreeNode> mainConfigEntries;
     public java.util.List<String> mainConfigMiscEntries;
-    public Map<Integer, ConfigTreeNode> nodeOfInsnID;
+    public Map<String, ConfigTreeNode> nodeOfID;
 
     // main interface elements
     public JFileChooser fileChooser;
@@ -321,14 +321,14 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
     // {{{ helper/utility functions
 
-    private static final String RPREC_REGEX = "inst(\\d+)_precision=(\\d+)";
+    private static final String RPREC_REGEX = "(\\w+_\\d+)_precision=(\\d+)";
 
     private void parseReducedPrecisionConfig(String line) {
+        // TODO: generalize to any type of precision config line
         String id = Util.extractRegex(line, RPREC_REGEX, 1);
-        if (nodeOfInsnID != null && id != null) {
-            Integer ii = Integer.valueOf(id);
-            if (nodeOfInsnID.containsKey(ii)) {
-                ConfigTreeNode node = nodeOfInsnID.get(ii);
+        if (nodeOfID != null && id != null) {
+            if (nodeOfID.containsKey(id)) {
+                ConfigTreeNode node = nodeOfID.get(id);
                 String prec = Util.extractRegex(line, RPREC_REGEX, 2);
                 node.precision = Long.parseLong(prec);
                 setShowPrecision(true);
@@ -393,7 +393,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         mainConfigFile = file;
         mainConfigEntries = new ArrayList<ConfigTreeNode>();
         mainConfigMiscEntries = new ArrayList<String>();
-        nodeOfInsnID = new HashMap<Integer, ConfigTreeNode>();
+        nodeOfID = new HashMap<String, ConfigTreeNode>();
 
         ConfigTreeNode appNode = new ConfigTreeNode();
         ConfigTreeNode curModNode = null;
@@ -412,6 +412,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     if (curNode.type == ConfigTreeNode.CNType.APPLICATION) {
                         appNode = curNode;
                         mainConfigEntries.add(curNode);
+                        nodeOfID.put(ConfigTreeNode.type2Str(curNode.type) + 
+                                "_" + curNode.number, curNode);
                     } else if (curNode.type == ConfigTreeNode.CNType.MODULE) {
                         if (curModNode != null) {
                             // clean previous module (remove if it has no children)
@@ -425,6 +427,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                         appNode.add(curNode);
                         curModNode = curNode;
                         mainConfigEntries.add(curNode);
+                        nodeOfID.put(ConfigTreeNode.type2Str(curNode.type) + 
+                                "_" + curNode.number, curNode);
                     } else if (curNode.type == ConfigTreeNode.CNType.FUNCTION) {
                         if (curFuncNode != null) {
                             // clean previous function (remove if it has no children)
@@ -438,6 +442,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                         curModNode.add(curNode);
                         curFuncNode = curNode;
                         mainConfigEntries.add(curNode);
+                        nodeOfID.put(ConfigTreeNode.type2Str(curNode.type) + 
+                                "_" + curNode.number, curNode);
                     } else if (curNode.type == ConfigTreeNode.CNType.BASIC_BLOCK &&
                                curFuncNode != null) {
                         if (curBlockNode != null) {
@@ -452,11 +458,14 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                         curFuncNode.add(curNode);
                         curBlockNode = curNode;
                         mainConfigEntries.add(curNode);
+                        nodeOfID.put(ConfigTreeNode.type2Str(curNode.type) + 
+                                "_" + curNode.number, curNode);
                     } else if (curNode.type == ConfigTreeNode.CNType.INSTRUCTION &&
                                curBlockNode != null) {
                         curBlockNode.add(curNode);
                         mainConfigEntries.add(curNode);
-                        nodeOfInsnID.put(Integer.valueOf(curNode.number), curNode);
+                        nodeOfID.put(ConfigTreeNode.type2Str(curNode.type) + 
+                                "_" + curNode.number, curNode);
                     }
                 } else {
                     mainConfigMiscEntries.add(curLine);
