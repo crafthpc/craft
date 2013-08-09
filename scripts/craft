@@ -815,10 +815,7 @@ def resume_lower_search
     end
 
     # initialize work queue
-    configs.each do |cfg|
-        add_to_workqueue(cfg)
-        puts "Added config #{cfg.label} to workqueue."
-    end
+    add_to_workqueue_bulk(configs)
     $max_queue_length = get_workqueue_length
 
 end # }}}
@@ -1730,9 +1727,11 @@ end
 def move_all_inproc_to_workqueue
     f = File.new($inproc_fn, "r+")
     f.flock File::LOCK_EX
+    configs = Array.new
     YAML.each_document(f) do |doc|
-        add_to_workqueue(doc)
+        configs << doc
     end
+    add_to_workqueue_bulk(configs)
     f.truncate(0)
     f.close
 end
