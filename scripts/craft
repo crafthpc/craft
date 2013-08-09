@@ -1041,22 +1041,22 @@ def resume_lower_search
         $strategy.base_type = $base_type
     end
 
+
     # look for new configurations
     configs = Array.new
+    already_added = Hash.new(false)        # prevents adding identical cuids twice
     old_configs = get_tested_configs
+    if $strategy_name == "rprec" then
+        $strategy.reload_bounds_from_results(old_configs)
+    end
     old_configs.each do |cfg|
-        if $strategy_name == "rprec" then
-            cfg.precisions.each_key do |uid|
-                pt = $program.lookup_by_uid(uid)
-                pt.children.each do |child|
-                    # at this, point we assume that $strategy is an RPrecStrategy
-                    # (guarded by $strategy_name check above)
-                    $strategy.add_midpoint_cfg(child, configs)
-                end
-            end
-        elsif cfg.attrs["result"] != $RESULT_PASS and is_single_base(cfg, old_base_type) then
+        if is_single_base(cfg, old_base_type) and 
+                (cfg.attrs["result"] != $RESULT_PASS or $strategy_name == "rprec") then
             $strategy.split_config(cfg).each do |c|
-                configs << c
+                if not already_added[c.cuid] then
+                    configs << c
+                    already_added[c.cuid] = true
+                end
             end
         end
     end
@@ -1110,16 +1110,13 @@ def run_main_search_loop
             configs.each do |child|
                 add_child = true
 
-                if $strategy_name != "rprec" then
-
-                    # skip single-exception configs where the only exception
-                    # is lower than the base type; currently there is no
-                    # situation where we will encounter mixed-level configs
-                    if child.exceptions.keys.size == 1 then
-                        pt = $program.lookup_by_uid(child.exceptions.keys.first)
-                        if !pt.nil? and $TYPE_RANK[pt.type] > $TYPE_RANK[$base_type] then
-                            add_child = false
-                        end
+                # skip single-exception configs where the only exception
+                # is lower than the base type; currently there is no
+                # situation where we will encounter mixed-level configs
+                if child.exceptions.keys.size == 1 then
+                    pt = $program.lookup_by_uid(child.exceptions.keys.first)
+                    if !pt.nil? and $TYPE_RANK[pt.type] > $TYPE_RANK[$base_type] then
+                        add_child = false
                     end
                 end
 
