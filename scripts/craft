@@ -1235,19 +1235,19 @@ def run_baseline_performance
     $baseline_error = 0.0
     $baseline_runtime = 1
     cmd = "#{$search_path}#{$craft_driver} #{$binary_path}"
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line|
-        if line =~ /status:\s*(pass|fail)/i then
-            if $1 =~ /pass/i then
-                passed = true
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line|
+            if line =~ /status:\s*(pass|fail)/i then
+                if $1 =~ /pass/i then
+                    passed = true
+                end
             end
-        end
-        if line =~ /error:\s*(.+)/i then
-            $baseline_error = $1.to_f
-        end
-        if line =~ /time:\s*(.+)/i then
-            $baseline_runtime = [1, $1.to_i].max
+            if line =~ /error:\s*(.+)/i then
+                $baseline_error = $1.to_f
+            end
+            if line =~ /time:\s*(.+)/i then
+                $baseline_runtime = [1, $1.to_i].max
+            end
         end
     end
     Dir.chdir($search_path)
@@ -1264,18 +1264,18 @@ def run_profiler
 
     # run mutator
     cmd = "#{$fpinst_invoke} -i --cinst #{$binary_path}"
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line| end
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line| end
+    end
 
     # run rewritten mutatee
     cmd = "#{$search_path}#{$craft_driver} #{Dir.getwd}/mutant"
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line|
-        if line =~ /status:\s*(pass|fail)/i then
-            if $1 =~ /pass/i then
-                passed = true
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line|
+            if line =~ /status:\s*(pass|fail)/i then
+                if $1 =~ /pass/i then
+                    passed = true
+                end
             end
         end
     end
@@ -1395,13 +1395,13 @@ def run_config_file (fn, keep, label)
     cmd += " -c #{fn}"
     cmd += " #{$binary_path}"
     #add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line|
-        if line =~ /Inplace: (.*)$/ then
-            $status_buffer += "        #{$1}\n"
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line|
+            if line =~ /Inplace: (.*)$/ then
+                $status_buffer += "        #{$1}\n"
+            end
         end
-    end
+     end
 
     # execute rewritten mutatee and check for success
     result = $RESULT_ERROR
@@ -1409,20 +1409,20 @@ def run_config_file (fn, keep, label)
     error = 0.0
     cmd = "#{$search_path}#{$craft_driver} #{Dir.getwd}/mutant"
     #add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line|
-        if line =~ /status:\s*(pass|fail)/i then
-            tmp = $1
-            if tmp =~ /pass/i then
-                result = $RESULT_PASS
-            elsif tmp =~ /fail/i then
-                result = $RESULT_FAIL
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line|
+            if line =~ /status:\s*(pass|fail)/i then
+                tmp = $1
+                if tmp =~ /pass/i then
+                    result = $RESULT_PASS
+                elsif tmp =~ /fail/i then
+                    result = $RESULT_FAIL
+                end
+            elsif line =~ /error:\s*(.+)/i then
+                error = $1.to_f
+            elsif line =~ /time:\s*(.+)/i then
+                runtime = $1.to_i
             end
-        elsif line =~ /error:\s*(.+)/i then
-            error = $1.to_f
-        elsif line =~ /time:\s*(.+)/i then
-            runtime = $1.to_i
         end
     end
 
