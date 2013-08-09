@@ -601,12 +601,14 @@ class RPrecStrategy < Strategy
     attr_accessor :lower_bound
     attr_accessor :upper_bound
     attr_accessor :num_iterations
+    attr_accessor :split_threshold
 
     def initialize(program, pref, alt)
         super(program, pref, alt)
         @lower_bound = Hash.new(-1)
         @upper_bound = Hash.new(52)
         @num_iterations = Hash.new(52)
+        @split_threshold = 23
     end
 
     def reload_bounds_from_results(results)
@@ -713,7 +715,7 @@ class RPrecStrategy < Strategy
         end
 
         # done with this level; descend if above single-precision
-        if configs.size == 0 and max_upper_bound >= 23 then
+        if configs.size == 0 and max_upper_bound >= @split_threshold then
 
             cfg.exceptions.each_pair do |k,v|
                 pt = @program.lookup_by_uid(k)
@@ -767,6 +769,7 @@ def main
     $fortran_mode = false                   # pass "-N" to mutator
     $base_type = $TYPE_INSTRUCTION          # stop splitting configs at this level
     $skip_nonexecuted = true                # don't bother running configs with non-executed instructions
+    $rprec_split_threshold = 23             # config splitting threshold for reduced precision searches
     $initial_cfg_fn = ""                    # initial config filename (may be blank)
     $perf_log_fn = ""                       # initial profiling log (may be blank)
     $max_queue_length = 0                   # track largest queue size (approximate)
@@ -1478,6 +1481,7 @@ def initialize_strategy
         $strategy = ExhaustiveStrategy.new($program, $status_preferred, $status_alternate)
     elsif $strategy_name == "rprec" then
         $strategy = RPrecStrategy.new($program, $status_preferred, $status_alternate)
+        $strategy.split_threshold = $rprec_split_threshold
     else
         puts "Unrecognized search strategy \"#{$strategy_name}\""
         puts "Aborting search."
