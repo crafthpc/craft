@@ -815,10 +815,7 @@ def resume_lower_search
     end
 
     # initialize work queue
-    configs.each do |cfg|
-        add_to_workqueue(cfg)
-        puts "Added config #{cfg.label} to workqueue."
-    end
+    add_to_workqueue_bulk(configs)
     $max_queue_length = get_workqueue_length
 
 end # }}}
@@ -1235,19 +1232,19 @@ def run_baseline_performance
     $baseline_error = 0.0
     $baseline_runtime = 1
     cmd = "#{$search_path}#{$craft_driver} #{$binary_path}"
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line|
-        if line =~ /status:\s*(pass|fail)/i then
-            if $1 =~ /pass/i then
-                passed = true
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line|
+            if line =~ /status:\s*(pass|fail)/i then
+                if $1 =~ /pass/i then
+                    passed = true
+                end
             end
-        end
-        if line =~ /error:\s*(.+)/i then
-            $baseline_error = $1.to_f
-        end
-        if line =~ /time:\s*(.+)/i then
-            $baseline_runtime = [1, $1.to_i].max
+            if line =~ /error:\s*(.+)/i then
+                $baseline_error = $1.to_f
+            end
+            if line =~ /time:\s*(.+)/i then
+                $baseline_runtime = [1, $1.to_i].max
+            end
         end
     end
     Dir.chdir($search_path)
@@ -1264,18 +1261,18 @@ def run_profiler
 
     # run mutator
     cmd = "#{$fpinst_invoke} -i --cinst #{$binary_path}"
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line| end
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line| end
+    end
 
     # run rewritten mutatee
     cmd = "#{$search_path}#{$craft_driver} #{Dir.getwd}/mutant"
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line|
-        if line =~ /status:\s*(pass|fail)/i then
-            if $1 =~ /pass/i then
-                passed = true
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line|
+            if line =~ /status:\s*(pass|fail)/i then
+                if $1 =~ /pass/i then
+                    passed = true
+                end
             end
         end
     end
@@ -1395,13 +1392,13 @@ def run_config_file (fn, keep, label)
     cmd += " -c #{fn}"
     cmd += " #{$binary_path}"
     #add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line|
-        if line =~ /Inplace: (.*)$/ then
-            $status_buffer += "        #{$1}\n"
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line|
+            if line =~ /Inplace: (.*)$/ then
+                $status_buffer += "        #{$1}\n"
+            end
         end
-    end
+     end
 
     # execute rewritten mutatee and check for success
     result = $RESULT_ERROR
@@ -1409,20 +1406,20 @@ def run_config_file (fn, keep, label)
     error = 0.0
     cmd = "#{$search_path}#{$craft_driver} #{Dir.getwd}/mutant"
     #add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line|
-        if line =~ /status:\s*(pass|fail)/i then
-            tmp = $1
-            if tmp =~ /pass/i then
-                result = $RESULT_PASS
-            elsif tmp =~ /fail/i then
-                result = $RESULT_FAIL
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line|
+            if line =~ /status:\s*(pass|fail)/i then
+                tmp = $1
+                if tmp =~ /pass/i then
+                    result = $RESULT_PASS
+                elsif tmp =~ /fail/i then
+                    result = $RESULT_FAIL
+                end
+            elsif line =~ /error:\s*(.+)/i then
+                error = $1.to_f
+            elsif line =~ /time:\s*(.+)/i then
+                runtime = $1.to_i
             end
-        elsif line =~ /error:\s*(.+)/i then
-            error = $1.to_f
-        elsif line =~ /time:\s*(.+)/i then
-            runtime = $1.to_i
         end
     end
 
@@ -1497,42 +1494,103 @@ def save_settings
     f = File.new($settings_fn, "r+")
     f.flock File::LOCK_EX
     f.truncate(0)
-    f.puts $start_time.to_i
-    f.puts $binary_name
-    f.puts $binary_path
-    f.puts $strategy_name
-    f.puts $status_preferred
-    f.puts $status_alternate
-    f.puts $baseline_runtime
-    f.puts($fortran_mode ? "fortran" : "other")
-    f.puts $base_type
-    f.puts $skip_nonexecuted
-    f.puts $initial_cfg_fn
-    f.puts $perf_log_fn
-    f.puts $total_candidates
+
+    f.puts "start_time=#{$start_time.to_i}"
+    f.puts "binary_name=#{$binary_name}"
+    f.puts "binary_path=#{$binary_path}"
+    f.puts "strategy_name=#{$strategy_name}"
+    f.puts "status_preferred=#{$status_preferred}"
+    f.puts "status_alternate=#{$status_alternate}"
+    f.puts "baseline_runtime=#{$baseline_runtime}"
+    f.puts "lang=#{($fortran_mode ? "fortran" : "other")}"
+    f.puts "base_type=#{$base_type}"
+    f.puts "skip_nonexecuted=#{$skip_nonexecuted}"
+    f.puts "initial_cfg_fn=#{$initial_cfg_fn}"
+    f.puts "perf_log_fn=#{$perf_log_fn}"
+    f.puts "total_candidates=#{$total_candidates}"
+    f.puts "rprec_split_threshold=#{$rprec_split_threshold}"
+
+    #f.puts $start_time.to_i
+    #f.puts $binary_name
+    #f.puts $binary_path
+    #f.puts $strategy_name
+    #f.puts $status_preferred
+    #f.puts $status_alternate
+    #f.puts $baseline_runtime
+    #f.puts($fortran_mode ? "fortran" : "other")
+    #f.puts $base_type
+    #f.puts $skip_nonexecuted
+    #f.puts $initial_cfg_fn
+    #f.puts $perf_log_fn
+    #f.puts $total_candidates
+    #f.puts $rprec_split_threshold
+
     f.close
 end
 def load_settings
     f = File.new($settings_fn, "r")
     f.flock File::LOCK_SH
-    $start_time = Time.at(f.gets.to_i)
-    $binary_name = f.gets.chomp
-    $binary_path = f.gets.chomp
-    $strategy_name = f.gets.chomp
-    $status_preferred = f.gets.chomp
-    $status_alternate = f.gets.chomp
-    $baseline_runtime = f.gets.chomp.to_i
-    lang = f.gets.chomp
-    if lang == "fortran" then
-        $fortran_mode = true
+    parser = /^\s*(\w+)\s*=\s*(.*)\s*$/
+    temp = f.gets
+    if temp =~ parser then
+        while temp != nil and temp =~ parser do
+            key = $1
+            value = $2
+            case key
+            when "start_time"
+                $start_time = Time.at(value.to_i)
+            when "binary_name"
+                $binary_name = value
+            when "binary_path"
+                $binary_path = value
+            when "strategy_name"
+                $strategy_name = value
+            when "status_preferred"
+                $status_preferred = value
+            when "status_alternate"
+                $status_alternate = value
+            when "baseline_runtime"
+                $baseline_runtime = value.to_i
+            when "lang"
+                if value == "fortran" then $fortran_mode = true
+                else                       $fortran_mode = false
+                end
+            when "base_type"
+                $base_type = value
+            when "skip_nonexecuted"
+                $skip_nonexecuted = (value == true.to_s)
+            when "initial_cfg_fn"
+                $initial_cfg_fn = value
+            when "perf_log_fn"
+                $perf_log_fn = value
+            when "total_candidates"
+                $total_candidates = value.to_i
+            when "rprec_split_threshold"
+                $rprec_split_threshold = value.to_i
+            end
+            temp = f.gets
+        end
     else
-        $fortran_mode = false
+        $start_time = Time.at(temp.to_i)
+        $binary_name = f.gets.chomp
+        $binary_path = f.gets.chomp
+        $strategy_name = f.gets.chomp
+        $status_preferred = f.gets.chomp
+        $status_alternate = f.gets.chomp
+        $baseline_runtime = f.gets.chomp.to_i
+        lang = f.gets.chomp
+        if lang == "fortran" then
+            $fortran_mode = true
+        else
+            $fortran_mode = false
+        end
+        $base_type = f.gets.chomp
+        $skip_nonexecuted = (f.gets.chomp == true.to_s)
+        $initial_cfg_fn = f.gets.chomp
+        line = f.gets; $perf_log_fn           = (line != nil ? line.chomp      : "")
+        line = f.gets; $total_candidates      = (line != nil ? line.chomp.to_i : 0)
+        line = f.gets; $rprec_split_threshold = (line != nil ? line.chomp.to_i : 0)
     end
-    $base_type = f.gets.chomp
-    $skip_nonexecuted = (f.gets.chomp == true.to_s)
-    $initial_cfg_fn = f.gets.chomp
-    line = f.gets; $perf_log_fn = (line != nil ? line.chomp : "")
-    line = f.gets; $total_candidates = (line != nil ? line.chomp.to_i : 0)
     f.close
 end
 
@@ -1669,9 +1727,11 @@ end
 def move_all_inproc_to_workqueue
     f = File.new($inproc_fn, "r+")
     f.flock File::LOCK_EX
+    configs = Array.new
     YAML.each_document(f) do |doc|
-        add_to_workqueue(doc)
+        configs << doc
     end
+    add_to_workqueue_bulk(configs)
     f.truncate(0)
     f.close
 end
