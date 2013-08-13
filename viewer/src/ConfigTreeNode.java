@@ -542,10 +542,12 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     }
 
     public String toString() {
-        return toString(false, false, false, false);
+        ConfigTreeRenderer.ViewOptions options = new ConfigTreeRenderer.ViewOptions();
+        options.showEffectiveStatus = false;
+        return toString(options);
     }
 
-    public String toString(boolean showEffectiveStatus, boolean showCodeCoverage, boolean showError, boolean showPrecision) {
+    public String toString(ConfigTreeRenderer.ViewOptions viewOptions) {
         StringBuffer str = new StringBuffer();
         switch (type) {
             case APPLICATION:       str.append("APPLICATION");    break;
@@ -555,22 +557,23 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             case INSTRUCTION:       str.append("        INSN");     break;
             default:                str.append("UNKNOWN");        break;
         }
-        //str.append(" #");
-        //str.append(number);
+        if (viewOptions.showID) {
+            str.append(String.format("%5d", number));
+        }
         str.append(": ");
         if (type != CNType.APPLICATION) {
             str.append(address);
             str.append(" ");
         }
         str.append(label);
-        if (showError) {
+        if (viewOptions.showError) {
             str.append("  Err=");
             str.append(error);
         }
 
-        if (showPrecision) {
+        if (viewOptions.showPrecision) {
             str.append("  Prec=");
-            if (showEffectiveStatus) {
+            if (viewOptions.showEffectiveStatus) {
                 str.append(getEffectivePrecision());
             } else {
                 str.append(precision);
@@ -624,7 +627,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             str.append(getInsnCount());
             str.append(" instruction(s)]");
 
-            if (showCodeCoverage) {
+            if (viewOptions.showCodeCoverage) {
                 while (str.length() < 100) {
                     str.append(' ');
                 }
@@ -650,7 +653,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
                 //str.append(" execution(s)");
                 str.append("]");
             }
-        } else if (type == CNType.INSTRUCTION && showCodeCoverage) {
+        } else if (type == CNType.INSTRUCTION && viewOptions.showCodeCoverage) {
             //while (str.length() < 50) {
                 //str.append(' ');
             //}

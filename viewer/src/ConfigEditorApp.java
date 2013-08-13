@@ -73,6 +73,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
     public JCheckBox showEffectiveBox;
     public JCheckBox showCodeCoverageBox;
     public JCheckBox showErrorBox;
+    public JCheckBoxMenuItem showIDMenu;
     public JCheckBoxMenuItem showEffectiveMenu;
     public JCheckBoxMenuItem showCodeCoverageMenu;
     public JCheckBoxMenuItem showErrorMenu;
@@ -138,6 +139,9 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
         JMenu viewMenu = new JMenu("View");
         viewMenu.setMnemonic(KeyEvent.VK_V);
+        showIDMenu = new JCheckBoxMenuItem("View ID");
+        showIDMenu.addActionListener(this);
+        viewMenu.add(showIDMenu);
         showEffectiveMenu = new JCheckBoxMenuItem("View Effective Status");
         showEffectiveMenu.addActionListener(this);
         viewMenu.add(showEffectiveMenu);
@@ -214,6 +218,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
         mainTree = new JTree();
         mainRenderer = new ConfigTreeRenderer();
+        showIDMenu.setSelected(mainRenderer.getShowID());
         showEffectiveBox.setSelected(mainRenderer.getShowEffectiveStatus());
         showEffectiveMenu.setSelected(mainRenderer.getShowEffectiveStatus());
         mainTree.setCellRenderer(mainRenderer);
@@ -1059,6 +1064,13 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         sourceWindow.refreshInterface();
     }
 
+    void setShowID(boolean value) {
+        mainRenderer.setShowID(value);
+        refreshTreeLabels();
+        refreshKeyLabels();
+        showIDMenu.setSelected(value);
+    }
+
     void setShowEffectiveStatus(boolean value) {
         mainRenderer.setShowEffectiveStatus(value);
         refreshTreeLabels();
@@ -1120,6 +1132,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             expandTestedRows();
         } else if (e.getSource() == collapseAllButton) {
             collapseAllRows();
+        } else if (e.getSource() == showIDMenu) {
+            setShowID(showIDMenu.isSelected());
         } else if (e.getSource() == showEffectiveBox) {
             setShowEffectiveStatus(showEffectiveBox.isSelected());
         } else if (e.getSource() == showEffectiveMenu) {
