@@ -1935,6 +1935,10 @@ def print_status
         status_text << "#{indent}     Total skipped:        #{"%13d" % summary["skipped"]}"
         status_text << "#{indent}   Total failed:           #{"%13d" % summary["fail"]}"
         status_text << "#{indent}   Total aborted:          #{"%13d" % summary["error"]}"
+        status_text << "#{indent}   Module-level:           #{"%13d" % summary[$TYPE_MODULE]}"
+        status_text << "#{indent}   Function-level:         #{"%13d" % summary[$TYPE_FUNCTION]}"
+        status_text << "#{indent}   Block-level:            #{"%13d" % summary[$TYPE_BASICBLOCK]}"
+        status_text << "#{indent}   Instruction-level:      #{"%13d" % summary[$TYPE_INSTRUCTION]}"
         status_text << "#{indent}Current in-proc length:    #{"%13d" % get_inproc_length}"
         status_text << "#{indent}Current workqueue length:  #{"%13d" % get_workqueue_length}"
         status_text << "#{indent}Total elapsed walltime: #{"%16s" % format_time(elapsed)}"
@@ -2141,6 +2145,9 @@ def get_tested_configs_summary
         end
         if cfg.attrs.has_key?("skipped") and cfg.attrs["skipped"] == "yes" then
             summary["skipped"] += 1
+        end
+        if cfg.attrs.has_key?("level") then
+            summary[cfg.attrs["level"]] += 1
         end
     end
     summary["total"] = tested_cfgs.size
