@@ -771,7 +771,8 @@ def main
     $skip_nonexecuted = true                # don't bother running configs with non-executed instructions
     $rprec_split_threshold = 23             # config splitting threshold for reduced precision searches
     $initial_cfg_fn = ""                    # initial config filename (may be blank)
-    $perf_log_fn = ""                       # initial profiling log (may be blank)
+    $prof_log_fn = ""                       # initial profiling log (may be blank)
+    $cached_fn = ""                         # cached results from previous run (may be blank)
     $max_queue_length = 0                   # track largest queue size (approximate)
     $main_mode = "start"                    # main status ("start/search", "resume", "status", "clean", "worker", "help")
     $restart_inproc = false                 # resume by restarting all inprocess tests
@@ -985,7 +986,7 @@ def initialize_search
     orig_cfg.close
     puts "Done."
 
-    # read all program control points and baseline performance data
+    # read all program control points
     # depends on initial configuration being present
     initialize_program
 
@@ -993,10 +994,18 @@ def initialize_search
     # depends on $program being initialized
     print "Performing profiling test ... "
     $stdout.flush
-    if !run_profiler then
+    if not File.exist?($prof_path) and !run_profiler then
         puts "Baseline profiling test failed verification!"
         #puts "Aborting search."        # not really necessary; we can run
         #exit                           # without profiling data
+    elsif File.exist?($prof_path) then
+        files = Dir.glob("#{$prof_path}/*-c_inst*.log")
+        if files.size > 0 then
+            $prof_log_fn = files.first
+        else
+            puts "\nError: profile folder exists but there is no c_inst log file. Run \"craft clean\" and restart to generate it."
+        end
+        puts "Cached."
     else
         puts "Done."
     end
@@ -1062,10 +1071,7 @@ def resume_lower_search
     end
 
     # initialize work queue
-    configs.each do |cfg|
-        add_to_workqueue(cfg)
-        puts "Added config #{cfg.label} to workqueue."
-    end
+    add_to_workqueue_bulk(configs)
     $max_queue_length = get_workqueue_length
 
 end # }}}
@@ -1083,8 +1089,27 @@ def run_main_search_loop
         $status_buffer += "[Queue length: #{"%3d" % (queue_length+1)}]  "
         $max_queue_length = queue_length if queue_length > $max_queue_length
 
-        puts "Testing config #{cfg.label} ..."
-        result = run_config(cfg)
+        # check list of already-tested configs
+        cached = false
+        cached_configs = get_cached_configs
+        cached_configs.each do |c|
+            if c.cuid == cfg.cuid then
+
+                # if we've already run this test, no need to run it again
+                result = c.attrs["result"]
+                puts "Using cached result for config #{cfg.label}: #{result}"
+                cfg.attrs["result"]  = c.attrs["result"]
+                cfg.attrs["error"]   = c.attrs["error"]
+                cfg.attrs["runtime"] = c.attrs["runtime"]
+                cached = true
+            end
+        end
+
+        # run the test and update queue
+        if not cached then
+            puts "Testing config #{cfg.label} ..."
+            result = run_config(cfg)
+        end
         add_tested_config(cfg)
         remove_from_inproc(cfg)
         rebuild_final_config
@@ -1301,6 +1326,8 @@ def read_craft_driver
             $status_alternate = $1
         elsif line =~ /^#\s*INITIAL_CFG\s*=\s*(\w+)/ then
             $initial_cfg_fn = $1
+        elsif line =~ /^#\s*CACHED_CFGS\s*=\s*(\w+)/ then
+            $cached_fn = $1
         elsif line =~ /^#\s*FORTRAN_MODE\s*=\s*(\w+)/ then
             if $1 == "yes" then
                 $fortran_mode = true
@@ -1358,6 +1385,9 @@ def parse_command_line
                 # debug mode
                 $status_preferred = ARGV.shift
                 $status_alternate = ARGV.shift
+            elsif opt == "-A" then
+                # archived/cached configuration results
+                $cached_fn = File.expand_path(ARGV.shift)
             elsif opt == "-c" then
                 # initial configuration
                 $initial_cfg_fn = ARGV.shift
@@ -1502,19 +1532,19 @@ def run_baseline_performance
     $baseline_error = 0.0
     $baseline_runtime = 1
     cmd = "#{$search_path}#{$craft_driver} #{$binary_path}"
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line|
-        if line =~ /status:\s*(pass|fail)/i then
-            if $1 =~ /pass/i then
-                passed = true
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line|
+            if line =~ /status:\s*(pass|fail)/i then
+                if $1 =~ /pass/i then
+                    passed = true
+                end
             end
-        end
-        if line =~ /error:\s*(.+)/i then
-            $baseline_error = $1.to_f
-        end
-        if line =~ /time:\s*(.+)/i then
-            $baseline_runtime = [1, $1.to_i].max
+            if line =~ /error:\s*(.+)/i then
+                $baseline_error = $1.to_f
+            end
+            if line =~ /time:\s*(.+)/i then
+                $baseline_runtime = [1, $1.to_i].max
+            end
         end
     end
     Dir.chdir($search_path)
@@ -1531,25 +1561,25 @@ def run_profiler
 
     # run mutator
     cmd = "#{$fpinst_invoke} -i --cinst #{$binary_path}"
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line| end
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line| end
+    end
 
     # run rewritten mutatee
     cmd = "#{$search_path}#{$craft_driver} #{Dir.getwd}/mutant"
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line|
-        if line =~ /status:\s*(pass|fail)/i then
-            if $1 =~ /pass/i then
-                passed = true
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line|
+            if line =~ /status:\s*(pass|fail)/i then
+                if $1 =~ /pass/i then
+                    passed = true
+                end
             end
         end
     end
 
     # extract log file name
     if passed then
-        $perf_log_fn = "#{Dir.getwd}/#{Dir.glob("*-c_inst*.log").first}"
+        $prof_log_fn = "#{Dir.getwd}/#{Dir.glob("*-c_inst*.log").first}"
     end
 
     Dir.chdir($search_path)
@@ -1560,12 +1590,12 @@ end
 def read_profiler_data
     pt_by_id = Hash.new
 
-    if File.exists?($perf_log_fn) then
+    if File.exists?($prof_log_fn) then
 
         # read individual instruction counts from log file
 
         # pass 1: extract ID => point mappings
-        IO.foreach($perf_log_fn) do |line|
+        IO.foreach($prof_log_fn) do |line|
             if line =~ /instruction id="(\d+)" address="([x0-9a-zA-Z]+)"/ then
                 pt_by_id[$1] = $program.lookup_by_addr($2)
             end
@@ -1573,7 +1603,7 @@ def read_profiler_data
 
         # pass 2: read counts
         cur_count = ""
-        IO.foreach($perf_log_fn) do |line|
+        IO.foreach($prof_log_fn) do |line|
             if line =~ /priority="(\d+)" type="InstCount"/ then
                 cur_count = $1
             end
@@ -1662,13 +1692,13 @@ def run_config_file (fn, keep, label)
     cmd += " -c #{fn}"
     cmd += " #{$binary_path}"
     #add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line|
-        if line =~ /Inplace: (.*)$/ then
-            $status_buffer += "        #{$1}\n"
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line|
+            if line =~ /Inplace: (.*)$/ then
+                $status_buffer += "        #{$1}\n"
+            end
         end
-    end
+     end
 
     # execute rewritten mutatee and check for success
     result = $RESULT_ERROR
@@ -1676,20 +1706,20 @@ def run_config_file (fn, keep, label)
     error = 0.0
     cmd = "#{$search_path}#{$craft_driver} #{Dir.getwd}/mutant"
     #add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
-    io_in, io_out, io_err = Open3.popen3(cmd)
-    io_err.each_line do |line| end
-    io_out.each_line do |line|
-        if line =~ /status:\s*(pass|fail)/i then
-            tmp = $1
-            if tmp =~ /pass/i then
-                result = $RESULT_PASS
-            elsif tmp =~ /fail/i then
-                result = $RESULT_FAIL
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line|
+            if line =~ /status:\s*(pass|fail)/i then
+                tmp = $1
+                if tmp =~ /pass/i then
+                    result = $RESULT_PASS
+                elsif tmp =~ /fail/i then
+                    result = $RESULT_FAIL
+                end
+            elsif line =~ /error:\s*(.+)/i then
+                error = $1.to_f
+            elsif line =~ /time:\s*(.+)/i then
+                runtime = $1.to_i
             end
-        elsif line =~ /error:\s*(.+)/i then
-            error = $1.to_f
-        elsif line =~ /time:\s*(.+)/i then
-            runtime = $1.to_i
         end
     end
 
@@ -1764,42 +1794,106 @@ def save_settings
     f = File.new($settings_fn, "r+")
     f.flock File::LOCK_EX
     f.truncate(0)
-    f.puts $start_time.to_i
-    f.puts $binary_name
-    f.puts $binary_path
-    f.puts $strategy_name
-    f.puts $status_preferred
-    f.puts $status_alternate
-    f.puts $baseline_runtime
-    f.puts($fortran_mode ? "fortran" : "other")
-    f.puts $base_type
-    f.puts $skip_nonexecuted
-    f.puts $initial_cfg_fn
-    f.puts $perf_log_fn
-    f.puts $total_candidates
+
+    f.puts "start_time=#{$start_time.to_i}"
+    f.puts "binary_name=#{$binary_name}"
+    f.puts "binary_path=#{$binary_path}"
+    f.puts "strategy_name=#{$strategy_name}"
+    f.puts "status_preferred=#{$status_preferred}"
+    f.puts "status_alternate=#{$status_alternate}"
+    f.puts "baseline_runtime=#{$baseline_runtime}"
+    f.puts "lang=#{($fortran_mode ? "fortran" : "other")}"
+    f.puts "base_type=#{$base_type}"
+    f.puts "skip_nonexecuted=#{$skip_nonexecuted}"
+    f.puts "initial_cfg_fn=#{$initial_cfg_fn}"
+    f.puts "cached_fn=#{$cached_fn}"
+    f.puts "prof_log_fn=#{$prof_log_fn}"
+    f.puts "total_candidates=#{$total_candidates}"
+    f.puts "rprec_split_threshold=#{$rprec_split_threshold}"
+
+    #f.puts $start_time.to_i
+    #f.puts $binary_name
+    #f.puts $binary_path
+    #f.puts $strategy_name
+    #f.puts $status_preferred
+    #f.puts $status_alternate
+    #f.puts $baseline_runtime
+    #f.puts($fortran_mode ? "fortran" : "other")
+    #f.puts $base_type
+    #f.puts $skip_nonexecuted
+    #f.puts $initial_cfg_fn
+    #f.puts $prof_log_fn
+    #f.puts $total_candidates
+    #f.puts $rprec_split_threshold
+
     f.close
 end
 def load_settings
     f = File.new($settings_fn, "r")
     f.flock File::LOCK_SH
-    $start_time = Time.at(f.gets.to_i)
-    $binary_name = f.gets.chomp
-    $binary_path = f.gets.chomp
-    $strategy_name = f.gets.chomp
-    $status_preferred = f.gets.chomp
-    $status_alternate = f.gets.chomp
-    $baseline_runtime = f.gets.chomp.to_i
-    lang = f.gets.chomp
-    if lang == "fortran" then
-        $fortran_mode = true
+    parser = /^\s*(\w+)\s*=\s*(.*)\s*$/
+    temp = f.gets
+    if temp =~ parser then
+        while temp != nil and temp =~ parser do
+            key = $1
+            value = $2
+            case key
+            when "start_time"
+                $start_time = Time.at(value.to_i)
+            when "binary_name"
+                $binary_name = value
+            when "binary_path"
+                $binary_path = value
+            when "strategy_name"
+                $strategy_name = value
+            when "status_preferred"
+                $status_preferred = value
+            when "status_alternate"
+                $status_alternate = value
+            when "baseline_runtime"
+                $baseline_runtime = value.to_i
+            when "lang"
+                if value == "fortran" then $fortran_mode = true
+                else                       $fortran_mode = false
+                end
+            when "base_type"
+                $base_type = value
+            when "skip_nonexecuted"
+                $skip_nonexecuted = (value == true.to_s)
+            when "cached_fn"
+                $cached_fn = value
+            when "initial_cfg_fn"
+                $initial_cfg_fn = value
+            when "prof_log_fn"
+                $prof_log_fn = value
+            when "total_candidates"
+                $total_candidates = value.to_i
+            when "rprec_split_threshold"
+                $rprec_split_threshold = value.to_i
+            end
+            temp = f.gets
+        end
     else
-        $fortran_mode = false
+        $start_time = Time.at(temp.to_i)
+        $binary_name = f.gets.chomp
+        $binary_path = f.gets.chomp
+        $strategy_name = f.gets.chomp
+        $status_preferred = f.gets.chomp
+        $status_alternate = f.gets.chomp
+        $baseline_runtime = f.gets.chomp.to_i
+        lang = f.gets.chomp
+        if lang == "fortran" then
+            $fortran_mode = true
+        else
+            $fortran_mode = false
+        end
+        $base_type = f.gets.chomp
+        $skip_nonexecuted = (f.gets.chomp == true.to_s)
+        $initial_cfg_fn = f.gets.chomp
+        line = f.gets; $prof_log_fn           = (line != nil ? line.chomp      : "")
+        line = f.gets; $total_candidates      = (line != nil ? line.chomp.to_i : 0)
+        line = f.gets; $rprec_split_threshold = (line != nil ? line.chomp.to_i : 0)
     end
-    $base_type = f.gets.chomp
-    $skip_nonexecuted = (f.gets.chomp == true.to_s)
-    $initial_cfg_fn = f.gets.chomp
-    line = f.gets; $perf_log_fn = (line != nil ? line.chomp : "")
-    line = f.gets; $total_candidates = (line != nil ? line.chomp.to_i : 0)
     f.close
 end
 
@@ -1936,9 +2030,11 @@ end
 def move_all_inproc_to_workqueue
     f = File.new($inproc_fn, "r+")
     f.flock File::LOCK_EX
+    configs = Array.new
     YAML.each_document(f) do |doc|
-        add_to_workqueue(doc)
+        configs << doc
     end
+    add_to_workqueue_bulk(configs)
     f.truncate(0)
     f.close
 end
@@ -1969,6 +2065,20 @@ def get_tested_config_count
     end
     f.close
     return len
+end
+
+
+def get_cached_configs
+    cached = Array.new
+    if File.exists?($cached_fn) then
+        f = File.new("#{$cached_fn}", "r")
+        f.flock File::LOCK_SH
+        YAML.each_document(f) do |doc|
+            cached << doc
+        end
+        f.close
+    end
+    return cached
 end
 
 
@@ -2016,6 +2126,7 @@ def print_usage
     puts " "
     puts "Initiation options:"
     puts "   -a             test all generated configs (don't skip non-executed instructions)"
+    puts "   -A <file>      use an archived craft.tested file to avoid re-running tests from a previous search"
     puts "   -b             stop splitting configs at the basic block level"
     puts "   -c <file>      use <file> as initial base configuration"
     puts "   -C \"<opts>\"    pass the given options to fpconf to generate initial base configuration"
@@ -2097,6 +2208,10 @@ def print_status
         status_text << "#{indent}     Total skipped:        #{"%13d" % summary["skipped"]}"
         status_text << "#{indent}   Total failed:           #{"%13d" % summary["fail"]}"
         status_text << "#{indent}   Total aborted:          #{"%13d" % summary["error"]}"
+        status_text << "#{indent}   Module-level:           #{"%13d" % summary[$TYPE_MODULE]}"
+        status_text << "#{indent}   Function-level:         #{"%13d" % summary[$TYPE_FUNCTION]}"
+        status_text << "#{indent}   Block-level:            #{"%13d" % summary[$TYPE_BASICBLOCK]}"
+        status_text << "#{indent}   Instruction-level:      #{"%13d" % summary[$TYPE_INSTRUCTION]}"
         status_text << "#{indent}Current in-proc length:    #{"%13d" % get_inproc_length}"
         status_text << "#{indent}Current workqueue length:  #{"%13d" % get_workqueue_length}"
         status_text << "#{indent}Total elapsed walltime: #{"%16s" % format_time(elapsed)}"
@@ -2323,6 +2438,9 @@ def get_tested_configs_summary
         end
         if cfg.attrs.has_key?("skipped") and cfg.attrs["skipped"] == "yes" then
             summary["skipped"] += 1
+        end
+        if cfg.attrs.has_key?("level") then
+            summary[cfg.attrs["level"]] += 1
         end
     end
     summary["total"] = tested_cfgs.size
