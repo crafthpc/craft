@@ -141,8 +141,12 @@ class PPoint
         return @byaddr[addr]
     end
 
-    def build_cuid
-        return @uid
+    def build_cuid(tag = nil)
+        cuid = @uid
+        if not tag.nil? then
+            cuid += " #{tag}"
+        end
+        return cuid
     end
 
     def build_label(tag = nil)
@@ -617,10 +621,11 @@ class RPrecStrategy < Strategy
         @num_iterations = Hash.new(0)
         results.each do |cfg|
             cfg.precisions.each_pair do |uid, prec|
+                #puts "adjusting #{uid} for result #{cfg.attrs["result"]} at #{prec}"
                 if cfg.attrs["result"] == $RESULT_PASS then
-                    @upper_bound[uid] = prec
+                    @upper_bound[uid] = [@upper_bound[uid],prec].min
                 else
-                    @lower_bound[uid] = prec
+                    @lower_bound[uid] = [@lower_bound[uid],prec].max
                 end
                 @num_iterations[uid] = @num_iterations[uid] + 1
             end
@@ -630,68 +635,29 @@ class RPrecStrategy < Strategy
     def build_initial_configs
         # find all base_type-level points
         configs = Array.new
-        #find_configs(@program, configs)
         add_midpoint_cfg(@program, configs)
         return configs
     end
 
-    def find_configs(pt, configs)
-        if pt.type == @base_type then
-
-            # add upper bound config
-            #label = pt.build_label("%02d" % @upper_bound[pt.uid])
-            #cfg = AppConfig.new(pt.build_cuid, label, @alternate)
-            #cfg.add_pt_info(pt)
-            #cfg.exceptions[pt.uid] = @preferred
-            #cfg.precisions[pt.uid] = @upper_bound[pt.uid]
-            #cfg.attrs["level"] = pt.type
-            #cfg.attrs["prec"] = pt.type
-            #configs << cfg
-
-            # add lower bound config
-            #label = pt.build_label("%02d" % @lower_bound[pt.uid])
-            #cfg = AppConfig.new(pt.build_cuid, label, @alternate)
-            #cfg.add_pt_info(pt)
-            #cfg.exceptions[pt.uid] = @preferred
-            #cfg.precisions[pt.uid] = @lower_bound[pt.uid]
-            #cfg.attrs["level"] = pt.type
-            #cfg.attrs["prec"] = pt.type
-            #configs << cfg
-
-            # add midpoint config
-            mid = (@upper_bound[pt.uid] + @lower_bound[pt.uid])/2 + @lower_bound[pt.uid]
-            label = pt.build_label("%02d" % mid)
-            cfg = AppConfig.new(pt.build_cuid, label, @alternate)
-            cfg.add_pt_info(pt)
-            cfg.exceptions[pt.uid] = @preferred
-            cfg.precisions[pt.uid] = mid
-            cfg.attrs["level"] = pt.type
-            cfg.attrs["prec"] = mid
-            configs << cfg
-            
-        else
-            pt.children.each do |child|
-                find_configs(child, configs)
-            end
-        end
-    end
-
     def add_midpoint_cfg(pt, configs)
         mid = (@upper_bound[pt.uid] - @lower_bound[pt.uid])/2 + @lower_bound[pt.uid]
+        puts "  new mid to test at pt #{pt.uid}: #{mid} in (#{@lower_bound[pt.uid]}, #{@upper_bound[pt.uid]}] cinst=#{pt.attrs["cinst"]}"
         if (pt.attrs["icount"].to_i > 0 and 
                 @upper_bound[pt.uid] > @lower_bound[pt.uid]+1) and
                 (mid != @upper_bound[pt.uid]) and (mid != @lower_bound[pt.uid]) then
-            #puts "  new mid to test = #{mid}"
-            label = pt.build_label("%02d" % mid)
-            cfg = AppConfig.new(pt.build_cuid, label, @alternate)
+            tag = ("%02d-bit" % mid)
+            cfg = AppConfig.new(pt.build_cuid(tag), pt.build_label(tag), @alternate)
             cfg.add_pt_info(pt)
             cfg.exceptions[pt.uid] = @preferred
             cfg.precisions[pt.uid] = mid
             cfg.attrs["level"] = pt.type
             cfg.attrs["prec"] = mid
-            configs << cfg
-        #else
-            #puts "  found lowest passing precision = #{@upper_bound[pt.uid]}"
+
+            # skip nodes with less than 1.0% of total executions
+            #calculate_pct_stats(cfg)
+            #if cfg.attrs["pct_cinst"].to_f > 1.0 then
+                configs << cfg
+            #end
         end
     end
 
@@ -700,21 +666,14 @@ class RPrecStrategy < Strategy
 
         max_upper_bound = 0
 
-        # adjust bounds and add new midpoint configs
+        # add new midpoint configs
         cfg.exceptions.each_key do |k|
             pt = @program.lookup_by_uid(k)
-            #puts "old bounds: #{cfg.attrs["prec"]} in [#{@lower_bound[pt.uid]},#{@upper_bound[pt.uid]}]"
-            if cfg.attrs["result"] == $RESULT_PASS then
-                @upper_bound[pt.uid] = cfg.attrs["prec"]
-            else
-                @lower_bound[pt.uid] = cfg.attrs["prec"]
-            end
-            @num_iterations[pt.uid] = @num_iterations[pt.uid] + 1
             max_upper_bound = [max_upper_bound, @upper_bound[pt.uid]].max
             add_midpoint_cfg(pt, configs)
         end
 
-        # done with this level; descend if above single-precision
+        # descend if done with this level and above precision-level threshold
         if configs.size == 0 and max_upper_bound >= @split_threshold then
 
             cfg.exceptions.each_pair do |k,v|
@@ -723,6 +682,7 @@ class RPrecStrategy < Strategy
 
                     # skip nodes with no FP instructions
                     if child.attrs["icount"].to_i > 0 then
+
                         child_pt = child
 
                         # skip single-child nodes
@@ -1115,8 +1075,12 @@ def run_main_search_loop
         rebuild_final_config
 
         add_children = true
+        if $strategy_name == "rprec" then
 
-        if $strategy_name != "rprec" then
+            # always add children, but reload results first
+            # so the strategy can make an informed decision
+            $strategy.reload_bounds_from_results(get_tested_configs)
+        else
 
             # check to see if we passed
             if result == $RESULT_PASS then
