@@ -533,7 +533,8 @@ def main
     $base_type = $TYPE_INSTRUCTION          # stop splitting configs at this level
     $skip_nonexecuted = true                # don't bother running configs with non-executed instructions
     $initial_cfg_fn = ""                    # initial config filename (may be blank)
-    $perf_log_fn = ""                       # initial profiling log (may be blank)
+    $prof_log_fn = ""                       # initial profiling log (may be blank)
+    $cached_fn = ""                         # cached results from previous run (may be blank)
     $max_queue_length = 0                   # track largest queue size (approximate)
     $main_mode = "start"                    # main status ("start/search", "resume", "status", "clean", "worker", "help")
     $restart_inproc = false                 # resume by restarting all inprocess tests
@@ -747,7 +748,7 @@ def initialize_search
     orig_cfg.close
     puts "Done."
 
-    # read all program control points and baseline performance data
+    # read all program control points
     # depends on initial configuration being present
     initialize_program
 
@@ -755,10 +756,18 @@ def initialize_search
     # depends on $program being initialized
     print "Performing profiling test ... "
     $stdout.flush
-    if !run_profiler then
+    if not File.exist?($prof_path) and !run_profiler then
         puts "Baseline profiling test failed verification!"
         #puts "Aborting search."        # not really necessary; we can run
         #exit                           # without profiling data
+    elsif File.exist?($prof_path) then
+        files = Dir.glob("#{$prof_path}/*-c_inst*.log")
+        if files.size > 0 then
+            $prof_log_fn = files.first
+        else
+            puts "\nError: profile folder exists but there is no c_inst log file. Run \"craft clean\" and restart to generate it."
+        end
+        puts "Cached."
     else
         puts "Done."
     end
@@ -833,7 +842,30 @@ def run_main_search_loop
         $status_buffer += "[Queue length: #{"%3d" % (queue_length+1)}]  "
         $max_queue_length = queue_length if queue_length > $max_queue_length
 
-        puts "Testing config #{cfg.label} ..."
+        # check list of already-tested configs
+        cached = false
+        cached_configs = get_cached_configs
+        cached_configs.each do |c|
+            if c.cuid == cfg.cuid then
+
+                # if we've already run this test, no need to run it again
+                result = c.attrs["result"]
+                puts "Using cached result for config #{cfg.label}: #{result}"
+                cfg.attrs["result"]  = c.attrs["result"]
+                cfg.attrs["error"]   = c.attrs["error"]
+                cfg.attrs["runtime"] = c.attrs["runtime"]
+                cached = true
+            end
+        end
+
+        # run the test and update queue
+        if not cached then
+            puts "Testing config #{cfg.label} ..."
+            result = run_config(cfg)
+        end
+        add_tested_config(cfg)
+        remove_from_inproc(cfg)
+        rebuild_final_config
 
         if run_config(cfg) == $RESULT_PASS then
 
@@ -1043,6 +1075,8 @@ def read_craft_driver
             $status_alternate = $1
         elsif line =~ /^#\s*INITIAL_CFG\s*=\s*(\w+)/ then
             $initial_cfg_fn = $1
+        elsif line =~ /^#\s*CACHED_CFGS\s*=\s*(\w+)/ then
+            $cached_fn = $1
         elsif line =~ /^#\s*FORTRAN_MODE\s*=\s*(\w+)/ then
             if $1 == "yes" then
                 $fortran_mode = true
@@ -1100,6 +1134,9 @@ def parse_command_line
                 # debug mode
                 $status_preferred = ARGV.shift
                 $status_alternate = ARGV.shift
+            elsif opt == "-A" then
+                # archived/cached configuration results
+                $cached_fn = File.expand_path(ARGV.shift)
             elsif opt == "-c" then
                 # initial configuration
                 $initial_cfg_fn = ARGV.shift
@@ -1279,7 +1316,7 @@ def run_profiler
 
     # extract log file name
     if passed then
-        $perf_log_fn = "#{Dir.getwd}/#{Dir.glob("*-c_inst*.log").first}"
+        $prof_log_fn = "#{Dir.getwd}/#{Dir.glob("*-c_inst*.log").first}"
     end
 
     Dir.chdir($search_path)
@@ -1290,12 +1327,12 @@ end
 def read_profiler_data
     pt_by_id = Hash.new
 
-    if File.exists?($perf_log_fn) then
+    if File.exists?($prof_log_fn) then
 
         # read individual instruction counts from log file
 
         # pass 1: extract ID => point mappings
-        IO.foreach($perf_log_fn) do |line|
+        IO.foreach($prof_log_fn) do |line|
             if line =~ /instruction id="(\d+)" address="([x0-9a-zA-Z]+)"/ then
                 pt_by_id[$1] = $program.lookup_by_addr($2)
             end
@@ -1303,7 +1340,7 @@ def read_profiler_data
 
         # pass 2: read counts
         cur_count = ""
-        IO.foreach($perf_log_fn) do |line|
+        IO.foreach($prof_log_fn) do |line|
             if line =~ /priority="(\d+)" type="InstCount"/ then
                 cur_count = $1
             end
@@ -1506,7 +1543,8 @@ def save_settings
     f.puts "base_type=#{$base_type}"
     f.puts "skip_nonexecuted=#{$skip_nonexecuted}"
     f.puts "initial_cfg_fn=#{$initial_cfg_fn}"
-    f.puts "perf_log_fn=#{$perf_log_fn}"
+    f.puts "cached_fn=#{$cached_fn}"
+    f.puts "prof_log_fn=#{$prof_log_fn}"
     f.puts "total_candidates=#{$total_candidates}"
     f.puts "rprec_split_threshold=#{$rprec_split_threshold}"
 
@@ -1521,7 +1559,7 @@ def save_settings
     #f.puts $base_type
     #f.puts $skip_nonexecuted
     #f.puts $initial_cfg_fn
-    #f.puts $perf_log_fn
+    #f.puts $prof_log_fn
     #f.puts $total_candidates
     #f.puts $rprec_split_threshold
 
@@ -1559,10 +1597,12 @@ def load_settings
                 $base_type = value
             when "skip_nonexecuted"
                 $skip_nonexecuted = (value == true.to_s)
+            when "cached_fn"
+                $cached_fn = value
             when "initial_cfg_fn"
                 $initial_cfg_fn = value
-            when "perf_log_fn"
-                $perf_log_fn = value
+            when "prof_log_fn"
+                $prof_log_fn = value
             when "total_candidates"
                 $total_candidates = value.to_i
             when "rprec_split_threshold"
@@ -1587,7 +1627,7 @@ def load_settings
         $base_type = f.gets.chomp
         $skip_nonexecuted = (f.gets.chomp == true.to_s)
         $initial_cfg_fn = f.gets.chomp
-        line = f.gets; $perf_log_fn           = (line != nil ? line.chomp      : "")
+        line = f.gets; $prof_log_fn           = (line != nil ? line.chomp      : "")
         line = f.gets; $total_candidates      = (line != nil ? line.chomp.to_i : 0)
         line = f.gets; $rprec_split_threshold = (line != nil ? line.chomp.to_i : 0)
     end
@@ -1765,6 +1805,20 @@ def get_tested_config_count
 end
 
 
+def get_cached_configs
+    cached = Array.new
+    if File.exists?($cached_fn) then
+        f = File.new("#{$cached_fn}", "r")
+        f.flock File::LOCK_SH
+        YAML.each_document(f) do |doc|
+            cached << doc
+        end
+        f.close
+    end
+    return cached
+end
+
+
 def add_to_mainlog(reg)
     f = File.new($mainlog_fn, "a")
     f.flock File::LOCK_EX
@@ -1799,6 +1853,7 @@ def print_usage
     puts " "
     puts "Valid initial options:"
     puts "   -a             test all generated configs (don't skip non-executed instructions)"
+    puts "   -A <file>      use an archived craft.tested file to avoid re-running tests from a previous search"
     puts "   -b             stop splitting configs at the basic block level"
     puts "   -c <file>      use <file> as initial base configuration"
     puts "   -d <p>         debug mode (<p> -> ignore instead of double->single)"
