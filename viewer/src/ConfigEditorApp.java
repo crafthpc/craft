@@ -162,10 +162,15 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         viewMenu.add(new ExpandRowsAction(this, "Expand Ignore",  null, null, "ignore"));
         viewMenu.add(new ExpandRowsAction(this, "Expand Tested",  null, null, "tested"));
 
+        JMenu reportMenu = new JMenu("Reports");
+        reportMenu.setMnemonic(KeyEvent.VK_R);
+        reportMenu.add(new ConfigReportAction(this, new RPrecConfigReport(), 
+                    "Reduced-precision Report", null, null));
 
         JMenuBar menuBar = new JMenuBar();
         menuBar.add(fileMenu);
         menuBar.add(viewMenu);
+        menuBar.add(reportMenu);
         menuBar.add(actionMenu);
         setJMenuBar(menuBar);
     }
@@ -1102,6 +1107,10 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         showPrecisionMenu.setSelected(value);
     }
 
+    ConfigTreeNode getRootNode() {
+        if (!(mainTree.getModel().getRoot() instanceof ConfigTreeNode)) return null;
+        return (ConfigTreeNode)mainTree.getModel().getRoot();
+    }
 
     // }}}
 
