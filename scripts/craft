@@ -641,7 +641,7 @@ class RPrecStrategy < Strategy
 
     def add_midpoint_cfg(pt, configs)
         mid = (@upper_bound[pt.uid] - @lower_bound[pt.uid])/2 + @lower_bound[pt.uid]
-        puts "  new mid to test at pt #{pt.uid}: #{mid} in (#{@lower_bound[pt.uid]}, #{@upper_bound[pt.uid]}] cinst=#{pt.attrs["cinst"]}"
+        #puts "  new mid to test at pt #{pt.uid}: #{mid} in (#{@lower_bound[pt.uid]}, #{@upper_bound[pt.uid]}] cinst=#{pt.attrs["cinst"]}"
         if (pt.attrs["icount"].to_i > 0 and 
                 @upper_bound[pt.uid] > @lower_bound[pt.uid]+1) and
                 (mid != @upper_bound[pt.uid]) and (mid != @lower_bound[pt.uid]) then
