@@ -2164,7 +2164,7 @@ def clean_everything
     Dir.glob("*_worker*") do |fn| toDelete << fn end
     Dir.glob("*.log") do |fn| toDelete << fn end
     Dir.glob("baseline") do |fn| toDelete << fn end
-    Dir.glob("profile") do |fn| toDelete << fn end
+    #Dir.glob("profile") do |fn| toDelete << fn end
     Dir.glob("final") do |fn| toDelete << fn end
     Dir.glob("best") do |fn| toDelete << fn end
     Dir.glob("passed") do |fn| toDelete << fn end
