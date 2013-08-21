@@ -15,6 +15,11 @@ public class BarGraphPanel extends JPanel {
     private long[] values;
     private String[] labels;
 
+    private final static float DASH_1[] = {2.0f};
+    private final static BasicStroke DASHED_STROKE = new BasicStroke(2.0f,
+                        BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
+                        10.0f, DASH_1, 0.0f);
+
     public BarGraphPanel(long[] values, String[] labels) {
         assert(values.length == labels.length);
         this.values = values;
@@ -22,6 +27,8 @@ public class BarGraphPanel extends JPanel {
     }
 
     public void paint(Graphics g) {
+
+        Graphics2D g2 = (Graphics2D)g;
 
         // find max value (for scaling)
         long max = 0;
@@ -40,7 +47,7 @@ public class BarGraphPanel extends JPanel {
         String botLabel = "0";
         String topLabel = ""+max;
         if (!tag.equals("")) {
-            topLabel = String.format("%.2f%s", nmax, tag);
+            topLabel = String.format("%.1f%s", nmax, tag);
         }
 
         // get draw limits
@@ -104,15 +111,29 @@ public class BarGraphPanel extends JPanel {
         }
 
         // draw each bar
-        g.setColor(Color.BLACK);
         for (int i=0; i<values.length; i++) {
             float pct = (float)values[i] / (float)max;
             int height = (int)(pct * (float)graphBounds.height);
+
+            g.setColor(Color.BLACK);
             g.fillRect(
                     graphBounds.x+firstBarBuffer+i*barWidth,
                     graphBounds.y+graphBounds.height-height,
                     barWidth,
                     height);
+
+            // red dashed line for single-precision
+            if (labels[i].startsWith("23")) {
+                g.setColor(Color.RED);
+                Stroke oldStroke = g2.getStroke();
+                g2.setStroke(DASHED_STROKE);
+                g.drawLine(
+                        graphBounds.x+firstBarBuffer+i*barWidth,
+                        graphBounds.y,
+                        graphBounds.x+firstBarBuffer+i*barWidth,
+                        graphBounds.y+graphBounds.height);
+                g2.setStroke(oldStroke);
+            }
         }
     }
 }
