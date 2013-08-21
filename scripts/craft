@@ -547,6 +547,7 @@ def main
     $fpconf_invoke = "fpconf"               # invoke configuration generator
     $fpconf_options = "-c --svinp double"   # configuration generator options
     $fpinst_invoke = "fpinst"               # invoke mutator
+    $cached_configs = Array.new             # cached results from a previous run
 
     # check command-line options
     if ARGV.size == 0 or ARGV.include?("-h") then
@@ -844,8 +845,8 @@ def run_main_search_loop
 
         # check list of already-tested configs
         cached = false
-        cached_configs = get_cached_configs
-        cached_configs.each do |c|
+        load_cached_configs
+        $cached_configs.each do |c|
             if c.cuid == cfg.cuid then
 
                 # if we've already run this test, no need to run it again
@@ -1805,17 +1806,18 @@ def get_tested_config_count
 end
 
 
-def get_cached_configs
-    cached = Array.new
-    if File.exists?($cached_fn) then
+def load_cached_configs
+    if ($cached_configs.size == 0) and (not $cached_fn == "") and (File.exists?($cached_fn)) then
         f = File.new("#{$cached_fn}", "r")
         f.flock File::LOCK_SH
-        YAML.each_document(f) do |doc|
-            cached << doc
-        end
+        ydocs = YAML.load_stream(f)
         f.close
+        if not ydocs.nil? then
+            ydocs.documents.each do |doc|
+                $cached_configs << doc
+            end
+        end
     end
-    return cached
 end
 
 
