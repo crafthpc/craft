@@ -1,4 +1,4 @@
 #!/bin/bash
 
-watch craft status
+watch -n 10 craft status
 
