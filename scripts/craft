@@ -1077,6 +1077,7 @@ def run_main_search_loop
                 # if we've already run this test, no need to run it again
                 result = c.attrs["result"]
                 puts "Using cached result for config #{cfg.label}: #{result}"
+                cfg.attrs["cached"] = "yes"
                 cfg.attrs["result"]  = c.attrs["result"]
                 cfg.attrs["error"]   = c.attrs["error"]
                 cfg.attrs["runtime"] = c.attrs["runtime"]
@@ -1274,6 +1275,8 @@ def finalize_search
     report << " "
     report << "Total candidates:          #{"%11d" % $total_candidates}"
     report << "Total configs tested:      #{"%11d" % summary["total"]}"
+    report << "  Total executed:          #{"%11d" % summary["tested"]}"
+    report << "  Total cached:            #{"%11d" % summary["cached"]}"
     report << "  Total passed:            #{"%11d" % summary["pass"]}"
     report << "    Total skipped:         #{"%11d" % summary["skipped"]}"
     report << "  Total failed:            #{"%11d" % summary["fail"]}"
@@ -2223,6 +2226,8 @@ def print_status
         status_text << "#{indent}Total candidates:          #{"%13d" % $total_candidates}"
         summary = get_tested_configs_summary
         status_text << "#{indent}Total configs tested:      #{"%13d" % summary["total"]}"
+        status_text << "#{indent}   Total executed:         #{"%13d" % summary["tested"]}"
+        status_text << "#{indent}   Total cached:           #{"%13d" % summary["cached"]}"
         status_text << "#{indent}   Total passed:           #{"%13d" % summary["pass"]}"
         status_text << "#{indent}     Total skipped:        #{"%13d" % summary["skipped"]}"
         status_text << "#{indent}   Total failed:           #{"%13d" % summary["fail"]}"
@@ -2458,11 +2463,15 @@ def get_tested_configs_summary
         if cfg.attrs.has_key?("skipped") and cfg.attrs["skipped"] == "yes" then
             summary["skipped"] += 1
         end
+        if cfg.attrs.has_key?("cached") and cfg.attrs["cached"] == "yes" then
+            summary["cached"] += 1
+        end
         if cfg.attrs.has_key?("level") then
             summary[cfg.attrs["level"]] += 1
         end
     end
     summary["total"] = tested_cfgs.size
+    summary["tested"] = summary["total"] - summary["skipped"] - summary["cached"]
     return summary
 end
 
