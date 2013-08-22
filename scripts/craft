@@ -606,13 +606,15 @@ class RPrecStrategy < Strategy
     attr_accessor :upper_bound
     attr_accessor :num_iterations
     attr_accessor :split_threshold
+    attr_accessor :runtime_pct_threshold
 
     def initialize(program, pref, alt)
         super(program, pref, alt)
         @lower_bound = Hash.new(-1)
         @upper_bound = Hash.new(52)
         @num_iterations = Hash.new(52)
-        @split_threshold = 23
+        @split_threshold = 23               # single-precision by default
+        @runtime_pct_threshold = 0.0        # disabled by default
     end
 
     def reload_bounds_from_results(results)
@@ -653,11 +655,15 @@ class RPrecStrategy < Strategy
             cfg.attrs["level"] = pt.type
             cfg.attrs["prec"] = mid
 
-            # skip nodes with less than 1.0% of total executions
-            #calculate_pct_stats(cfg)
-            #if cfg.attrs["pct_cinst"].to_f > 1.0 then
+            if @runtime_pct_threshold > 0.0 then
+                # skip nodes with less than X% of total executions
+                calculate_pct_stats(cfg)
+                if cfg.attrs["pct_cinst"].to_f > @runtime_pct_threshold then
+                    configs << cfg
+                end
+            else
                 configs << cfg
-            #end
+            end
         end
     end
 
@@ -730,6 +736,7 @@ def main
     $base_type = $TYPE_INSTRUCTION          # stop splitting configs at this level
     $skip_nonexecuted = true                # don't bother running configs with non-executed instructions
     $rprec_split_threshold = 23             # config splitting threshold for reduced precision searches
+    $rprec_runtime_pct_threshold = 0.0      # config cutoff runtime percentage threshold
     $initial_cfg_fn = ""                    # initial config filename (may be blank)
     $prof_log_fn = ""                       # initial profiling log (may be blank)
     $cached_fn = ""                         # cached results from previous run (may be blank)
@@ -745,6 +752,7 @@ def main
     $fpconf_invoke = "fpconf"               # invoke configuration generator
     $fpconf_options = "-c --svinp double"   # configuration generator options
     $fpinst_invoke = "fpinst"               # invoke mutator
+    $disable_queue_sort = false             # disable workqueue sorting
 
     # check command-line options
     if ARGV.size == 0 or ARGV[0] == "help" or ARGV.include?("-h") then
@@ -911,6 +919,14 @@ def initialize_search
     File.new($inproc_fn, "w").close
     File.new($tested_fn, "w").close
     File.new($mainlog_fn, "w").close
+
+    if $strategy_name == 'rprec' then
+        print "Initializing reduced-precision search:  "
+        print "split_threshold=#{$rprec_split_threshold}  "
+        puts  "runtime_pct_threshold=#{$rprec_runtime_pct_threshold}"
+    else
+        puts  "Initializing standard search:  strategy=#{$strategy_name}"
+    end
 
     # initial performance run
     print "Performing baseline performance test ... "
@@ -1382,6 +1398,12 @@ def parse_command_line
             elsif opt == '-s' then
                 # strategy
                 $strategy_name = ARGV.shift
+            elsif opt == '-P' then
+                # runtime percentage threshold for reduced precision
+                $rprec_runtime_pct_threshold = ARGV.shift.to_f
+            elsif opt == '-S' then
+                # disable workqueue sorting
+                $disable_queue_sort = true
             elsif !parsed_binary then
                 $binary_name = File.basename(opt)
                 $binary_path = File.expand_path(opt)
@@ -1473,6 +1495,7 @@ def initialize_strategy
     elsif $strategy_name == "rprec" then
         $strategy = RPrecStrategy.new($program, $status_preferred, $status_alternate)
         $strategy.split_threshold = $rprec_split_threshold
+        $strategy.runtime_pct_threshold = $rprec_runtime_pct_threshold
     else
         puts "Unrecognized search strategy \"#{$strategy_name}\""
         puts "Aborting search."
@@ -1774,6 +1797,8 @@ def save_settings
     f.puts "prof_log_fn=#{$prof_log_fn}"
     f.puts "total_candidates=#{$total_candidates}"
     f.puts "rprec_split_threshold=#{$rprec_split_threshold}"
+    f.puts "rprec_runtime_pct_threshold=#{$rprec_runtime_pct_threshold}"
+    f.puts "disable_queue_sort=#{$disable_queue_sort.to_s}"
 
     #f.puts $start_time.to_i
     #f.puts $binary_name
@@ -1789,6 +1814,8 @@ def save_settings
     #f.puts $prof_log_fn
     #f.puts $total_candidates
     #f.puts $rprec_split_threshold
+    #f.puts $rprec_runtime_pct_threshold
+    #f.puts $disable_queue_sort
 
     f.close
 end
@@ -1834,6 +1861,10 @@ def load_settings
                 $total_candidates = value.to_i
             when "rprec_split_threshold"
                 $rprec_split_threshold = value.to_i
+            when "rprec_runtime_pct_threshold"
+                $rprec_runtime_pct_threshold = value.to_f
+            when "disable_queue_sort"
+                $disable_queue_sort = (value == true.to_s)
             end
             temp = f.gets
         end
@@ -1857,6 +1888,8 @@ def load_settings
         line = f.gets; $prof_log_fn           = (line != nil ? line.chomp      : "")
         line = f.gets; $total_candidates      = (line != nil ? line.chomp.to_i : 0)
         line = f.gets; $rprec_split_threshold = (line != nil ? line.chomp.to_i : 0)
+        line = f.gets; $rprec_runtime_pct_threshold = (line != nil ? line.chomp.to_i : 0)
+        line = f.gets; $disable_queue_sort = (line != nil ? line.chomp == true.to_s : false)
     end
     f.close
 end
@@ -1876,7 +1909,9 @@ def add_to_workqueue_bulk(configs)
         queue << cfg
         puts "Added config #{cfg.label} to workqueue."
     end
-    queue.sort!
+    if not $disable_queue_sort then
+        queue.sort!
+    end
 
     f.truncate(0)
     f.pos = 0
@@ -1897,7 +1932,9 @@ def add_to_workqueue(cfg)
 
     calculate_pct_stats(cfg)
     queue << cfg
-    queue.sort!
+    if not $disable_queue_sort then
+        queue.sort!
+    end
     
     # debug output
     #puts "Current workqueue:"
@@ -2099,8 +2136,10 @@ def print_usage
     puts "   -f             stop splitting configs at the function level"
     puts "   -j <np>        spawn <np> worker threads"
     puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
+    puts "   -P <X>         rprec mode: only examine nodes with more than X% of total executed instructions"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
     puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"rprec\""
+    puts "   -S             disable queue sorting (improves overall performance but may converge slower"
     puts " "
     puts "Resumption options:"
     puts "   -j <np>        spawn <np> worker threads"
