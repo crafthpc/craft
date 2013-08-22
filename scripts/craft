@@ -753,6 +753,7 @@ def main
     $fpconf_options = "-c --svinp double"   # configuration generator options
     $fpinst_invoke = "fpinst"               # invoke mutator
     $disable_queue_sort = false             # disable workqueue sorting
+    $run_final_config = true                # test the final config?
 
     # check command-line options
     if ARGV.size == 0 or ARGV[0] == "help" or ARGV.include?("-h") then
@@ -1257,7 +1258,9 @@ def finalize_search
     # try the final config (and keep results)
     puts "Testing final configuration ... "
     Dir.chdir($final_path)
-    run_config_file($final_config_fn, true, $final_config.label)
+    if $run_final_config then
+        run_config_file($final_config_fn, true, $final_config.label)
+    end
     Dir.chdir($search_path)
 
     # start generating final report
@@ -1395,6 +1398,9 @@ def parse_command_line
             elsif opt == '-f' then
                 # stop splitting at functions
                 $base_type = $TYPE_FUNCTION
+            elsif opt == '-F' then
+                # don't run final config
+                $run_final_config = false
             elsif opt == '-s' then
                 # strategy
                 $strategy_name = ARGV.shift
@@ -1799,6 +1805,7 @@ def save_settings
     f.puts "rprec_split_threshold=#{$rprec_split_threshold}"
     f.puts "rprec_runtime_pct_threshold=#{$rprec_runtime_pct_threshold}"
     f.puts "disable_queue_sort=#{$disable_queue_sort.to_s}"
+    f.puts "run_final_config=#{$run_final_config.to_s}"
 
     #f.puts $start_time.to_i
     #f.puts $binary_name
@@ -1816,6 +1823,7 @@ def save_settings
     #f.puts $rprec_split_threshold
     #f.puts $rprec_runtime_pct_threshold
     #f.puts $disable_queue_sort
+    #f.puts $run_final_config
 
     f.close
 end
@@ -1865,10 +1873,13 @@ def load_settings
                 $rprec_runtime_pct_threshold = value.to_f
             when "disable_queue_sort"
                 $disable_queue_sort = (value == true.to_s)
+            when "run_final_config"
+                $run_final_config = (value == true.to_s)
             end
             temp = f.gets
         end
     else
+        # old style settings file; included for backwards compatibility
         $start_time = Time.at(temp.to_i)
         $binary_name = f.gets.chomp
         $binary_path = f.gets.chomp
@@ -1890,6 +1901,7 @@ def load_settings
         line = f.gets; $rprec_split_threshold = (line != nil ? line.chomp.to_i : 0)
         line = f.gets; $rprec_runtime_pct_threshold = (line != nil ? line.chomp.to_i : 0)
         line = f.gets; $disable_queue_sort = (line != nil ? line.chomp == true.to_s : false)
+        line = f.gets; $run_final_config = (line != nil ? line.chomp == true.to_s : false)
     end
     f.close
 end
@@ -2134,6 +2146,7 @@ def print_usage
     puts "   -d <p>         debug mode (<p> -> ignore instead of double->single)"
     puts "   -D <p> <a>     debug mode (<p> -> <a> instead of double->single)"
     puts "   -f             stop splitting configs at the function level"
+    puts "   -F             don't test final configuration"
     puts "   -j <np>        spawn <np> worker threads"
     puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
     puts "   -P <X>         rprec mode: only examine nodes with more than X% of total executed instructions"
