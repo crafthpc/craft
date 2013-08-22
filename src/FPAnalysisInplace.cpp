@@ -2494,34 +2494,6 @@ void FPAnalysisInplace::printShadowEntry(string name, FPOperandAddress addr, uns
     //doneAlready.push_back(addr);
 }
 
-inline string formatLargeCount(size_t val)
-{
-    stringstream ss;
-    ss.clear(); ss.str("");
-    int divs = 0, dec = 0;
-    while (val > 10000) {
-        val /= 1000;
-        divs++;
-    }
-    if (val > 1000) {
-        val = val / 100;
-        dec = val % 10;
-        val = val / 10;
-        divs++;
-    }
-    ss << val << "." << dec;
-    switch (divs) {
-        case 0:  break;
-        case 1:  ss << "K"; break;
-        case 2:  ss << "M"; break;
-        case 3:  ss << "G"; break;
-        case 4:  ss << "T"; break;
-        case 5:  ss << "P"; break;
-        case 6:  ss << "E"; break;
-        default: ss << "e" << divs*3; break;
-    }
-    return ss.str();
-}
 
 void FPAnalysisInplace::finalOutput()
 {
@@ -2569,13 +2541,13 @@ void FPAnalysisInplace::finalOutput()
     }
     stringstream ss;
     ss << "Finished execution:" << endl;
-    ss << "  Inplace: " << formatLargeCount(exec_total) << " executed";
+    ss << "  Inplace: " << logFile->formatLargeCount(exec_total) << " executed";
     ss << setiosflags(ios::fixed) << setprecision(3);
-    ss << "  (" << formatLargeCount(exec_single)
+    ss << "  (" << logFile->formatLargeCount(exec_single)
        << " [" << (exec_single == 0 ? 0 : 
                (double)exec_single/(double)exec_total*100.0) << "%]"
        << " single";
-    ss << ", " << formatLargeCount(exec_double)
+    ss << ", " << logFile->formatLargeCount(exec_double)
        << " [" << (exec_double == 0 ? 0 :
                (double)exec_double/(double)exec_total*100.0) << "%]"
        << " double)";

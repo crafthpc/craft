@@ -44,6 +44,7 @@ LIB_MODULES = libfpanalysis fpflag FPAnalysis \
 			  FPAnalysisCInst FPAnalysisTRange \
 			  FPAnalysisDCancel FPAnalysisDNan \
 			  FPAnalysisInplace FPAnalysisPointer \
+			  FPAnalysisRPrec \
 			  FPSVPolicy FPSV FPSVSingle FPSVDouble \
 			  FPSVConfigPolicy FPSVMemPolicy \
 			  FPConfig FPShadowEntry FPReplaceEntry \

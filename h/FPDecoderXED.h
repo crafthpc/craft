@@ -8,6 +8,9 @@ extern "C" {
 #include "FPDecoder.h"
 #include "FPOperation.h"
 
+#include <map>
+#include <sstream>
+
 using namespace std;
 
 namespace FPInst {
@@ -31,6 +34,7 @@ class FPDecoderXED : public FPDecoder {
         bool filter(unsigned char *bytes, size_t nbytes);
         FPSemantics* decode(unsigned long iidx, void *addr, unsigned char *bytes, size_t nbytes);
         FPSemantics* lookup(unsigned long iidx);
+        FPSemantics* lookupByAddr(void* addr);
 
     private:
 
@@ -39,9 +43,10 @@ class FPDecoderXED : public FPDecoder {
         static FPRegister xedReg2FPReg(xed_reg_enum_t reg);
 
         void expandInstCache(size_t newSize);
-
         FPSemantics** instCacheArray;
         size_t instCacheSize;
+
+        std::map<void *,unsigned long> iidxByAddr;
 
 };
 

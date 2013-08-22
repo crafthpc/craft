@@ -23,6 +23,7 @@
 #include "FPAnalysisTRange.h"
 #include "FPAnalysisPointer.h"
 #include "FPAnalysisInplace.h"
+#include "FPAnalysisRPrec.h"
 
 using namespace FPInst;
 
@@ -44,6 +45,8 @@ extern FPAnalysisPointer *_INST_Main_PointerAnalysis;
 const long svptrID   = 31;
 extern FPAnalysisInplace *_INST_Main_InplaceAnalysis;
 const long svinpID   = 32;
+extern FPAnalysisRPrec *_INST_Main_RPrecAnalysis;
+const long rprecID   = 41;
 FPAnalysis               *allAnalyses[10];
 
 unsigned long *_INST_reg_eip;
@@ -312,6 +315,11 @@ void _INST_init_analysis ()
         FPAnalysisInplace::getInstance()->configure(mainConfig, mainDecoder, mainLog, mainContext);
         allAnalyses[analysisCount++] = FPAnalysisInplace::getInstance();
         status << "sv_inp: initialized" << endl;
+    }
+    if (mainConfig->hasValue("r_prec") && mainConfig->getValue("r_prec") == "yes") {
+        FPAnalysisRPrec::getInstance()->configure(mainConfig, mainDecoder, mainLog, mainContext);
+        allAnalyses[analysisCount++] = FPAnalysisRPrec::getInstance();
+        status << "r_prec: initialized" << endl;
     }
     if (analysisCount == 0) {
         mainNullAnalysis = new FPAnalysis();
@@ -834,6 +842,8 @@ long _INST_get_analysis_id(FPAnalysis *analysis)
         id = svptrID;
     } else if (tag == "svinp") {
         id = svinpID;
+    } else if (tag == "rprec") {
+        id = rprecID;
     }
     return id;
 }
@@ -848,6 +858,7 @@ void _INST_handle_pre_analysis(long analysisID, long iidx)
         case trangeID:  analysis = _INST_Main_TRangeAnalysis;       break;
         case svptrID:   analysis = _INST_Main_PointerAnalysis;      break;
         case svinpID:   analysis = _INST_Main_InplaceAnalysis;      break;
+        case rprecID:   analysis = _INST_Main_RPrecAnalysis;        break;
         default:        assert(!"Invalid analysis ID");             break;
     }
     __asm__ ("fxsave %0;" : : "m" (*mainContext->fxsave_state));
@@ -867,6 +878,7 @@ void _INST_handle_post_analysis(long analysisID, long iidx)
         case trangeID:  analysis = _INST_Main_TRangeAnalysis;       break;
         case svptrID:   analysis = _INST_Main_PointerAnalysis;      break;
         case svinpID:   analysis = _INST_Main_InplaceAnalysis;      break;
+        case rprecID:   analysis = _INST_Main_RPrecAnalysis;        break;
         default:        assert(!"Invalid analysis ID");             break;
     }
     __asm__ ("fxsave %0;" : : "m" (*mainContext->fxsave_state));
@@ -886,6 +898,7 @@ void _INST_handle_replacement(long analysisID, long iidx)
         case trangeID:  analysis = _INST_Main_TRangeAnalysis;       break;
         case svptrID:   analysis = _INST_Main_PointerAnalysis;      break;
         case svinpID:   analysis = _INST_Main_InplaceAnalysis;      break;
+        case rprecID:   analysis = _INST_Main_RPrecAnalysis;        break;
         default:        assert(!"Invalid analysis ID");             break;
     }
     __asm__ ("fxsave %0;" : : "m" (*mainContext->fxsave_state));

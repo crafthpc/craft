@@ -64,10 +64,11 @@ class FPConfig
         static const char RE_NULL      = 'x';       // null instrumentation (only Dyninst overhead)
 
         // Replacement-based analyses:
-        static const char RE_TRANGE    = 'r';       // range tracking replacement
+        static const char RE_TRANGE    = 't';       // range tracking replacement
         static const char RE_CANDIDATE = '?';       // candidate for replacement
         static const char RE_SINGLE    = 's';       // single-precision replacement
         static const char RE_DOUBLE    = 'd';       // double-precision replacement
+        static const char RE_RPREC     = 'r';       // reduced precision replacement
 
         // Instrumentation-based analyses:
         static const char RE_CINST     = 'i';       // instruction counting

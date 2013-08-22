@@ -69,6 +69,8 @@ class FPLog
         Type* getGlobalVarType(string name);
         Type* getGlobalVarType(FPOperandAddress addr);
 
+        string formatLargeCount(size_t val);
+
         void close();
 
     private:

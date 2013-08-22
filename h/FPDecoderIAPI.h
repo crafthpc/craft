@@ -28,6 +28,7 @@ class FPDecoderIAPI : public FPDecoder, public Visitor {
         bool filter(unsigned char *bytes, size_t nbytes);
         FPSemantics* decode(unsigned long iidx, void *addr, unsigned char *bytes, size_t nbytes);
         FPSemantics* lookup(unsigned long iidx);
+        FPSemantics* lookupByAddr(void* addr);
 
         void visit(BinaryFunction *b);
         void visit(Immediate *i);

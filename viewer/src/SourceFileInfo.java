@@ -15,9 +15,15 @@ public class SourceFileInfo {
     public Map<Integer, Integer> singleCounts;
     public Map<Integer, Integer> doubleCounts;
 
+    // line_number => maximum necessary precision mapping
+    public Map<Integer, Long> maxPrecisions;
+
     // aggregate replacement counts
     public int totalSingleCount;
     public int totalDoubleCount;
+
+    // aggregate max precision
+    public long overallMaxPrecision;
 
     // for drawing border
     public int maxLineLength;
@@ -27,8 +33,10 @@ public class SourceFileInfo {
         path = null;
         singleCounts = new HashMap<Integer, Integer>();
         doubleCounts = new HashMap<Integer, Integer>();
+        maxPrecisions = new HashMap<Integer, Long>();
         totalSingleCount = 0;
         totalDoubleCount = 0;
+        overallMaxPrecision = 0;
         maxLineLength = 0;
     }
 
@@ -66,6 +74,17 @@ public class SourceFileInfo {
         }
     }
 
+    public void setMaxPrecision(int lineno, long precision) {
+        Integer i = Integer.valueOf(lineno);
+        if (maxPrecisions.containsKey(i)) {
+            maxPrecisions.put(i, Long.valueOf(Math.max(maxPrecisions.get(i).longValue(), precision)));
+        } else {
+            maxPrecisions.put(i, Long.valueOf(precision));
+        }
+        overallMaxPrecision = Math.max(overallMaxPrecision, precision);
+        maxLineLength = Math.max(3, maxLineLength);
+    }
+
     public String toString() {
         // pretty display for the file list box
         // (includes total replacement counts)
@@ -75,6 +94,9 @@ public class SourceFileInfo {
         }
         if (totalDoubleCount > 0) {
             label += "  D:" + totalDoubleCount;
+        }
+        if (overallMaxPrecision > 0) {
+            label += "  P:" + overallMaxPrecision;
         }
         return label;
     }

@@ -40,6 +40,7 @@
 #include "FPAnalysisTRange.h"
 #include "FPAnalysisPointer.h"
 #include "FPAnalysisInplace.h"
+#include "FPAnalysisRPrec.h"
 
 using namespace std;
 using namespace Dyninst;
@@ -102,11 +103,16 @@ void instrumentInstruction(void* addr, unsigned char *bytes, size_t nbytes,
         PatchFunction *func, PatchBlock *block,
         BPatch_Vector<BPatch_snippet*> &initSnippets);
 void instrumentBasicBlock(BPatch_basicBlock *block, BPatch_Vector<BPatch_snippet*> &initSnippets);
-void instrumentFunction(BPatch_function *function, BPatch_Vector<BPatch_snippet*> &initSnippets,
-        const char *name);
-void instrumentModule(BPatch_module *module, BPatch_Vector<BPatch_snippet*> &initSnippets,
-        const char *name);
+void instrumentFunction(BPatch_function *function, BPatch_Vector<BPatch_snippet*> &initSnippets);
+void instrumentModule(BPatch_module *module, BPatch_Vector<BPatch_snippet*> &initSnippets);
 void instrumentApplication();
+
+// decoder/parsers
+void decodeInstruction(void* addr, unsigned char *bytes, size_t nbytes);
+void decodeBasicBlock(BPatch_basicBlock *block);
+void decodeFunction(BPatch_function *function, const char *name);
+void decodeModule(BPatch_module *module, const char *name);
+void decodeApplication();
 
 // command-line parsing and help text
 void usage();

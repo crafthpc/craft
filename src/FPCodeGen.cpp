@@ -468,6 +468,15 @@ size_t FPCodeGen::buildAndGPR64WithGPR64(unsigned char *pos, FPRegister reg, FPR
             0x21, reg, rm, false, 0);
 }
 
+size_t FPCodeGen::buildAndXMMWithXMM(unsigned char *pos, FPRegister reg, FPRegister rm)
+{
+    // andpd %rm, %reg   (%rm = %rm & %reg)
+    assert(rm >= REG_XMM0 && rm <= REG_XMM15);
+    assert(reg >= REG_XMM0 && reg <= REG_XMM15);
+    return buildInstruction(pos, 0x66, true, true,
+            0x54, reg, rm, false, 0);
+}
+
 size_t FPCodeGen::buildOrGPR64WithGPR64(unsigned char *pos, FPRegister reg, FPRegister rm)
 {
     // and %rm, %reg   (%rm = %rm & %reg)
@@ -504,9 +513,10 @@ size_t FPCodeGen::buildAddGPR64ToGPR64(unsigned char *pos, FPRegister reg, FPReg
             0x01, reg, rm, false, 0);
 }
 
-size_t FPCodeGen::buildIncMem64(unsigned char *pos, int32_t offset)
+size_t FPCodeGen::buildIncMem64(unsigned char *pos, int32_t offset, bool lock)
 {
-    return buildInstruction(pos, 0, true, false,
+    unsigned char prefix = (lock ? 0xf0 : 0x0);
+    return buildInstruction(pos, prefix, true, false,
             0xff, REG_NONE, REG_NONE, true, offset);
 }
 

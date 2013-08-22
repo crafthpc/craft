@@ -17,14 +17,14 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
 
     public enum CNStatus {
         NONE, IGNORE, CANDIDATE, SINGLE, DOUBLE,
-        TRANGE, NULL, CINST, DCANCEL, DNAN
+        TRANGE, RPREC, NULL, CINST, DCANCEL, DNAN
     }
 
     public static String type2Str(CNType type) {
         String str = "UNKNOWN";
         switch (type) {
-            case APPLICATION:       str = "APPL";    break;
-            case MODULE:            str = "MODL";    break;
+            case APPLICATION:       str = "APPLICATION";    break;
+            case MODULE:            str = "MODULE";    break;
             case FUNCTION:          str = "FUNC";    break;
             case BASIC_BLOCK:       str = "BBLK";    break;
             case INSTRUCTION:       str = "INSN";    break;
@@ -42,6 +42,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             case SINGLE:    str = "SING";    break;
             case DOUBLE:    str = "DOUB";    break;
             case TRANGE:    str = "TRAN";    break;
+            case RPREC:     str = "RPRC";    break;
             case NULL:      str = "NULL";    break;
             case CINST:     str = "CINS";    break;
             case DCANCEL:   str = "DCAN";    break;
@@ -64,6 +65,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     public String regexTag;     // type, id, and address
     public double error;        // from searches
     public boolean tested;      // from searches
+    public long precision;      // from rprec searches
 
     public ConfigTreeNode() {
         super();
@@ -78,6 +80,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         regexTag = "";
         error = 0.0;
         tested = false;
+        precision = -1;
     }
 
     public ConfigTreeNode(CNType t, CNStatus s, int num, String lbl) {
@@ -93,6 +96,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         regexTag = "";
         error = 0.0;
         tested = false;
+        precision = -1;
     }
 
     public ConfigTreeNode(String configLine) {
@@ -127,7 +131,8 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
                 case '?':   status = CNStatus.CANDIDATE; candidate = true; break;
                 case 's':   status = CNStatus.SINGLE;    break;
                 case 'd':   status = CNStatus.DOUBLE;    break;
-                case 'r':   status = CNStatus.TRANGE;    break;
+                case 't':   status = CNStatus.TRANGE;    break;
+                case 'r':   status = CNStatus.RPREC;     break;
                 case 'x':   status = CNStatus.NULL;      break;
                 case 'i':   status = CNStatus.CINST;     break;
                 case 'c':   status = CNStatus.DCANCEL;   break;
@@ -154,13 +159,13 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         address = Util.extractRegex(configLine, "(0x[0-9a-fA-F]+)", 0);
         regexTag += ": " + address;
 
-        label = "(empty)";
+        label = "";
         if (configLine.length() > 2) {
             pos = configLine.indexOf('"');
             if (pos >= 0 && pos < configLine.length()-1) {
                 pos2 = configLine.indexOf('"', pos+1);
                 if (pos2 > pos) {
-                    label = address + "  " + configLine.substring(pos, pos2+1);
+                    label = configLine.substring(pos, pos2+1);
                 }
             }
         }
@@ -169,6 +174,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         resetExecCounts();
         error = 0.0;
         tested = false;
+        precision = -1;
     }
 
     public void resetExecCounts() {
@@ -203,9 +209,10 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     }
 
     public CNStatus getEffectiveStatusFromChildren() {
+        // implied status (all children match)
         /* TODO: optimize this by caching; right now this is very inefficient
          * since it traverses the tree excessively */
-        if (getChildCount() > 0) {
+        if (status == CNStatus.NONE && getChildCount() > 0) {
             Enumeration children = children();
             CNStatus effectiveStatus = ((ConfigTreeNode)children.nextElement()).getEffectiveStatusFromChildren();
             while (children.hasMoreElements()) {
@@ -218,6 +225,46 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         } else {
             return status;
         }
+    }
+
+    public long getEffectivePrecision() {
+        long fromChildren = getEffectivePrecisionFromChildren();
+        if (fromChildren != precision) {
+            return fromChildren;
+        }
+        long fromParent = getEffectivePrecisionFromParent();
+        if (precision == -1 && fromParent != precision) {
+            return fromParent;
+        }
+        return precision;
+    }
+
+    public long getEffectivePrecisionFromParent() {
+        if (getParent() != null) {
+            TreeNode parent = getParent();
+            if (parent instanceof ConfigTreeNode) {
+                long parentPrecision = ((ConfigTreeNode)parent).getEffectivePrecision();
+                if (parentPrecision != -1) {
+                    return parentPrecision;
+                }
+            }
+        }
+        return precision;
+    }
+
+    public long getEffectivePrecisionFromChildren() {
+        // implied precision (max of all children)
+        long maxPrec = precision;
+        Enumeration children = children();
+        ConfigTreeNode child = null;
+        while (children.hasMoreElements()) {
+            child = (ConfigTreeNode)children.nextElement();
+            long tempPrec = child.getEffectivePrecisionFromChildren();
+            if (tempPrec > maxPrec) {
+                maxPrec = tempPrec;
+            }
+        }
+        return maxPrec;
     }
 
     public void resetInsnCount() {
@@ -272,7 +319,8 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             case IGNORE:    status = CNStatus.CANDIDATE;    break;
             case CANDIDATE: status = CNStatus.SINGLE;       break;
             case SINGLE:    status = CNStatus.DOUBLE;       break;
-            case DOUBLE:    status = CNStatus.NULL;         break;
+            case DOUBLE:    status = CNStatus.RPREC;        break;
+            case RPREC:     status = CNStatus.NULL;         break;
             case NULL:    */status = CNStatus.TRANGE;       break;
             case TRANGE:    status = CNStatus.CINST;        break;
             case CINST:     status = CNStatus.DCANCEL;      break;
@@ -298,6 +346,8 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             status = CNStatus.DOUBLE;
         } else if (status == CNStatus.SINGLE || node.status == CNStatus.SINGLE) {
             status = CNStatus.SINGLE;
+        } else if (status == CNStatus.RPREC || node.status == CNStatus.RPREC) {
+            status = CNStatus.RPREC;
         } else if (status == CNStatus.TRANGE || node.status == CNStatus.TRANGE) {
             status = CNStatus.TRANGE;
         } else if (status == CNStatus.CINST || node.status == CNStatus.CINST) {
@@ -320,7 +370,8 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             case CANDIDATE: str.append('?');    break;
             case SINGLE:    str.append('s');    break;
             case DOUBLE:    str.append('d');    break;
-            case TRANGE:    str.append('r');    break;
+            case RPREC:     str.append('r');    break;
+            case TRANGE:    str.append('t');    break;
             case NULL:      str.append('x');    break;
             case CINST:     str.append('i');    break;
             case DCANCEL:   str.append('c');    break;
@@ -339,6 +390,8 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         str.append(" #");
         str.append(number);
         str.append(": ");
+        str.append(address);
+        str.append(" ");
         str.append(label);
         return str.toString();
     }
@@ -441,6 +494,22 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         }
     }
 
+    public void updatePrecision() {
+        long maxPrec = precision;
+        Enumeration children = children();
+        ConfigTreeNode child = null;
+        while (children.hasMoreElements()) {
+            child = (ConfigTreeNode)children.nextElement();
+            child.updatePrecision();
+            if (child.precision > maxPrec) {
+                maxPrec = child.precision;
+            }
+        }
+        //if (precision == -1) {
+            //precision = maxPrec;
+        //}
+    }
+
     public void batchConfig(CNStatus orig, CNStatus dest) {
         Enumeration children = children();
         ConfigTreeNode child = null;
@@ -473,10 +542,12 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     }
 
     public String toString() {
-        return toString(false, false);
+        ConfigTreeRenderer.ViewOptions options = new ConfigTreeRenderer.ViewOptions();
+        options.showEffectiveStatus = false;
+        return toString(options);
     }
 
-    public String toString(boolean showCodeCoverage, boolean showError) {
+    public String toString(ConfigTreeRenderer.ViewOptions viewOptions) {
         StringBuffer str = new StringBuffer();
         switch (type) {
             case APPLICATION:       str.append("APPLICATION");    break;
@@ -486,10 +557,29 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             case INSTRUCTION:       str.append("        INSN");     break;
             default:                str.append("UNKNOWN");        break;
         }
-        //str.append(" #");
-        //str.append(number);
+        if (viewOptions.showID) {
+            str.append(String.format("%5d", number));
+        }
         str.append(": ");
+        if (type != CNType.APPLICATION) {
+            str.append(address);
+            str.append(" ");
+        }
         str.append(label);
+        if (viewOptions.showError) {
+            str.append("  Err=");
+            str.append(error);
+        }
+
+        if (viewOptions.showPrecision) {
+            str.append("  Prec=");
+            if (viewOptions.showEffectiveStatus) {
+                str.append(getEffectivePrecision());
+            } else {
+                str.append(precision);
+            }
+        }
+
         if (type == CNType.MODULE || type == CNType.FUNCTION) {
             long coverage = 0;
             if (insnCount > 0) {
@@ -530,20 +620,20 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             while (str.length() < 50) {
                 str.append(' ');
             }
-            if (type == CNType.MODULE) {
-                str.append("   ");
-            }
-            str.append(" [");
+            //if (type == CNType.MODULE) {
+                //str.append("   ");
+            //}
+            str.append("[");
             str.append(getInsnCount());
             str.append(" instruction(s)]");
 
-            if (showCodeCoverage) {
-                while (str.length() < 80) {
+            if (viewOptions.showCodeCoverage) {
+                while (str.length() < 100) {
                     str.append(' ');
                 }
-                if (type == CNType.MODULE) {
-                    str.append("   ");
-                }
+                //if (type == CNType.MODULE) {
+                    //str.append("   ");
+                //}
                 str.append("  [global: ");
                 str.append(String.format("%3d", gsgl));
                 str.append("%/");
@@ -563,20 +653,16 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
                 //str.append(" execution(s)");
                 str.append("]");
             }
-        } else if (type == CNType.INSTRUCTION && showCodeCoverage) {
-            while (str.length() < 50) {
-                str.append(' ');
-            }
-            str.append(" [");
+        } else if (type == CNType.INSTRUCTION && viewOptions.showCodeCoverage) {
+            //while (str.length() < 50) {
+                //str.append(' ');
+            //}
+            str.append("  [");
             str.append(totalExecCount);
             str.append(" execution(s)");
             str.append("]");
         }
 
-        if (showError) {
-            str.append("  Err=");
-            str.append(error);
-        }
         
         return str.toString();
     }

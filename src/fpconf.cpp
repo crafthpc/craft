@@ -37,7 +37,9 @@ bool detectCancel = false;
 bool detectNaN = false;
 bool trackRange = false;
 bool inplaceSV = false;
+bool reducePrec = false;
 char* inplaceSVType = NULL;
+unsigned long reducePrecDefaultPrec = 0;
 
 // configuration file options
 char *binary = NULL;
@@ -187,6 +189,15 @@ void configInstruction(void *addr, unsigned char *bytes, size_t nbytes)
         }
     }
 
+    // configure reduced precision analysis
+    if (reducePrec && mainAnalysis->shouldReplace(inst)) {
+        if (outputCandidates) {
+            entry->tag = RETAG_CANDIDATE;
+        } else {
+            entry->tag = RETAG_RPREC;
+        }
+    }
+
     // don't report "none" or "ignore" unless explicitly desired
     if (!(entry->tag == RETAG_NONE || entry->tag == RETAG_IGNORE) || addAll) {
 
@@ -228,13 +239,15 @@ void configBasicBlock(BPatch_basicBlock *block)
         tempBblkRE = entry;
     }
 
-    // get all floating-point instructions
+    // get all instructions
     PatchBlock::Insns insns;
     PatchAPI::convert(block)->getInsns(insns);
 
     // config each point separately
     PatchBlock::Insns::iterator j;
+    //PatchBlock::Insns::reverse_iterator j;
     for (j = insns.begin(); j != insns.end(); j++) {
+    //for (j = insns.rbegin(); j != insns.rend(); j++) {
 
         // get instruction bytes
         addr = (void*)((*j).first);
@@ -308,11 +321,8 @@ void configModule(BPatch_module *mod, const char *name)
         // don't config:
         //   - main() or memset() or call_gmon_start() or frame_dummy()
         //   - functions that begin with an underscore
-        //   - functions that begin with "targ"
-		if ( /* (strcmp(funcname,"main")!=0) && */ (strcmp(funcname,"memset")!=0)
-                && (strcmp(funcname,"call_gmon_start")!=0) && (strcmp(funcname,"frame_dummy")!=0)
-                && funcname[0] != '_' //&&
-                //!(strlen(funcname) > 4 && funcname[0]=='t' && funcname[1]=='a' && funcname[2]=='r' && funcname[3]=='g')
+		if ( (strcmp(funcname,"memset")!=0) && (strcmp(funcname,"call_gmon_start")!=0) &&
+                (strcmp(funcname,"frame_dummy")!=0) && funcname[0] != '_'
                 ) {
 
             configFunction(function, funcname);
@@ -349,7 +359,7 @@ void configApplication(BPatch_addressSpace *app)
     for (m = modules->begin(); m != modules->end(); m++) {
         (*m)->getName(modname, BUFFER_STRING_LEN);
 
-        // don't config our own library or libm
+        // don't config our own library or libc/libm
         if (strcmp(modname, "libfpanalysis.so") == 0 ||
             strcmp(modname, "libm.so.6") == 0 ||
             strcmp(modname, "libc.so.6") == 0) {
@@ -396,6 +406,7 @@ void usage()
 	printf("  --trange             track operand value ranges\n");
     printf("  --svinp <policy>     in-place replacement shadow value analysis\n");
     printf("                         valid policies: \"single\", \"double\", \"mem_single\", \"mem_double\"\n");
+    printf("  --rprec <bits>       reduced precision analysis\n");
     printf("\n");
     printf(" Options:\n");
     printf("\n");
@@ -436,6 +447,9 @@ bool parseCommandLine(unsigned argc, char *argv[])
 		} else if (strcmp(argv[i], "--svinp")==0) {
             inplaceSV = true;
             inplaceSVType = argv[++i];
+		} else if (strcmp(argv[i], "--rprec")==0) {
+            reducePrec = true;
+            reducePrecDefaultPrec = strtoul(argv[++i], NULL, 10);
         } else if (argv[i][0] == '-') {
             printf("Unrecognized option: %s\n", argv[i]);
             usage();
@@ -472,6 +486,11 @@ void initialize_analysis()
         mainConfig->setValue("sv_inp_type", inplaceSVType);
         mainAnalysis = FPAnalysisInplace::getInstance();
         mainAnalysisInplace = FPAnalysisInplace::getInstance();
+    } else if (reducePrec) {
+        stringstream ss(""); ss << reducePrecDefaultPrec;
+        mainConfig->setValue("r_prec", "yes");
+        mainConfig->setValue("r_prec_default_precision", ss.str());
+        mainAnalysis = FPAnalysisRPrec::getInstance();
     }
     if (mainAnalysis) {
         mainAnalysis->configure(mainConfig, mainDecoder, NULL, NULL);
