@@ -680,7 +680,7 @@ class RPrecStrategy < Strategy
         end
 
         # descend if done with this level and above precision-level threshold
-        if configs.size == 0 and max_upper_bound >= @split_threshold then
+        if configs.size == 0 and max_upper_bound > @split_threshold then
 
             cfg.exceptions.each_pair do |k,v|
                 pt = @program.lookup_by_uid(k)
