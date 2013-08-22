@@ -547,6 +547,8 @@ def main
     $fpconf_invoke = "fpconf"               # invoke configuration generator
     $fpconf_options = "-c --svinp double"   # configuration generator options
     $fpinst_invoke = "fpinst"               # invoke mutator
+    $cached_configs = Array.new             # cached results from a previous run
+    $binary_serialization = true            # use binary serialization (faster) for queues instead of YAML
 
     # check command-line options
     if ARGV.size == 0 or ARGV.include?("-h") then
@@ -844,8 +846,8 @@ def run_main_search_loop
 
         # check list of already-tested configs
         cached = false
-        cached_configs = get_cached_configs
-        cached_configs.each do |c|
+        load_cached_configs
+        $cached_configs.each do |c|
             if c.cuid == cfg.cuid then
 
                 # if we've already run this test, no need to run it again
@@ -1635,39 +1637,54 @@ def load_settings
 end
 
 
-def add_to_workqueue_bulk(configs)
+def read_cfg_array(io)
+    configs = Array.new
+    begin
+        line = io.readline.chomp
+        if line == "BINARY" then
+            configs = Marshal.load(io)
+        else
+            io.rewind
+            YAML.each_document(io) do |doc|
+                configs << doc
+            end
+        end
+    rescue
+    end
+    return configs
+end
 
-    queue = Array.new
+def write_cfg_array(configs, io)
+    if $binary_serialization then
+        io.puts "BINARY"
+        Marshal.dump(configs, io)
+    else
+        configs.each do |doc|
+            YAML.dump(doc, io)
+        end
+    end
+end
+
+def add_to_workqueue_bulk(configs)
     f = File.new("#{$workqueue_fn}", "r+")
     f.flock File::LOCK_EX
-    YAML.each_document(f) do |doc|
-        queue << doc
-    end
-
+    queue = read_cfg_array(f)
     configs.each do |cfg|
         calculate_pct_stats(cfg)
         queue << cfg
         puts "Added config #{cfg.label} to workqueue."
     end
     queue.sort!
-
     f.truncate(0)
     f.pos = 0
-    queue.each do |cfg|
-        YAML.dump(cfg, f)
-    end
+    write_cfg_array(queue, f)
     f.close
 end
 
 def add_to_workqueue(cfg)
-
-    queue = Array.new
     f = File.new("#{$workqueue_fn}", "r+")
     f.flock File::LOCK_EX
-    YAML.each_document(f) do |doc|
-        queue << doc
-    end
-
+    queue = read_cfg_array(f)
     calculate_pct_stats(cfg)
     queue << cfg
     queue.sort!
@@ -1680,35 +1697,25 @@ def add_to_workqueue(cfg)
     
     f.truncate(0)
     f.pos = 0
-    queue.each do |cfg|
-        YAML.dump(cfg, f)
-    end
+    write_cfg_array(queue, f)
     f.close
 end
 def get_next_workqueue_item
     next_cfg = nil
-    queue = Array.new
     f = File.new($workqueue_fn, "r+")
     f.flock File::LOCK_EX
-    YAML.each_document(f) do |doc|
-        queue << doc
-    end
+    queue = read_cfg_array(f)
     next_cfg = queue.shift
     f.pos = 0
-    queue.each do |cfg|
-        YAML.dump(cfg, f)
-    end
+    write_cfg_array(queue, f)
     f.truncate(f.pos)
     f.close
     return next_cfg
 end
 def get_workqueue_configs
-    queue = Array.new
     f = File.new("#{$workqueue_fn}", "r")
     f.flock File::LOCK_SH
-    YAML.each_document(f) do |doc|
-        queue << doc
-    end
+    queue = read_cfg_array(f)
     f.close
     return queue
 end
@@ -1716,41 +1723,40 @@ def get_workqueue_length
     len = 0
     f = File.new($workqueue_fn, "r")
     f.flock File::LOCK_SH
-    YAML.each_document(f) do |doc|
-        len += 1
-    end
+    queue = read_cfg_array(f)
+    len = queue.size
     f.close
     return len
 end
 
 
 def add_to_inproc(cfg)
-    f = File.new($inproc_fn, "a")
+    f = File.new($inproc_fn, "r+")
     f.flock File::LOCK_EX
-    YAML.dump(cfg, f)
+    inproc = read_cfg_array(f)
+    inproc << cfg
+    f.pos = 0
+    write_cfg_array(inproc, f)
+    f.truncate(f.pos)
     f.close
 end
 def remove_from_inproc(cfg)
     inproc = Array.new
     f = File.new($inproc_fn, "r+")
     f.flock File::LOCK_EX
-    YAML.each_document(f) do |doc|
-        inproc << doc if not (cfg.cuid == doc.cuid)
+    configs = read_cfg_array(f)
+    configs.each do |cfg|
+        inproc << cfg if not (cfg.cuid == cfg.cuid)
     end
     f.pos = 0
-    inproc.each do |cfg|
-        YAML.dump(cfg, f)
-    end
+    write_cfg_array(inproc, f)
     f.truncate(f.pos)
     f.close
 end
 def get_inproc_configs
-    inproc = Array.new
     f = File.new("#{$inproc_fn}", "r")
     f.flock File::LOCK_SH
-    YAML.each_document(f) do |doc|
-        inproc << doc
-    end
+    inproc = read_cfg_array(f)
     f.close
     return inproc
 end
@@ -1758,19 +1764,15 @@ def get_inproc_length
     len = 0
     f = File.new($inproc_fn, "r")
     f.flock File::LOCK_SH
-    YAML.each_document(f) do |doc|
-        len += 1
-    end
+    inproc = read_cfg_array(f)
+    len = inproc.size
     f.close
     return len
 end
 def move_all_inproc_to_workqueue
     f = File.new($inproc_fn, "r+")
     f.flock File::LOCK_EX
-    configs = Array.new
-    YAML.each_document(f) do |doc|
-        configs << doc
-    end
+    configs = read_cfg_array(f)
     add_to_workqueue_bulk(configs)
     f.truncate(0)
     f.close
@@ -1778,7 +1780,7 @@ end
 
 
 def add_tested_config(cfg)
-    f = File.new("#{$tested_fn}", "a")
+    f = File.new($tested_fn, "a")
     f.flock File::LOCK_EX
     YAML.dump(cfg, f)
     f.close
@@ -1805,17 +1807,18 @@ def get_tested_config_count
 end
 
 
-def get_cached_configs
-    cached = Array.new
-    if File.exists?($cached_fn) then
+def load_cached_configs
+    if ($cached_configs.size == 0) and (not $cached_fn == "") and (File.exists?($cached_fn)) then
         f = File.new("#{$cached_fn}", "r")
         f.flock File::LOCK_SH
-        YAML.each_document(f) do |doc|
-            cached << doc
-        end
+        ydocs = YAML.load_stream(f)
         f.close
+        if not ydocs.nil? then
+            ydocs.documents.each do |doc|
+                $cached_configs << doc
+            end
+        end
     end
-    return cached
 end
 
 
@@ -2162,7 +2165,7 @@ def clean_everything
     Dir.glob("*_worker*") do |fn| toDelete << fn end
     Dir.glob("*.log") do |fn| toDelete << fn end
     Dir.glob("baseline") do |fn| toDelete << fn end
-    Dir.glob("profile") do |fn| toDelete << fn end
+    #Dir.glob("profile") do |fn| toDelete << fn end
     Dir.glob("final") do |fn| toDelete << fn end
     Dir.glob("best") do |fn| toDelete << fn end
     Dir.glob("passed") do |fn| toDelete << fn end
