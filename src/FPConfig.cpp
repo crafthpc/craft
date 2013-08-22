@@ -154,6 +154,7 @@ void FPConfig::addReplaceEntry(string line)
             case RE_DCANCEL:    entry->tag = RETAG_DCANCEL;     break;
             case RE_DNAN:       entry->tag = RETAG_DNAN;        break;
             case RE_TRANGE:     entry->tag = RETAG_TRANGE;      break;
+            case RE_RPREC:      entry->tag = RETAG_RPREC;       break;
             default:            entry->tag = RETAG_NONE;        break;
         }
     }
@@ -224,6 +225,7 @@ void FPConfig::addReplaceEntry(string line)
 void FPConfig::addReplaceEntry(FPReplaceEntry *entry)
 {
     replaceEntries.push_back(entry);
+    //replaceEntries.insert(replaceEntries.begin(), entry);
     if (entry->type == RETYPE_INSTRUCTION) {
         instructionEntries[entry->address] = entry;
     }
@@ -364,6 +366,7 @@ string FPConfig::getReplaceEntryLine(FPReplaceEntry *rentry)
         case RETAG_DCANCEL:     ss << RE_DCANCEL;     break;
         case RETAG_DNAN:        ss << RE_DNAN;        break;
         case RETAG_TRANGE:      ss << RE_TRANGE;      break;
+        case RETAG_RPREC:       ss << RE_RPREC;       break;
         default:                ss << RE_NONE;      break;
     }
     ss << " ";

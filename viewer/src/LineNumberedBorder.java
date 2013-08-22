@@ -116,6 +116,10 @@ public class LineNumberedBorder extends AbstractBorder {
    public static final int DOT_SPACING  = 2;
    public static final int MAX_DOTS     = 10;
 
+   public static final int BAR_WIDTH    = 14;
+   public static final int BAR_HEIGHT   = 9;
+   public static final int BAR_ARC      = 4;
+
    /**
     *  Indicates the justification of the text of the line number.
     */
@@ -343,6 +347,10 @@ public class LineNumberedBorder extends AbstractBorder {
                  }
 
              }
+             if (fileInfo.maxPrecisions.containsKey(i)) {
+                 drawBar(g, (lnxstart + lineWidth)+(k*(DOT_WIDTH+DOT_SPACING)), ydots-1,
+                         Util.getPrecisionScaledColor(fileInfo.maxPrecisions.get(i).longValue()));
+             }
              g.setColor(oldColor);
          }
  
@@ -357,6 +365,13 @@ public class LineNumberedBorder extends AbstractBorder {
        g.fillRoundRect(x, y, DOT_WIDTH, DOT_HEIGHT, DOT_ARC, DOT_ARC);
        g.setColor(Color.BLACK);
        g.drawRoundRect(x, y, DOT_WIDTH, DOT_HEIGHT, DOT_ARC, DOT_ARC);
+   }
+
+   private void drawBar(Graphics g, int x, int y, Color c) {
+       g.setColor(c);
+       g.fillRoundRect(x, y, BAR_WIDTH, BAR_HEIGHT, BAR_ARC, BAR_ARC);
+       g.setColor(Color.BLACK);
+       g.drawRoundRect(x, y, BAR_WIDTH, BAR_HEIGHT, BAR_ARC, BAR_ARC);
    }
 
    private void drawEllipsis(Graphics g, int x, int y) {

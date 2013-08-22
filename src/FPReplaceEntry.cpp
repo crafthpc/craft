@@ -56,6 +56,7 @@ string FPReplaceEntry::toString()
         case RETAG_DCANCEL:   ss << " [dcancel]";     break;
         case RETAG_DNAN:      ss << " [dnan]";        break;
         case RETAG_TRANGE:    ss << " [trange]";      break;
+        case RETAG_RPREC:     ss << " [rprec]";       break;
         case RETAG_NONE:    break;
     }
     if (parent) {

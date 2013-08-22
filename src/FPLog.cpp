@@ -522,6 +522,35 @@ void FPLog::writeInstructions()
     }
 }
 
+string FPLog::formatLargeCount(size_t val)
+{
+    stringstream ss;
+    ss.clear(); ss.str("");
+    int divs = 0, dec = 0;
+    while (val > 10000) {
+        val /= 1000;
+        divs++;
+    }
+    if (val > 1000) {
+        val = val / 100;
+        dec = val % 10;
+        val = val / 10;
+        divs++;
+    }
+    ss << val << "." << dec;
+    switch (divs) {
+        case 0:  break;
+        case 1:  ss << "K"; break;
+        case 2:  ss << "M"; break;
+        case 3:  ss << "G"; break;
+        case 4:  ss << "T"; break;
+        case 5:  ss << "P"; break;
+        case 6:  ss << "E"; break;
+        default: ss << "e" << divs*3; break;
+    }
+    return ss.str();
+}
+
 void FPLog::close()
 {
     if (!fileOpen) return;

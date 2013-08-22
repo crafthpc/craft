@@ -200,11 +200,13 @@ FPSemantics* FPDecoderXED::decode(unsigned long iidx, void *addr, unsigned char 
         expandInstCache(iidx >= instCacheSize*2 ? iidx+1 : instCacheSize*2);
         inst = build(iidx, addr, bytes, nbytes);
         instCacheArray[iidx] = inst;
+        iidxByAddr[addr] = iidx;
     } else {
         inst = instCacheArray[iidx];
         if (inst == NULL) {
             inst = build(iidx, addr, bytes, nbytes);
             instCacheArray[iidx] = inst;
+            iidxByAddr[addr] = iidx;
         }
     }
     return inst;
@@ -213,6 +215,15 @@ FPSemantics* FPDecoderXED::decode(unsigned long iidx, void *addr, unsigned char 
 FPSemantics* FPDecoderXED::lookup(unsigned long iidx)
 {
     return (iidx < instCacheSize) ? instCacheArray[iidx] : NULL;
+}
+
+FPSemantics* FPDecoderXED::lookupByAddr(void* addr)
+{
+    FPSemantics *inst = NULL;
+    if (iidxByAddr.find(addr) != iidxByAddr.end()) {
+        inst = lookup(iidxByAddr[addr]);
+    }
+    return inst;
 }
 
 FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char *bytes, size_t nbytes)

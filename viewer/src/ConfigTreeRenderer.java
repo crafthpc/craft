@@ -11,38 +11,67 @@ import javax.swing.tree.*;
 
 public class ConfigTreeRenderer extends DefaultTreeCellRenderer {
 
-    private boolean showEffectiveStatus;
-    private boolean showCodeCoverage;
-    private boolean showError;
+    public static class ViewOptions {
+
+        public boolean showID;
+        public boolean showEffectiveStatus;
+        public boolean showCodeCoverage;
+        public boolean showError;
+        public boolean showPrecision;
+
+        public ViewOptions() {
+            showID = false;
+            showEffectiveStatus = true;
+            showCodeCoverage = false;
+            showError = false;
+            showPrecision = false;
+        }
+    }
+
+    private ViewOptions viewOptions;
 
     public ConfigTreeRenderer() {
-        showEffectiveStatus = true;
-        showCodeCoverage = false;
-        showError = false;
+        viewOptions = new ViewOptions();
+    }
+
+    public boolean getShowID() {
+        return viewOptions.showID;
+    }
+
+    public void setShowID(boolean newValue) {
+        viewOptions.showID = newValue;
     }
 
     public boolean getShowEffectiveStatus() {
-        return showEffectiveStatus;
+        return viewOptions.showEffectiveStatus;
     }
 
     public void setShowEffectiveStatus(boolean newValue) {
-        showEffectiveStatus = newValue;
+        viewOptions.showEffectiveStatus = newValue;
     }
 
     public boolean getShowCodeCoverage() {
-        return showCodeCoverage;
+        return viewOptions.showCodeCoverage;
     }
 
     public void setShowCodeCoverage(boolean newValue) {
-        showCodeCoverage = newValue;
+        viewOptions.showCodeCoverage = newValue;
     }
 
     public boolean getShowError() {
-        return showError;
+        return viewOptions.showError;
     }
 
     public void setShowError(boolean newValue) {
-        showError = newValue;
+        viewOptions.showError = newValue;
+    }
+
+    public boolean getShowPrecision() {
+        return viewOptions.showPrecision;
+    }
+
+    public void setShowPrecision(boolean newValue) {
+        viewOptions.showPrecision = newValue;
     }
 
     public Component getTreeCellRendererComponent(JTree tree, Object value, 
@@ -51,9 +80,9 @@ public class ConfigTreeRenderer extends DefaultTreeCellRenderer {
         setFont(ConfigEditorApp.DEFAULT_FONT_MONO_PLAIN);
         if (value instanceof ConfigTreeNode) {
             ConfigTreeNode node = (ConfigTreeNode)value;
-            setText(node.toString(showCodeCoverage, showError));
+            setText(node.toString(viewOptions));
             ConfigTreeNode.CNStatus status = node.status;
-            if (showEffectiveStatus) {
+            if (viewOptions.showEffectiveStatus) {
                 status = node.getEffectiveStatus();
             }
             switch (status) {
@@ -72,6 +101,9 @@ public class ConfigTreeRenderer extends DefaultTreeCellRenderer {
                 case TRANGE:
                     setBackground(ConfigEditorApp.DEFAULT_COLOR_TRANGE);
                     setOpaque(true);        break;
+                case RPREC:
+                    setBackground(ConfigEditorApp.DEFAULT_COLOR_RPREC);
+                    setOpaque(true);        break;
                 case NULL:
                     setBackground(ConfigEditorApp.DEFAULT_COLOR_NULL);
                     setOpaque(true);        break;
@@ -87,12 +119,18 @@ public class ConfigTreeRenderer extends DefaultTreeCellRenderer {
                 default:
                     setOpaque(false);       break;
             }
-            if (showError) {
+            if (viewOptions.showError) {
                 // TODO: this should be empirically derived
-                double err = (Math.log10(node.error)+13.0)/14.0;
-                if (err > 1.0) err = 1.0;
-                if (err < 0.0) err = 0.0;
-                setBackground(new Color((float)err,(float)1.0-(float)err,(float)0.0));
+                float err = ((float)Math.log10(node.error)+13.0f)/14.0f;
+                setBackground(Util.getGreenRedScaledColor(err));
+                setOpaque(true);
+            }
+            if (viewOptions.showPrecision) {
+                if (viewOptions.showEffectiveStatus) {
+                    setBackground(Util.getPrecisionScaledColor(node.getEffectivePrecision()));
+                } else {
+                    setBackground(Util.getPrecisionScaledColor(node.precision));
+                }
                 setOpaque(true);
             }
         } else {

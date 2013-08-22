@@ -4,6 +4,7 @@
  * misc utility methods
  */
 
+import java.awt.*;
 import java.io.*;
 import java.text.*;
 import java.util.*;
@@ -11,7 +12,7 @@ import java.util.regex.*;
 
 public class Util {
 
-    private static List<File> searchDirs = new ArrayList<File>();
+    private static java.util.List<File> searchDirs = new ArrayList<File>();
 
     public static void initSearchDirs() {
         searchDirs = new ArrayList<File>();
@@ -37,7 +38,7 @@ public class Util {
         }
     }
 
-    public static List<File> getSearchDirs() {
+    public static java.util.List<File> getSearchDirs() {
         return searchDirs;
     }
 
@@ -86,6 +87,30 @@ public class Util {
             s = m.group(group);
         }
         return s;
+    }
+
+    public static Color getGreenRedScaledColor(float value) {
+        value = Math.min(Math.max(value, 0.0f), 1.0f);
+        float hue = (1.0f-value) * (115.0f / 360.0f);
+        return Color.getHSBColor(hue, 0.35f, 1.0f);
+    }
+
+    public static Color getWhiteBlueScaledColor(float value) {
+        value = Math.min(Math.max(value, 0.0f), 1.0f);
+        float sat = value * 0.25f;
+        return Color.getHSBColor((180.0f / 360.0f), sat, 1.0f);
+    }
+
+    public static Color getPrecisionScaledColor(long precision) {
+        Color c = Color.WHITE;
+        if (precision > 23 && precision <= 52) {
+            float prec = ((float)precision-23.0f)/(52.0f-23.0f);
+            c = getGreenRedScaledColor(prec);
+        } else if (precision <= 23) {
+            float prec = ((float)precision)/(23.0f);
+            c = getWhiteBlueScaledColor(prec);
+        }
+        return c;
     }
 }
 

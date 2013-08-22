@@ -1,0 +1,35 @@
+#!/usr/bin/env ruby
+#
+# Fixes an old version of the reduced-precision "craft.tested" files by
+# adding "x-bit" notation to the end of all the CUIDs (thus making them unique,
+# as the newer ones are).
+#
+# Usage:  ./fix_cache <old_file> <new_file>
+#
+
+require 'yaml.rb'
+
+class AppConfig
+    attr_accessor :cuid             # unique identifier (string)
+    attr_accessor :label            # human-readable description; e.g. "MODULE #1: boxes.c; MODULE #2: spheres.c"
+    attr_accessor :default          # status
+    attr_accessor :exceptions       # cuid -> status
+    attr_accessor :attrs            # string => string
+
+    attr_accessor :defprec          # default precision (int)
+    attr_accessor :precisions       # cuid -> int
+end
+
+fin = File.new(ARGV[0], "r")
+fout = File.new(ARGV[1], "w")
+YAML.each_document(fin) do |doc|
+    if (not doc.cuid =~ /-bit$/) and (doc.precisions.size == 1) then
+        prec = doc.precisions[doc.precisions.keys.first]
+        doc.cuid = "#{doc.cuid} #{prec}-bit"
+    end
+    puts doc.cuid
+    YAML.dump(doc, fout)
+end
+fin.close
+fout.close
+

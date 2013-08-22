@@ -57,7 +57,8 @@ $STATUS_NULL      = "x"
 $STATUS_CINST     = "i"
 $STATUS_DCANCEL   = "c"
 $STATUS_DNAN      = "n"
-$STATUS_TRANGE    = "r"
+$STATUS_TRANGE    = "t"
+$STATUS_RPREC     = "r"
 
 $FINALCFG_CUID = "FINAL"                            # special config; represents "best" final results
 
@@ -75,6 +76,7 @@ $FINALCFG_CUID = "FINAL"                            # special config; represents
 # {{{ PPoint
 class PPoint
     attr_accessor :uid              # unique regex identifier; e.g. "INSN #34: 0x804d3f"
+    attr_accessor :id               # program component identifier; e.g. 34 in line above
     attr_accessor :type             # module, function, instruction, etc.
     attr_accessor :orig_status      # single, double, ignore, candidate, none
     attr_accessor :parent           # PPoint
@@ -85,6 +87,10 @@ class PPoint
 
     def initialize (uid, type, orig_status)
         @uid = uid
+        @id = 0
+        if @uid =~ /#(\d+)/ then
+            @id = $1.to_i
+        end
         @type = type
         @orig_status = orig_status
         @parent = nil
@@ -94,7 +100,7 @@ class PPoint
         @byaddr = Hash.new
     end
 
-    def build_config_file (config, fn)
+    def build_config_file (config, fn, only_insns=true)
         # write out a configuration file for this program and the given config
         # this method will only be called in an APPLICATION node; it calls
         # output() to recursively print the other levels
@@ -102,7 +108,11 @@ class PPoint
         if @attrs.has_key?("prolog") then
             fout << @attrs["prolog"]
         end
-        output(config, fout, nil)
+        if only_insns then
+            output(config, fout, nil, nil)
+        else
+            output_all(config, fout)
+        end
         fout.close
     end
 
@@ -131,29 +141,73 @@ class PPoint
         return @byaddr[addr]
     end
 
-    def build_cuid
-        return @uid
+    def build_cuid(tag = nil)
+        cuid = @uid
+        if not tag.nil? then
+            cuid += " #{tag}"
+        end
+        return cuid
     end
 
-    def build_label
+    def build_label(tag = nil)
         # build human-readable label
         label = @uid
-        if @uid.include?($TYPE_APPLICATION) then
-            label = "APP #{@attrs["desc"]}"
-        elsif @uid.include?($TYPE_MODULE) then
-            label = "MOD #{@attrs["desc"]}"
-        elsif @uid.include?($TYPE_FUNCTION) then
-            label = "FUNC #{@attrs["desc"]}"
-        elsif @uid.include?($TYPE_BASICBLOCK) then
-            label = "BBLK #{@attrs["addr"]}"
-        elsif @uid.include?($TYPE_INSTRUCTION) then
-            label = "INSN #{@attrs["addr"]} \"#{@attrs["desc"]}\""
+        if tag.nil? then
+            tag = ""
+        else
+            tag += " "
         end
-        return label
+        if @uid.include?($TYPE_APPLICATION) then
+            label = "APP #{tag}#{@attrs["desc"]}"
+        elsif @uid.include?($TYPE_MODULE) then
+            label = "MOD #{tag}#{@attrs["desc"]}"
+        elsif @uid.include?($TYPE_FUNCTION) then
+            label = "FUNC #{tag}#{@attrs["desc"]}"
+        elsif @uid.include?($TYPE_BASICBLOCK) then
+            label = "BBLK #{@attrs["addr"]} #{tag}"
+        elsif @uid.include?($TYPE_INSTRUCTION) then
+            label = "INSN #{@attrs["addr"]} #{tag}\"#{@attrs["desc"]}\""
+        end
+        return label.strip
     end
 
+    def output_all(config, fout)
+        prec_line = nil
+        fout.print("^")
+        if config.exceptions.has_key?(@uid) then
+            # status overridden by current config
+            fout.print(config.exceptions[@uid])
+            if config.exceptions[@uid] == $STATUS_RPREC then
+                prec_line = "#{type}_#{@id}_precision=#{config.precisions[@uid]}"
+            end
+        else
+            if @orig_status == $STATUS_CANDIDATE then
+                # candidate for replacement; output configuration default
+                fout.print(config.default)
+            else
+                # no override; output original default
+                fout.print(@orig_status)
+            end
+        end
+        fout.print(" ")
+        fout.print($TYPE_SPACES[@type])     # indentation
+        fout.print(@uid)
+        if @attrs.has_key?("desc") then
+            fout.print(" \"")
+            fout.print(@attrs["desc"])
+            fout.print("\"")
+        end
+        fout.print("\n")
+        if not prec_line.nil? then
+            fout.puts prec_line
+        end
+        @children.each do |pt|
+            pt.output_all(config, fout)
+        end
+    end
 
-    def output (config, fout, overload)
+    def output(config, fout, overload, overload_prec)
+        prec_line = nil
         fout.print("^")
         if type == $TYPE_INSTRUCTION then
             if @orig_status == $STATUS_CANDIDATE then
@@ -161,10 +215,16 @@ class PPoint
                 if not overload.nil? then
                     # status overridden by something higher up the tree
                     fout.print(overload)
+                    if overload == $STATUS_RPREC then
+                        prec_line = "#{type}_#{@id}_precision=#{overload_prec}"
+                    end
                 else
                     if config.exceptions.has_key?(@uid) then
                         # status overridden by current config
                         fout.print(config.exceptions[@uid])
+                        if config.exceptions[@uid] == $STATUS_RPREC then
+                            prec_line = "#{type}_#{@id}_precision=#{config.precisions[@uid]}"
+                        end
                     else
                         # no override; output configuration default
                         fout.print(config.default)
@@ -178,6 +238,9 @@ class PPoint
                 if config.exceptions.has_key?(@uid) then
                     # children status overridden by current config
                     overload = config.exceptions[@uid]
+                    if overload == $STATUS_RPREC then
+                        overload_prec = config.precisions[@uid]
+                    end
                 elsif not @orig_status == $STATUS_NONE then
                     # children status overridden by original config
                     overload = @orig_status
@@ -194,8 +257,11 @@ class PPoint
             fout.print("\"")
         end
         fout.print("\n")
+        if not prec_line.nil? then
+            fout.puts prec_line
+        end
         @children.each do |pt|
-            pt.output(config, fout, overload)
+            pt.output(config, fout, overload, overload_prec)
         end
     end
 end # }}}
@@ -217,12 +283,17 @@ class AppConfig
     attr_accessor :exceptions       # cuid -> status
     attr_accessor :attrs            # string => string
 
+    attr_accessor :defprec          # default precision (int)
+    attr_accessor :precisions       # cuid -> int
+
     def initialize (cuid, label, default)
         @cuid = cuid
         @label = label
         @default = default
         @exceptions = Hash.new
         @attrs = Hash.new
+        @defprec = 52
+        @precisions = Hash.new
     end
 
     def <=> (c2)
@@ -287,6 +358,15 @@ class AppConfig
         fn << ".cfg"
         return fn
     end
+
+    def add_pt_info(pt)
+        if pt.attrs.has_key?("cinst") then
+            @attrs["cinst"] = pt.attrs["cinst"]
+        else
+            @attrs["cinst"] = 0
+        end
+    end
+
 end # }}}
 
 
@@ -306,7 +386,7 @@ class Strategy
     attr_accessor :program
     attr_accessor :preferred
     attr_accessor :alternate
-    attr_accessor :basetype
+    attr_accessor :base_type
 
     def initialize(program, pref, alt)
         @preferred = pref
@@ -333,6 +413,7 @@ class Strategy
         # try to replace the entire program
         configs = Array.new
         cfg = AppConfig.new(@program.build_cuid, @program.build_label, @alternate)
+        cfg.add_pt_info(@program)
         cfg.exceptions[@program.uid] = @preferred
         cfg.attrs["level"] = $TYPE_APPLICATION
         configs << cfg
@@ -356,6 +437,7 @@ class Strategy
                     end
 
                     cfg = AppConfig.new(child_pt.build_cuid, child_pt.build_label, config.default)
+                    cfg.add_pt_info(pt)
                     cfg.exceptions[child_pt.uid] = v
                     cfg.attrs["level"] = child_pt.type
                     configs << cfg
@@ -403,12 +485,8 @@ class BinaryStrategy < Strategy
             config.exceptions.each_pair do |k,v|
                 pt = @program.lookup_by_uid(k)
                 cfg = AppConfig.new(pt.build_cuid, pt.build_label, config.default)
+                cfg.add_pt_info(pt)
                 cfg.exceptions[pt.uid] = v
-                if pt.attrs.has_key?("cinst") then
-                    cfg.attrs["cinst"] = pt.attrs["cinst"]
-                else
-                    cfg.attrs["cinst"] = 0
-                end
                 cfg.attrs["level"] = pt.type
                 configs << cfg
             end
@@ -425,18 +503,14 @@ class BinaryStrategy < Strategy
                         child_pt = child
 
                         # skip single-child nodes
-                        if child.children.size == 1 and child.type != @basetype then
+                        if child.children.size == 1 and child.type != @base_type then
                             child_pt = child.children.first
                         end
 
                         cfg = AppConfig.new(child_pt.build_cuid, child_pt.build_label, config.default)
+                        cfg.add_pt_info(child_pt)
                         #puts "ADDING #{cfg.cuid} #{child_pt.type}"
                         cfg.exceptions[child_pt.uid] = v
-                        if child_pt.attrs.has_key?("cinst") then
-                            cfg.attrs["cinst"] = child_pt.attrs["cinst"]
-                        else
-                            cfg.attrs["cinst"] = 0
-                        end
                         cfg.attrs["level"] = child_pt.type
                         configs << cfg
                     end
@@ -491,15 +565,16 @@ end # }}}
 class ExhaustiveStrategy < Strategy
 
     def build_initial_configs
-        # find all basetype-level points
+        # find all base_type-level points
         configs = Array.new
         find_configs(@program, configs)
         return configs
     end
 
     def find_configs(pt, configs)
-        if pt.type == @basetype then
+        if pt.type == @base_type then
             cfg = AppConfig.new(pt.build_cuid, pt.build_label, @alternate)
+            cfg.add_pt_info(pt)
             cfg.exceptions[pt.uid] = @preferred
             cfg.attrs["level"] = pt.type
             configs << cfg
@@ -517,6 +592,134 @@ class ExhaustiveStrategy < Strategy
 
 end # }}}
 
+
+# RPrecStrategy
+#
+# Search algorithm that find the lowest reduced-precision level for each
+# instruction that allows the entire program to pass verification. Performs a
+# binary search on the precision level to speed convergence.
+#
+# {{{ RPrecStrategy
+class RPrecStrategy < Strategy
+
+    attr_accessor :lower_bound
+    attr_accessor :upper_bound
+    attr_accessor :num_iterations
+    attr_accessor :split_threshold
+    attr_accessor :runtime_pct_threshold
+
+    def initialize(program, pref, alt)
+        super(program, pref, alt)
+        @lower_bound = Hash.new(-1)
+        @upper_bound = Hash.new(52)
+        @num_iterations = Hash.new(52)
+        @split_threshold = 23               # single-precision by default
+        @runtime_pct_threshold = 0.0        # disabled by default
+    end
+
+    def reload_bounds_from_results(results)
+        @lower_bound = Hash.new(-1)
+        @upper_bound = Hash.new(52)
+        @num_iterations = Hash.new(0)
+        results.each do |cfg|
+            cfg.precisions.each_pair do |uid, prec|
+                #puts "adjusting #{uid} for result #{cfg.attrs["result"]} at #{prec}"
+                if cfg.attrs["result"] == $RESULT_PASS then
+                    @upper_bound[uid] = [@upper_bound[uid],prec].min
+                else
+                    @lower_bound[uid] = [@lower_bound[uid],prec].max
+                end
+                @num_iterations[uid] = @num_iterations[uid] + 1
+            end
+        end
+    end
+
+    def build_initial_configs
+        # find all base_type-level points
+        configs = Array.new
+        add_midpoint_cfg(@program, configs)
+        return configs
+    end
+
+    def add_midpoint_cfg(pt, configs)
+        mid = (@upper_bound[pt.uid] - @lower_bound[pt.uid])/2 + @lower_bound[pt.uid]
+        #puts "  new mid to test at pt #{pt.uid}: #{mid} in (#{@lower_bound[pt.uid]}, #{@upper_bound[pt.uid]}] cinst=#{pt.attrs["cinst"]}"
+        if (pt.attrs["icount"].to_i > 0 and 
+                @upper_bound[pt.uid] > @lower_bound[pt.uid]+1) and
+                (mid != @upper_bound[pt.uid]) and (mid != @lower_bound[pt.uid]) then
+            tag = ("%02d-bit" % mid)
+            cfg = AppConfig.new(pt.build_cuid(tag), pt.build_label(tag), @alternate)
+            cfg.add_pt_info(pt)
+            cfg.exceptions[pt.uid] = @preferred
+            cfg.precisions[pt.uid] = mid
+            cfg.attrs["level"] = pt.type
+            cfg.attrs["prec"] = mid
+
+            if @runtime_pct_threshold > 0.0 then
+                # skip nodes with less than X% of total executions
+                calculate_pct_stats(cfg)
+                if cfg.attrs["pct_cinst"].to_f > @runtime_pct_threshold then
+                    configs << cfg
+                end
+            else
+                configs << cfg
+            end
+        end
+    end
+
+    def split_config(cfg)
+        configs = Array.new
+
+        max_upper_bound = 0
+
+        # add new midpoint configs
+        cfg.exceptions.each_key do |k|
+            pt = @program.lookup_by_uid(k)
+            max_upper_bound = [max_upper_bound, @upper_bound[pt.uid]].max
+            add_midpoint_cfg(pt, configs)
+        end
+
+        # descend if done with this level and above precision-level threshold
+        if configs.size == 0 and max_upper_bound > @split_threshold then
+
+            cfg.exceptions.each_pair do |k,v|
+                pt = @program.lookup_by_uid(k)
+                pt.children.each do |child|
+
+                    # skip nodes with no FP instructions
+                    if child.attrs["icount"].to_i > 0 then
+
+                        child_pt = child
+
+                        # skip single-child nodes
+                        if child.children.size == 1 and child.type != @base_type then
+                            child_pt = child.children.first
+                        end
+
+                        add_midpoint_cfg(child_pt, configs)
+                    end
+                end
+            end
+        end
+
+        return configs
+    end
+
+    def build_final_config(results)
+        reload_bounds_from_results(results)
+        # simple union of all passing configs
+        cfg = AppConfig.new($FINALCFG_CUID, "Final Configuration", @alternate)
+        @upper_bound.each_pair do |uid, prec|
+            cfg.exceptions[uid] = $STATUS_RPREC
+            cfg.precisions[uid] = prec
+        end
+        return cfg
+    end
+
+end
+# }}}
+
+
 # App entry point
 
 # {{{ main method
@@ -532,6 +735,8 @@ def main
     $fortran_mode = false                   # pass "-N" to mutator
     $base_type = $TYPE_INSTRUCTION          # stop splitting configs at this level
     $skip_nonexecuted = true                # don't bother running configs with non-executed instructions
+    $rprec_split_threshold = 23             # config splitting threshold for reduced precision searches
+    $rprec_runtime_pct_threshold = 0.0      # config cutoff runtime percentage threshold
     $initial_cfg_fn = ""                    # initial config filename (may be blank)
     $prof_log_fn = ""                       # initial profiling log (may be blank)
     $cached_fn = ""                         # cached results from previous run (may be blank)
@@ -549,9 +754,11 @@ def main
     $fpinst_invoke = "fpinst"               # invoke mutator
     $cached_configs = Array.new             # cached results from a previous run
     $binary_serialization = true            # use binary serialization (faster) for queues instead of YAML
+    $disable_queue_sort = false             # disable workqueue sorting
+    $run_final_config = true                # test the final config?
 
     # check command-line options
-    if ARGV.size == 0 or ARGV.include?("-h") then
+    if ARGV.size == 0 or ARGV[0] == "help" or ARGV.include?("-h") then
         $main_mode = "help"
         print_usage
         exit
@@ -716,6 +923,14 @@ def initialize_search
     File.new($tested_fn, "w").close
     File.new($mainlog_fn, "w").close
 
+    if $strategy_name == 'rprec' then
+        print "Initializing reduced-precision search:  "
+        print "split_threshold=#{$rprec_split_threshold}  "
+        puts  "runtime_pct_threshold=#{$rprec_runtime_pct_threshold}"
+    else
+        puts  "Initializing standard search:  strategy=#{$strategy_name}"
+    end
+
     # initial performance run
     print "Performing baseline performance test ... "
     $stdout.flush
@@ -811,16 +1026,25 @@ def resume_lower_search
     else
         puts "Lowering base type from #{$base_type} to #{$TYPE_RRANK[new_base_rank]}."
         $base_type = $TYPE_RRANK[new_base_rank]
-        $strategy.basetype = $base_type
+        $strategy.base_type = $base_type
     end
+
 
     # look for new configurations
     configs = Array.new
+    already_added = Hash.new(false)        # prevents adding identical cuids twice
     old_configs = get_tested_configs
+    if $strategy_name == "rprec" then
+        $strategy.reload_bounds_from_results(old_configs)
+    end
     old_configs.each do |cfg|
-        if cfg.attrs["result"] != $RESULT_PASS and is_single_base(cfg, old_base_type) then
+        if is_single_base(cfg, old_base_type) and 
+                (cfg.attrs["result"] != $RESULT_PASS or $strategy_name == "rprec") then
             $strategy.split_config(cfg).each do |c|
-                configs << c
+                if not already_added[c.cuid] then
+                    configs << c
+                    already_added[c.cuid] = true
+                end
             end
         end
     end
@@ -869,58 +1093,65 @@ def run_main_search_loop
         remove_from_inproc(cfg)
         rebuild_final_config
 
-        if run_config(cfg) == $RESULT_PASS then
+        add_children = true
+        if $strategy_name == "rprec" then
 
-            # this config passed
-
+            # always add children, but reload results first
+            # so the strategy can make an informed decision
+            $strategy.reload_bounds_from_results(get_tested_configs)
         else
 
-            # check to see if we're at the base type; stop if so
-            add_children = true
-            if is_single_base(cfg, $base_type) then
+            # check to see if we passed
+            if result == $RESULT_PASS then
                 add_children = false
             end
 
-            # add any children we need to test
-            if add_children then
-                configs = $strategy.split_config(cfg)
-                configs.each do |child|
-                    add_child = true
-
-                    # skip single-exception configs where the only exception
-                    # is lower than the base type; currently there is no
-                    # situation where we will encounter mixed-level configs
-                    if child.exceptions.keys.size == 1 then
-                        pt = $program.lookup_by_uid(child.exceptions.keys.first)
-                        if !pt.nil? and $TYPE_RANK[pt.type] > $TYPE_RANK[$base_type] then
-                            add_child = false
-                        end
-                    end
-
-                    # skip non-executed instructions if desired; assume they
-                    # will pass
-                    if $skip_nonexecuted and child.attrs["cinst"].to_i == 0 then
-                        puts "Skipping non-executed config #{child.label}."
-                        add_to_mainlog("    Skipping non-executed config #{child.label}.")
-                        child.attrs["result"] = $RESULT_PASS
-                        child.attrs["skipped"] = "yes"
-                        calculate_pct_stats(child)
-                        add_tested_config(child)
-                        rebuild_final_config
-                        add_child = false
-                    end
-                    if add_child then
-                        add_to_workqueue(child)
-                        puts "Added config #{child.label} to workqueue."
-                    end
-                end
+            # check to see if we're at the base type; stop if so
+            if is_single_base(cfg, $base_type) then
+                add_children = false
             end
-
         end
 
-        add_tested_config(cfg)
-        remove_from_inproc(cfg)
-        rebuild_final_config
+        # add any children we need to test
+        if add_children then
+            configs = $strategy.split_config(cfg)
+            configs.each do |child|
+                add_child = true
+
+                # skip single-exception configs where the only exception
+                # is lower than the base type; currently there is no
+                # situation where we will encounter mixed-level configs
+                if child.exceptions.keys.size == 1 then
+                    pt = $program.lookup_by_uid(child.exceptions.keys.first)
+                    if !pt.nil? and $TYPE_RANK[pt.type] > $TYPE_RANK[$base_type] then
+                        add_child = false
+                    end
+                end
+
+                # skip non-executed instructions if desired; assume they
+                # will pass
+                if $skip_nonexecuted and child.attrs["cinst"].to_i == 0 then
+                    puts "Skipping non-executed config #{child.label}."
+                    add_to_mainlog("    Skipping non-executed config #{child.label}.")
+                    child.attrs["result"] = $RESULT_PASS
+                    child.attrs["skipped"] = "yes"
+                    if $strategy_name == "rprec" then
+                        child.precisions.each_key do |k|
+                            child.precisions[k] = 0
+                        end
+                    end
+                    calculate_pct_stats(child)
+                    add_tested_config(child)
+                    rebuild_final_config
+                    add_child = false
+                end
+
+                if add_child then
+                    add_to_workqueue(child)
+                    puts "Added config #{child.label} to workqueue."
+                end
+            end
+        end
 
         cfg = get_next_workqueue_item
     end
@@ -1029,7 +1260,9 @@ def finalize_search
     # try the final config (and keep results)
     puts "Testing final configuration ... "
     Dir.chdir($final_path)
-    run_config_file($final_config_fn, true, $final_config.label)
+    if $run_final_config then
+        run_config_file($final_config_fn, true, $final_config.label)
+    end
     Dir.chdir($search_path)
 
     # start generating final report
@@ -1038,6 +1271,7 @@ def finalize_search
     # finalize report
     elapsed = Time.now.to_f - $start_time.to_f
     summary = get_tested_configs_summary
+    report << " "
     report << "Total candidates:          #{"%11d" % $total_candidates}"
     report << "Total configs tested:      #{"%11d" % summary["total"]}"
     report << "  Total passed:            #{"%11d" % summary["pass"]}"
@@ -1142,9 +1376,18 @@ def parse_command_line
             elsif opt == "-c" then
                 # initial configuration
                 $initial_cfg_fn = ARGV.shift
+            elsif opt == "-C" then
+                # initial fpconf options
+                $fpconf_options = ARGV.shift
             elsif opt == '-m' then
                 # memory-based analysis
                 $fpconf_options = "-c --svinp mem_double "
+            elsif opt == '-r' then
+                # reduced-precision analysis
+                $status_preferred = $STATUS_RPREC
+                $status_alternate = $STATUS_IGNORE
+                $fpconf_options = "-c --rprec 52"
+                $strategy_name = "rprec"
             elsif opt == '-a' then
                 # skip non-executed configs
                 $skip_nonexecuted = false
@@ -1157,9 +1400,18 @@ def parse_command_line
             elsif opt == '-f' then
                 # stop splitting at functions
                 $base_type = $TYPE_FUNCTION
+            elsif opt == '-F' then
+                # don't run final config
+                $run_final_config = false
             elsif opt == '-s' then
                 # strategy
                 $strategy_name = ARGV.shift
+            elsif opt == '-P' then
+                # runtime percentage threshold for reduced precision
+                $rprec_runtime_pct_threshold = ARGV.shift.to_f
+            elsif opt == '-S' then
+                # disable workqueue sorting
+                $disable_queue_sort = true
             elsif !parsed_binary then
                 $binary_name = File.basename(opt)
                 $binary_path = File.expand_path(opt)
@@ -1248,12 +1500,16 @@ def initialize_strategy
         $strategy = BinaryStrategy.new($program, $status_preferred, $status_alternate)
     elsif $strategy_name == "exhaustive" then
         $strategy = ExhaustiveStrategy.new($program, $status_preferred, $status_alternate)
+    elsif $strategy_name == "rprec" then
+        $strategy = RPrecStrategy.new($program, $status_preferred, $status_alternate)
+        $strategy.split_threshold = $rprec_split_threshold
+        $strategy.runtime_pct_threshold = $rprec_runtime_pct_threshold
     else
         puts "Unrecognized search strategy \"#{$strategy_name}\""
         puts "Aborting search."
         exit
     end
-    $strategy.basetype = $base_type
+    $strategy.base_type = $base_type
     if $program.attrs.has_key?("icount") then
         $total_candidates = $program.attrs["icount"]
     else
@@ -1549,6 +1805,9 @@ def save_settings
     f.puts "prof_log_fn=#{$prof_log_fn}"
     f.puts "total_candidates=#{$total_candidates}"
     f.puts "rprec_split_threshold=#{$rprec_split_threshold}"
+    f.puts "rprec_runtime_pct_threshold=#{$rprec_runtime_pct_threshold}"
+    f.puts "disable_queue_sort=#{$disable_queue_sort.to_s}"
+    f.puts "run_final_config=#{$run_final_config.to_s}"
 
     #f.puts $start_time.to_i
     #f.puts $binary_name
@@ -1564,6 +1823,9 @@ def save_settings
     #f.puts $prof_log_fn
     #f.puts $total_candidates
     #f.puts $rprec_split_threshold
+    #f.puts $rprec_runtime_pct_threshold
+    #f.puts $disable_queue_sort
+    #f.puts $run_final_config
 
     f.close
 end
@@ -1609,10 +1871,17 @@ def load_settings
                 $total_candidates = value.to_i
             when "rprec_split_threshold"
                 $rprec_split_threshold = value.to_i
+            when "rprec_runtime_pct_threshold"
+                $rprec_runtime_pct_threshold = value.to_f
+            when "disable_queue_sort"
+                $disable_queue_sort = (value == true.to_s)
+            when "run_final_config"
+                $run_final_config = (value == true.to_s)
             end
             temp = f.gets
         end
     else
+        # old style settings file; included for backwards compatibility
         $start_time = Time.at(temp.to_i)
         $binary_name = f.gets.chomp
         $binary_path = f.gets.chomp
@@ -1632,6 +1901,9 @@ def load_settings
         line = f.gets; $prof_log_fn           = (line != nil ? line.chomp      : "")
         line = f.gets; $total_candidates      = (line != nil ? line.chomp.to_i : 0)
         line = f.gets; $rprec_split_threshold = (line != nil ? line.chomp.to_i : 0)
+        line = f.gets; $rprec_runtime_pct_threshold = (line != nil ? line.chomp.to_i : 0)
+        line = f.gets; $disable_queue_sort = (line != nil ? line.chomp == true.to_s : false)
+        line = f.gets; $run_final_config = (line != nil ? line.chomp == true.to_s : false)
     end
     f.close
 end
@@ -1674,7 +1946,9 @@ def add_to_workqueue_bulk(configs)
         queue << cfg
         puts "Added config #{cfg.label} to workqueue."
     end
-    queue.sort!
+    if not $disable_queue_sort then
+        queue.sort!
+    end
     f.truncate(0)
     f.pos = 0
     write_cfg_array(queue, f)
@@ -1687,7 +1961,9 @@ def add_to_workqueue(cfg)
     queue = read_cfg_array(f)
     calculate_pct_stats(cfg)
     queue << cfg
-    queue.sort!
+    if not $disable_queue_sort then
+        queue.sort!
+    end
     
     # debug output
     #puts "Current workqueue:"
@@ -1843,32 +2119,45 @@ end
 
 def print_usage
     puts " "
-    puts "Usage:  #{$self_invoke} start [start-options] <binary>    (supervisor process)"
+    puts "CRAFT #{$CRAFT_VERSION}"
+    puts "Automatic search script"
+    puts " "
+    puts "Usage:  #{$self_invoke} start [start-options] <binary>     (supervisor process)"
     puts "        #{$self_invoke} search [start-options] <binary>    (supervisor process)"
     puts "          or"
-    puts "        #{$self_invoke} resume [resume-options]           (resume supervisor process)"
+    puts "        #{$self_invoke} resume [resume-options]            (resume supervisor process)"
     puts "          or"
-    puts "        #{$self_invoke} status                            (display search status)"
+    puts "        #{$self_invoke} status                             (display search status)"
     puts "          or"
-    puts "        #{$self_invoke} clean                             (reset search)"
+    puts "        #{$self_invoke} clean                              (reset search)"
     puts "          or"
-    puts "        #{$self_invoke} worker <id> <dir>                 (worker process; used internally)"
+    puts "        #{$self_invoke} worker <id> <dir>                  (worker process; used internally)"
     puts " "
-    puts "Valid initial options:"
+    puts "Shortcut mode modifications:"
+    puts "   <default>      operation-based mixed-precision analysis"
+    puts "   -m             memory-based mixed-precision analysis"
+    puts "                    equivalent to '-C \"-c --svinp mem_double\"'"
+    puts "   -r             reduced-precision analysis"
+    puts "                    equivalent to '-d #{$STATUS_RPREC} -s \"rprec\" -C \"-c --rprec 52\"'"
+    puts " "
+    puts "Initiation options:"
     puts "   -a             test all generated configs (don't skip non-executed instructions)"
     puts "   -A <file>      use an archived craft.tested file to avoid re-running tests from a previous search"
     puts "   -b             stop splitting configs at the basic block level"
     puts "   -c <file>      use <file> as initial base configuration"
+    puts "   -C \"<opts>\"    pass the given options to fpconf to generate initial base configuration"
     puts "   -d <p>         debug mode (<p> -> ignore instead of double->single)"
     puts "   -D <p> <a>     debug mode (<p> -> <a> instead of double->single)"
     puts "   -f             stop splitting configs at the function level"
+    puts "   -F             don't test final configuration"
     puts "   -j <np>        spawn <np> worker threads"
-    puts "   -m             memory-based analysis"
     puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
+    puts "   -P <X>         rprec mode: only examine nodes with more than X% of total executed instructions"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
-    puts "                    valid strategies:  \"simple\", \"bin_simple\", and \"exhaustive\""
+    puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"rprec\""
+    puts "   -S             disable queue sorting (improves overall performance but may converge slower"
     puts " "
-    puts "Valid resumption options:"
+    puts "Resumption options:"
     puts "   -j <np>        spawn <np> worker threads"
     puts "   -l             resume search at lower level (e.g., INSN instead of BBLK)"
     puts "   -n             resume search and restart in-process tests"
@@ -1951,10 +2240,11 @@ def print_status
 
     # best results so far and current in-process configs
     if full_output then
-        build_best_report(8).each do |rl|
+        report = build_best_report(8)
+        report.each do |rl|
             status_text << rl
         end
-        status_text << hbar
+        status_text << hbar if report.size > 0
         if get_inproc_length > 0 or get_workqueue_length > 0 then
             inproc = get_inproc_configs
             queue = get_workqueue_configs
@@ -2032,7 +2322,7 @@ end
 
 def rebuild_final_config
     $final_config = $strategy.build_final_config(get_tested_configs)
-    $program.build_config_file($final_config, $final_config_fn)
+    $program.build_config_file($final_config, $final_config_fn, false)
     calculate_pct_stats($final_config)
 end
 
@@ -2050,6 +2340,25 @@ end
 
 
 def build_best_report(num,copy_files=false)
+    if $strategy_name == "rprec" then
+        return Array.new
+    else
+        return build_best_regular_report(num,copy_files)
+    end
+end
+
+def build_reduced_prec_report(num,copy_files=false)
+    results = get_tested_configs
+    $strategy.reload_bounds_from_results(results)
+    report = Array.new
+
+    # TODO: iterate over $program and find the best bounds for each instruction
+    #       then merge this with the icount and cinst info and report it all
+
+    return report
+end
+
+def build_best_regular_report(num,copy_files=false)
     # find best individual configs
     results = get_tested_configs
     inst_passed_cfgs = Array.new
