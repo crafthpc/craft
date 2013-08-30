@@ -607,6 +607,7 @@ class RPrecStrategy < Strategy
     attr_accessor :num_iterations
     attr_accessor :split_threshold
     attr_accessor :runtime_pct_threshold
+    attr_accessor :skip_app_level
 
     def initialize(program, pref, alt)
         super(program, pref, alt)
@@ -615,6 +616,7 @@ class RPrecStrategy < Strategy
         @num_iterations = Hash.new(52)
         @split_threshold = 23               # single-precision by default
         @runtime_pct_threshold = 0.0        # disabled by default
+        @skip_app_level = false             # don't skip app level by default
     end
 
     def reload_bounds_from_results(results)
@@ -635,9 +637,23 @@ class RPrecStrategy < Strategy
     end
 
     def build_initial_configs
-        # find all base_type-level points
         configs = Array.new
-        add_midpoint_cfg(@program, configs)
+        if @skip_app_level then
+            # start at the module level
+            @program.children.each do |child|
+                child_pt = child
+
+                # skip single-child nodes
+                if child.children.size == 1 and child.type != @base_type then
+                    child_pt = child.children.first
+                end
+
+                add_midpoint_cfg(child_pt, configs)
+            end
+        else
+            # start at the app level
+            add_midpoint_cfg(@program, configs)
+        end
         return configs
     end
 
@@ -737,6 +753,7 @@ def main
     $skip_nonexecuted = true                # don't bother running configs with non-executed instructions
     $rprec_split_threshold = 23             # config splitting threshold for reduced precision searches
     $rprec_runtime_pct_threshold = 0.0      # config cutoff runtime percentage threshold
+    $rprec_skip_app_level = false           # skip the app level for rprec search
     $initial_cfg_fn = ""                    # initial config filename (may be blank)
     $prof_log_fn = ""                       # initial profiling log (may be blank)
     $cached_fn = ""                         # cached results from previous run (may be blank)
@@ -924,9 +941,10 @@ def initialize_search
     File.new($mainlog_fn, "w").close
 
     if $strategy_name == 'rprec' then
-        print "Initializing reduced-precision search:  "
-        print "split_threshold=#{$rprec_split_threshold}  "
-        puts  "runtime_pct_threshold=#{$rprec_runtime_pct_threshold}"
+        puts "Initializing reduced-precision search. Options:"
+        puts "  split_threshold=#{$rprec_split_threshold}"
+        puts "  runtime_pct_threshold=#{$rprec_runtime_pct_threshold}"
+        puts "  skip_app_level=#{$rprec_skip_app_level}"
     else
         puts  "Initializing standard search:  strategy=#{$strategy_name}"
     end
@@ -1409,9 +1427,15 @@ def parse_command_line
             elsif opt == '-s' then
                 # strategy
                 $strategy_name = ARGV.shift
-            elsif opt == '-P' then
+            elsif opt == '--rprec-split_threshold' then
+                # precision split threshold for reduced precision
+                $rprec_split_threshold = ARGV.shift.to_i
+            elsif opt == '--rprec-runtime_pct_threshold' then
                 # runtime percentage threshold for reduced precision
                 $rprec_runtime_pct_threshold = ARGV.shift.to_f
+            elsif opt == '--rprec-skip_app_level' then
+                # runtime percentage threshold for reduced precision
+                $rprec_skip_app_level = true
             elsif opt == '-S' then
                 # disable workqueue sorting
                 $disable_queue_sort = true
@@ -1507,6 +1531,7 @@ def initialize_strategy
         $strategy = RPrecStrategy.new($program, $status_preferred, $status_alternate)
         $strategy.split_threshold = $rprec_split_threshold
         $strategy.runtime_pct_threshold = $rprec_runtime_pct_threshold
+        $strategy.skip_app_level = $rprec_skip_app_level
     else
         puts "Unrecognized search strategy \"#{$strategy_name}\""
         puts "Aborting search."
@@ -1809,6 +1834,7 @@ def save_settings
     f.puts "total_candidates=#{$total_candidates}"
     f.puts "rprec_split_threshold=#{$rprec_split_threshold}"
     f.puts "rprec_runtime_pct_threshold=#{$rprec_runtime_pct_threshold}"
+    f.puts "rprec_skip_app_level=#{$rprec_skip_app_level}"
     f.puts "disable_queue_sort=#{$disable_queue_sort.to_s}"
     f.puts "run_final_config=#{$run_final_config.to_s}"
 
@@ -1827,6 +1853,7 @@ def save_settings
     #f.puts $total_candidates
     #f.puts $rprec_split_threshold
     #f.puts $rprec_runtime_pct_threshold
+    #f.puts $rprec_skip_app_level
     #f.puts $disable_queue_sort
     #f.puts $run_final_config
 
@@ -1876,6 +1903,8 @@ def load_settings
                 $rprec_split_threshold = value.to_i
             when "rprec_runtime_pct_threshold"
                 $rprec_runtime_pct_threshold = value.to_f
+            when "rprec_skip_app_level"
+                $rprec_skip_app_level = (value == true.to_s)
             when "disable_queue_sort"
                 $disable_queue_sort = (value == true.to_s)
             when "run_final_config"
@@ -1905,6 +1934,7 @@ def load_settings
         line = f.gets; $total_candidates      = (line != nil ? line.chomp.to_i : 0)
         line = f.gets; $rprec_split_threshold = (line != nil ? line.chomp.to_i : 0)
         line = f.gets; $rprec_runtime_pct_threshold = (line != nil ? line.chomp.to_i : 0)
+        line = f.gets; $rprec_skip_app_level = (line != nil ? line.chomp == true.to_s : false)
         line = f.gets; $disable_queue_sort = (line != nil ? line.chomp == true.to_s : false)
         line = f.gets; $run_final_config = (line != nil ? line.chomp == true.to_s : false)
     end
@@ -2155,10 +2185,14 @@ def print_usage
     puts "   -F             don't test final configuration"
     puts "   -j <np>        spawn <np> worker threads"
     puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
-    puts "   -P <X>         rprec mode: only examine nodes with more than X% of total executed instructions"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
     puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"rprec\""
     puts "   -S             disable queue sorting (improves overall performance but may converge slower"
+    puts " "
+    puts "Reduced-precision-specific options:"
+    puts "   --rprec-split_threshold <X>            don't descend into nodes with <=X bits of precision"
+    puts "   --rprec-runtime_pct_threshold <X>      don't descent into nodes with >X% runtime execution"
+    puts "   --rprec-skip_app_level                 don't test at the whole-application level"
     puts " "
     puts "Resumption options:"
     puts "   -j <np>        spawn <np> worker threads"
