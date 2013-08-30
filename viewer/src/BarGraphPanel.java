@@ -4,13 +4,16 @@
 
 import java.awt.*;
 import java.awt.event.*;
+import java.awt.image.*;
+import java.io.*;
 import java.math.*;
 import java.util.*;
 import java.util.regex.*;
+import javax.imageio.*;
 import javax.swing.*;
 import javax.swing.border.*;
 
-public class BarGraphPanel extends JPanel {
+public class BarGraphPanel extends JPanel implements MouseListener {
     
     private long[] values;
     private String[] labels;
@@ -24,6 +27,7 @@ public class BarGraphPanel extends JPanel {
         assert(values.length == labels.length);
         this.values = values;
         this.labels = labels;
+        addMouseListener(this);
     }
 
     public void paint(Graphics g) {
@@ -135,6 +139,46 @@ public class BarGraphPanel extends JPanel {
                 g2.setStroke(oldStroke);
             }
         }
+    }
+
+    public void saveImage() {
+        final int IMG_WIDTH  =  800;
+        final int IMG_HEIGHT =  700;
+
+        JFileChooser chooser = new JFileChooser();
+        ImageFilter filter = new ImageFilter();
+        chooser.setCurrentDirectory(new File("."));
+        chooser.setSelectedFile(new File("./rprec_graph.png"));
+        chooser.setFileFilter(filter);
+        int rval = chooser.showSaveDialog(getParent());
+        if (rval == JFileChooser.APPROVE_OPTION) {
+            File fout = chooser.getSelectedFile();
+            BufferedImage img = new BufferedImage(IMG_WIDTH, IMG_HEIGHT,
+                    BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2 = img.createGraphics();
+            g2.setClip(0, 0, IMG_WIDTH, IMG_HEIGHT);
+            paint(g2);
+            try {
+                if (ImageIO.write(img, "png", fout)) {
+                    JOptionPane.showMessageDialog(getParent(),
+                            "Image saved!", "Success",
+                            JOptionPane.INFORMATION_MESSAGE);
+                }
+            } catch (IOException io) {
+                JOptionPane.showMessageDialog(getParent(),
+                        "Error: " + io.getMessage(), "Error",
+                        JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    public void mousePressed(MouseEvent e) { }
+    public void mouseReleased(MouseEvent e) { }
+    public void mouseEntered(MouseEvent e) { }
+    public void mouseExited(MouseEvent e) { }
+
+    public void mouseClicked(MouseEvent e) {
+        saveImage();
     }
 }
 
