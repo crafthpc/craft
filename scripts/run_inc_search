@@ -1,0 +1,32 @@
+#!/bin/bash
+
+tests="10.00 05.00 01.00 00.50"
+opts="-j2 --rprec-skip_app_level"
+
+arg=$1
+
+echo " "
+if [ "$arg" != "report" ]; then
+    mutatee=$arg
+    echo "" >archive
+    for t in $tests; do
+        craft clean
+        craft search -r --rprec-runtime_pct_threshold $t -F -A archive $opts $mutatee | tee inc_$t-pct.txt
+        cp craft_final.cfg incfinal_$t-pct.cfg
+        cp craft.tested inc_$t-pct.tested
+        cp craft.tested archive
+    done
+fi
+
+echo " "
+for t in $tests; do
+    echo "===  $t PCT  ==="
+    grep "Total candidates:" inc_$t-pct.txt
+    grep "Total configs tested:" inc_$t-pct.txt
+    grep "Total executed:" inc_$t-pct.txt
+    grep "Total cached:" inc_$t-pct.txt
+    grep "Total skipped:" inc_$t-pct.txt
+    grep "Total elapsed walltime:" inc_$t-pct.txt
+    echo " "
+done
+
