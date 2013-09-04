@@ -1,4 +1,4 @@
 #!/bin/bash
 
-fpconfed craft_final.cfg craft_orig.cfg profile/*-c_inst-*.log
+fpconfed $@ craft_final.cfg craft_orig.cfg profile/*-c_inst-*.log
 

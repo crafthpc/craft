@@ -1186,6 +1186,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         int i;
         String tag;
         File instFile;
+        boolean barGraphOnly = false;
 
         // main application object
         ConfigEditorApp app = null;
@@ -1195,6 +1196,8 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
         while (i < args.length) {
             if (args[i].equals("-c") && i < args.length-1) {
                 fpconfOptions += args[++i];
+            } else if (args[i].equals("-b")) {
+                barGraphOnly = true;
             } else {
                 File f = new File(args[i]);
                 if (f.exists()) {
@@ -1229,7 +1232,14 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
             app = new ConfigEditorApp();
         }
 
-        app.setVisible(true);
+        if (barGraphOnly) {
+            RPrecConfigReport report = new RPrecConfigReport();
+            report.runReport(app.getRootNode());
+            report.saveGraphs();
+            System.exit(0);
+        } else {
+            app.setVisible(true);
+        }
 
     } // }}}
 

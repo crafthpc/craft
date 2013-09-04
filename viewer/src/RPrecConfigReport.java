@@ -4,6 +4,7 @@
 
 import java.awt.*;
 import java.awt.event.*;
+import java.io.*;
 import java.math.*;
 import java.util.*;
 import java.util.regex.*;
@@ -18,6 +19,9 @@ public class RPrecConfigReport extends ConfigTreeIterator implements ConfigRepor
     private long[] insnCountBins;
     private long[] execCountBins;
     private String[] binLabels;
+
+    private BarGraphPanel insnGraphPanel = null;
+    private BarGraphPanel execGraphPanel = null;
 
     public void manipulate(ConfigTreeNode node) {
         if (node.type == ConfigTreeNode.CNType.INSTRUCTION) {
@@ -136,13 +140,27 @@ public class RPrecConfigReport extends ConfigTreeIterator implements ConfigRepor
         execBox.setEditable(false);
         execBox.setCaretPosition(0);
 
+        insnGraphPanel = new BarGraphPanel(insnCountBins, binLabels);
+        execGraphPanel = new BarGraphPanel(execCountBins, binLabels);
+
         JPanel mainPanel = new JPanel();
         mainPanel.setLayout(new GridLayout(2,2));
-        mainPanel.add(new BarGraphPanel(insnCountBins, binLabels));
+        mainPanel.add(insnGraphPanel);
         mainPanel.add(new JScrollPane(insnBox));
-        mainPanel.add(new BarGraphPanel(execCountBins, binLabels));
+        mainPanel.add(execGraphPanel);
         mainPanel.add(new JScrollPane(execBox));
         return mainPanel;
+    }
+
+    public void saveGraphs() {
+        if (insnGraphPanel == null) {
+            insnGraphPanel = new BarGraphPanel(insnCountBins, binLabels);
+        }
+        insnGraphPanel.saveImageToFile(new File("./insn_rprec_graph.png"));
+        if (execGraphPanel == null) {
+            execGraphPanel = new BarGraphPanel(execCountBins, binLabels);
+        }
+        execGraphPanel.saveImageToFile(new File("./exec_rprec_graph.png"));
     }
 
     public String getTitle() {
