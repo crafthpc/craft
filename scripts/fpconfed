@@ -1,10 +1,17 @@
 #!/bin/sh
 
 BACKGROUND="y"
+PROFILER="n"
+
+VMOPTS="-Xmx1024M"
+
+if [ "$PROFILER" = "y" ]; then
+    VMOPTS="$VMOPTS -Xrunhprof:cpu=samples,interval=20,depth=5"
+fi
 
 if [ "$BACKGROUND" = "y" ]; then
-    java -Xmx1024M -jar $DYNINST_ROOT/craft/viewer/fpconfed.jar $@ &
+    java $VMOPTS -jar $DYNINST_ROOT/craft/viewer/fpconfed.jar $@ &
 else
-    java -Xmx1024M -jar $DYNINST_ROOT/craft/viewer/fpconfed.jar $@
+    java $VMOPTS -jar $DYNINST_ROOT/craft/viewer/fpconfed.jar $@
 fi
 
