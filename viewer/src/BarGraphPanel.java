@@ -61,7 +61,7 @@ public class BarGraphPanel extends JPanel implements MouseListener {
         g.setColor(Color.WHITE);
         g.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
         g.setColor(Color.BLACK);
-        g.drawRect(bounds.x, bounds.y, bounds.width, bounds.height);
+        g.drawRect(bounds.x, bounds.y, bounds.width-1, bounds.height-1);
 
         // adjust for border whitespace
         int borderSize = (int)(0.075*(float)Math.min(bounds.width, bounds.height));
