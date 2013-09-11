@@ -263,10 +263,10 @@ public class SourceCodeViewer extends JFrame
 
                 // extract line-specific replacement information
                 int lineno = getLineNumber(node);
-                if (node.status == ConfigTreeNode.CNStatus.SINGLE) {
+                if (node.getEffectiveStatus() == ConfigTreeNode.CNStatus.SINGLE) {
                     fi.incrementSingle(lineno);
                 }
-                if (node.status == ConfigTreeNode.CNStatus.DOUBLE) {
+                if (node.getEffectiveStatus() == ConfigTreeNode.CNStatus.DOUBLE) {
                     fi.incrementDouble(lineno);
                 }
                 if (node.getEffectivePrecision() > -1) {
