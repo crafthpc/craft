@@ -66,6 +66,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     public double error;        // from searches
     public boolean tested;      // from searches
     public long precision;      // from rprec searches
+    public long effectivePrecFromChildren;
 
     public ConfigTreeNode() {
         super();
@@ -81,6 +82,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         error = 0.0;
         tested = false;
         precision = -1;
+        effectivePrecFromChildren = -1;
     }
 
     public ConfigTreeNode(CNType t, CNStatus s, int num, String lbl) {
@@ -97,6 +99,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         error = 0.0;
         tested = false;
         precision = -1;
+        effectivePrecFromChildren = -1;
     }
 
     public ConfigTreeNode(String configLine) {
@@ -175,6 +178,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         error = 0.0;
         tested = false;
         precision = -1;
+        effectivePrecFromChildren = -1;
     }
 
     public void resetExecCounts() {
@@ -254,6 +258,9 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
 
     public long getEffectivePrecisionFromChildren() {
         // implied precision (max of all children)
+        if (effectivePrecFromChildren >= 0) {
+            return effectivePrecFromChildren;
+        }
         long maxPrec = precision;
         Enumeration children = children();
         ConfigTreeNode child = null;
@@ -264,6 +271,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
                 maxPrec = tempPrec;
             }
         }
+        effectivePrecFromChildren = maxPrec;
         return maxPrec;
     }
 
