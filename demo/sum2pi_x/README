@@ -1,0 +1,71 @@
+== Sum2PI_X Demo ==
+
+This demo shows how you can use CRAFT to configure the precision of a small
+example program. The program calculates PI*X, where X is hard-coded for
+simplicity. The program uses an unnecessarily computation-heavy method of
+calculating PI*X for demonstration purposes. There is an inner loop that sums to
+PI, and then an outer loop adds that to itself X times. The sensitivity of the
+test at the end is adjustable using the #define statements at the top. With the
+default value, double precision produces a passing final value, while single
+precision does not.
+
+
+STEP 1: Look at the source code (sum2pi_x.c) and verify understanding.
+
+STEP 2: Compile and test original program:
+    make && ./sum2pi_x
+
+STEP 3: Verify success of sanity check
+    fpinst --svinp double sum2pi_x
+
+STEP 4: Verify failure of whole-program replacement:
+    clean && fpinst --svinp single sum2pi_x
+
+STEP 5: Build "a priori" optimal configuration:
+    fpconf --svinp single sum2pi_x >optimal.cfg
+    fpconfed optimal.cfg        # in GUI, open "main" function, toggle the last
+                                # two "addsd" instructions to DOUBLE (red)
+                                # and click "Save"
+
+STEP 6: Test "a priori" optimal configuration:
+    clean && fpinst -c optimal.cfg sum2pi_x
+
+STEP 7: Look at craft_driver and verify understanding.
+
+STEP 8: Run autoconfiguration script:
+    mkdir mixed && cd mixed
+    ln -s ../craft_driver .
+    craft search ../sum2pi_x        # add "-j4" or similar to parallelize
+
+STEP 9: Verify that automatically-generated config matches the "a priori" one:
+    fpconfed craft_final.cfg
+    diff ../optimal.cfg craft_final.cfg
+
+STEP 10: Run autoconfiguration script in reduced-precision mode:
+    cd ..
+    mkdir reduced && cd reduced
+    ln -s ../craft_driver .
+    craft search -r ../sum2pi_x        # add "-j4" or similar to parallelize
+
+STEP 9: View the results:
+    craft_final
+
+
+If you want to view source code while examining the results of the automatic
+searches, copy (or link) the sum2pi_x.c source file in the "mixed" or "reduced"
+folders.
+
+The "make" command also generates single- and mixed-precision versions of the
+program for comparison.
+
+You can run "craft clean" at the end in the "mixed" or "reduced" folders to
+remove most of the CRAFT-generated files (note that the profiling information is
+retained because it is re-usable in other runs).
+
+You can also run "clean" in the main folder to remove CRAFT-generated rewritten
+binary files.
+
+This demo was written by Mike Lam in March 2012.
+Last updated September 2013.
+Enjoy!
+
