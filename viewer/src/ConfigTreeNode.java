@@ -160,6 +160,9 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         regexTag += " #" + number;
 
         address = Util.extractRegex(configLine, "(0x[0-9a-fA-F]+)", 0);
+        if (address == null) {
+            address = "0";
+        }
         regexTag += ": " + address;
 
         label = "";
@@ -399,8 +402,10 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         str.append(number);
         str.append(": ");
         str.append(address);
-        str.append(" ");
-        str.append(label);
+        if (label != null && label.length() > 0) {
+            str.append(" ");
+            str.append(label);
+        }
         return str.toString();
     }
 
