@@ -6,7 +6,7 @@ calculations, but is initialized to 1.0 so that if singles are used, the
 additions don't actually get saved since there isn't enough precision to do them
 properly.
 
-STEP 1: Look at the source code and verify understanding.
+STEP 1: Look at the source code (demo.c) and verify understanding.
 
 STEP 2: Compile and test demo program:
     make && ./demo
@@ -15,28 +15,35 @@ STEP 3: Verify success of sanity check
     fpinst --svinp double demo
 
 STEP 4: Verify failure of whole-program replacement:
-    fpinst --svinp single demo
+    clean && fpinst --svinp single demo
 
 STEP 5: Build "a priori" optimal configuration:
-    fpconf --svinp single demo >demo.cfg
-    fpconfed demo.cfg           # in GUI, toggle the last "addsd" in main()
-                                # to DOUBLE (red) and click "Save"
+    fpconf --svinp single demo >optimal.cfg
+    fpconfed optimal.cfg        # in GUI, open "main" function, toggle the last
+                                # "addsd" to DOUBLE (red) and click "Save"
 
 STEP 6: Test "a priori" optimal configuration:
-    fpinst -c demo.cfg demo
+    clean && fpinst -c optimal.cfg demo
 
 STEP 7: Look at craft_driver and verify understanding.
 
 STEP 8: Run autoconfiguration script:
     mkdir auto && cd auto
+    cp ../craft_driver .
     craft search ../demo        # add "-j4" or similar to parallelize
 
 STEP 9: Verify that automatically-generated config matches the "a priori" one:
     fpconfed craft_final.cfg
+    diff ../optimal.cfg craft_final.cfg
 
-You can run "craft clean" at the end to remove all CRAFT-generated files.
+You can run "craft clean" at the end in the "auto" folder to remove most of the
+CRAFT-generated files (the profiling information is kept because it is re-usable
+in other runs).
+
+You can also run "clean" in the main "accumulator" folder to remove
+CRAFT-generated rewritten binary files.
 
 This demo was written by Mike Lam in March 2012.
-Last updated May 2013.
+Last updated September 2013.
 Enjoy!
 
