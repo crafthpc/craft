@@ -187,7 +187,7 @@ FPBinaryBlobRPrec::FPBinaryBlobRPrec(FPSemantics *inst,
         rprecConst64[i] = rprecConst64[i-1] | (1UL << (52-i));
         //printf("%lu = %lx\n", i, (unsigned long)rprecConst64[i]);
     }
-    rprecConst32[0] = (uint32_t)0xFFF00000;
+    rprecConst32[0] = (uint32_t)0xFF800000;
     //printf("%u = %x\n", 0UL, (unsigned int)rprecConst32[0]);
     for (uint32_t i=1; i<=23; i++) {
         rprecConst32[i] = rprecConst32[i-1] | (1UL << (23-i));

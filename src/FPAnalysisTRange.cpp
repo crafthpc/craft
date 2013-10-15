@@ -323,6 +323,9 @@ bool FPBinaryBlobTRange::generate(Point * /*pt*/, Buffer &buf)
         if (op->getType() == OP_CMP  || op->getType() == OP_COMI  ||
             op->getType() == OP_UCOM || op->getType() == OP_UCOMI) continue;
 
+        if (op->numOpSets==0)
+            continue;
+        
         // for each operand set
         for (j=0; j<1; j++) {
             for (k=0; k<op->opSets[j].nOut; k++) {

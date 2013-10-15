@@ -61,7 +61,7 @@ public class BarGraphPanel extends JPanel implements MouseListener {
         g.setColor(Color.WHITE);
         g.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
         g.setColor(Color.BLACK);
-        g.drawRect(bounds.x, bounds.y, bounds.width, bounds.height);
+        g.drawRect(bounds.x, bounds.y, bounds.width-1, bounds.height-1);
 
         // adjust for border whitespace
         int borderSize = (int)(0.075*(float)Math.min(bounds.width, bounds.height));
@@ -141,10 +141,28 @@ public class BarGraphPanel extends JPanel implements MouseListener {
         }
     }
 
-    public void saveImage() {
+    public void saveImageToFile(File fout) {
         final int IMG_WIDTH  =  800;
         final int IMG_HEIGHT =  700;
+        BufferedImage img = new BufferedImage(IMG_WIDTH, IMG_HEIGHT,
+                BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2 = img.createGraphics();
+        g2.setClip(0, 0, IMG_WIDTH, IMG_HEIGHT);
+        paint(g2);
+        try {
+            if (ImageIO.write(img, "png", fout)) {
+                JOptionPane.showMessageDialog(getParent(),
+                        "Image saved!", "Success",
+                        JOptionPane.INFORMATION_MESSAGE);
+            }
+        } catch (IOException io) {
+            JOptionPane.showMessageDialog(getParent(),
+                    "Error: " + io.getMessage(), "Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
 
+    public void saveImage() {
         JFileChooser chooser = new JFileChooser();
         ImageFilter filter = new ImageFilter();
         chooser.setCurrentDirectory(new File("."));
@@ -152,23 +170,7 @@ public class BarGraphPanel extends JPanel implements MouseListener {
         chooser.setFileFilter(filter);
         int rval = chooser.showSaveDialog(getParent());
         if (rval == JFileChooser.APPROVE_OPTION) {
-            File fout = chooser.getSelectedFile();
-            BufferedImage img = new BufferedImage(IMG_WIDTH, IMG_HEIGHT,
-                    BufferedImage.TYPE_INT_RGB);
-            Graphics2D g2 = img.createGraphics();
-            g2.setClip(0, 0, IMG_WIDTH, IMG_HEIGHT);
-            paint(g2);
-            try {
-                if (ImageIO.write(img, "png", fout)) {
-                    JOptionPane.showMessageDialog(getParent(),
-                            "Image saved!", "Success",
-                            JOptionPane.INFORMATION_MESSAGE);
-                }
-            } catch (IOException io) {
-                JOptionPane.showMessageDialog(getParent(),
-                        "Error: " + io.getMessage(), "Error",
-                        JOptionPane.ERROR_MESSAGE);
-            }
+            saveImageToFile(chooser.getSelectedFile());
         }
     }
 
