@@ -237,6 +237,10 @@ bool FPBinaryBlobTRange::generate(Point * /*pt*/, Buffer &buf)
     // for each operation
     for (i=0; i<inst->numOps; i++) {
         op = (*inst)[i];
+
+        if (op->numOpSets==0)
+            continue;
+        
         // for each operand set
         for (j=0; j<1; j++) {
 
