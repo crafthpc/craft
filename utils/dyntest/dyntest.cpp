@@ -236,7 +236,7 @@ void handleApplication(BPatch_addressSpace *app)
 
         // for the purposes of this test,
         // don't handle our own library or libm
-        if (strcmp(modname, "libfpanalysis.so") == 0 ||
+        if (strcmp(modname, "libdyntest.so") == 0 ||
             strcmp(modname, "libm.so.6") == 0 ||
             strcmp(modname, "libc.so.6") == 0) {
             //printf(" skipping %s [%s]\n", name, modname);
