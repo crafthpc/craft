@@ -220,19 +220,33 @@ bool FPBinaryBlobTRange::generate(Point * /*pt*/, Buffer &buf)
      *        instData.max_addr);
      */
     
+    FPOperation *op;
+    size_t i, j, k;
+    unsigned char *skip_jmp_pos = 0;
+    int32_t *skip_offset_pos = 0;
+    FPOperand *input;
+    FPOperand *eip_operand = NULL;
+
+    // check for an IP-relative operand
+    for (i=0; i<inst->numOps; i++) {
+        op = (*inst)[i];
+        if (op->numOpSets==0) continue;
+        for (j=0; j<1; j++) {
+            for (k=0; k<op->opSets[j].nIn; k++) {
+                input = op->opSets[j].in[k];
+                if (input->getBase() == REG_EIP) {
+                    eip_operand = input;
+                }
+            }
+        }
+    }
+
     pos += buildHeader(pos);
     if (temp_gpr1 != REG_EAX) {
         pos += buildFakeStackPushGPR64(pos, temp_gpr1);
     }
     pos += buildFakeStackPushXMM(pos, temp_xmm1);
     pos += buildFakeStackPushXMM(pos, temp_xmm2);
-
-    FPOperation *op;
-    FPOperand *input, *output;
-    size_t i, j, k;
-    unsigned char *skip_jmp_pos = 0;
-    int32_t *skip_offset_pos = 0;
-    FPOperand *eip_operand = NULL;
 
     // for each operation
     for (i=0; i<inst->numOps; i++) {
@@ -246,10 +260,6 @@ bool FPBinaryBlobTRange::generate(Point * /*pt*/, Buffer &buf)
 
             for (k=0; k<op->opSets[j].nIn; k++) {
                 input = op->opSets[j].in[k];
-
-                if (input->getBase() == REG_EIP) {
-                    eip_operand = input;
-                }
                 
                 if (input->getType() != IEEE_Single &&
                     input->getType() != IEEE_Double) {
@@ -318,6 +328,8 @@ bool FPBinaryBlobTRange::generate(Point * /*pt*/, Buffer &buf)
     }
     pos += buildFakeStackPushXMM(pos, temp_xmm1);
     pos += buildFakeStackPushXMM(pos, temp_xmm2);
+
+    FPOperand *output;
 
     // for each operation
     for (i=0; i<inst->numOps; i++) {
