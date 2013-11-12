@@ -1730,11 +1730,31 @@ void instrumentFunction(BPatch_function *function, BPatch_Vector<BPatch_snippet*
     }
 }
 
+struct functionBasePredicate {
+    bool operator()(BPatch_function *f1, BPatch_function *f2) const {
+        return (f1->getBaseAddr() < f2->getBaseAddr());
+    }
+};
+
+struct moduleNamePredicate {
+    bool operator()(BPatch_module *m1, BPatch_module *m2) const {
+        char m1name[BUFFER_STRING_LEN];
+        char m2name[BUFFER_STRING_LEN];
+        m1->getName(m1name, BUFFER_STRING_LEN);
+        m2->getName(m2name, BUFFER_STRING_LEN);
+        return (strcmp(m1name, m2name) < 0);
+    }
+};
+
 void instrumentModule(BPatch_module *module, BPatch_Vector<BPatch_snippet*> &initSnippets)
 {
 	char funcname[BUFFER_STRING_LEN];
 	std::vector<BPatch_function *>* functions;
 	functions = module->getProcedures();
+
+    // sort functions by base address
+    std::sort(functions->begin(), functions->end(), functionBasePredicate());
+
 	for (unsigned i = 0; i < functions->size(); i++) {
 		BPatch_function *function = functions->at(i);
 		function->getName(funcname, BUFFER_STRING_LEN);
@@ -1832,6 +1852,9 @@ void instrumentApplication()
     std::vector<BPatch_module *>::iterator m;
     modules = mainImg->getModules();
     printf("Instrumenting modules.\n");
+
+    // sort modules by name
+    std::sort(modules->begin(), modules->end(), moduleNamePredicate());
 
     // for each module ...
     for (m = modules->begin(); m != modules->end(); m++) {
@@ -2070,6 +2093,7 @@ void decodeModule(BPatch_module *module, const char *name)
 
 	std::vector<BPatch_function *>* functions;
 	functions = module->getProcedures();
+    std::sort(functions->begin(), functions->end(), functionBasePredicate());
 	char funcname[BUFFER_STRING_LEN];
 	for (unsigned i = 0; i < functions->size(); i++) {
 		BPatch_function *function = functions->at(i);
@@ -2100,6 +2124,7 @@ void decodeApplication()
     std::vector<BPatch_module *>* modules;
     std::vector<BPatch_module *>::iterator m;
     modules = mainImg->getModules();
+    std::sort(modules->begin(), modules->end(), moduleNamePredicate());
     for (m = modules->begin(); m != modules->end(); m++) {
         (*m)->getName(modname, BUFFER_STRING_LEN);
 

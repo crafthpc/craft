@@ -291,6 +291,22 @@ void configFunction(BPatch_function *function, const char *name)
     }
 }
 
+struct functionBasePredicate {
+    bool operator()(BPatch_function *f1, BPatch_function *f2) const {
+        return (f1->getBaseAddr() < f2->getBaseAddr());
+    }
+};
+
+struct moduleNamePredicate {
+    bool operator()(BPatch_module *m1, BPatch_module *m2) const {
+        char m1name[BUFFER_STRING_LEN];
+        char m2name[BUFFER_STRING_LEN];
+        m1->getName(m1name, BUFFER_STRING_LEN);
+        m2->getName(m2name, BUFFER_STRING_LEN);
+        return (strcmp(m1name, m2name) < 0);
+    }
+};
+
 void configModule(BPatch_module *mod, const char *name)
 {
 	char funcname[BUFFER_STRING_LEN];
@@ -312,10 +328,15 @@ void configModule(BPatch_module *mod, const char *name)
 	std::vector<BPatch_function *>* functions;
 	functions = mod->getProcedures();
 
+    // sort functions by base address
+    std::sort(functions->begin(), functions->end(), functionBasePredicate());
+
 	// for each function ...
 	for (unsigned i = 0; i < functions->size(); i++) {
 		BPatch_function *function = functions->at(i);
 		function->getName(funcname, BUFFER_STRING_LEN);
+
+        //printf("  FUNC: %s (%lx)\n", funcname, (unsigned long)function->getBaseAddr());
 
         // CRITERIA FOR INSTRUMENTATION:
         // don't config:
@@ -355,6 +376,9 @@ void configApplication(BPatch_addressSpace *app)
     std::vector<BPatch_module *>::iterator m;
     modules = mainImg->getModules();
 
+    // sort modules by name
+    std::sort(modules->begin(), modules->end(), moduleNamePredicate());
+
     // for each module ...
     for (m = modules->begin(); m != modules->end(); m++) {
         (*m)->getName(modname, BUFFER_STRING_LEN);
@@ -371,6 +395,7 @@ void configApplication(BPatch_addressSpace *app)
         if ((*m)->isSharedLib() && !instShared) {
             continue;
         }
+        //printf("MODULE: %s (%lx)\n", modname, (unsigned long)(*m)->getBaseAddr());
 
         configModule(*m, modname);
     }
