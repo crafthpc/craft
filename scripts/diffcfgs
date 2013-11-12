@@ -1,0 +1,206 @@
+#!/usr/bin/env ruby
+#
+# diffcfgs
+#
+# Compare two configuration files.
+#
+
+$TYPE_APPLICATION = "APPLICATION"                   # control point levels
+$TYPE_MODULE      = "MODULE"
+$TYPE_FUNCTION    = "FUNC"
+$TYPE_BASICBLOCK  = "BBLK"
+$TYPE_INSTRUCTION = "INSN"
+
+$TYPE_SPACES = Hash.new("")
+$TYPE_SPACES[$TYPE_APPLICATION] = ""                # for pretty output
+$TYPE_SPACES[$TYPE_MODULE]      = "  "
+$TYPE_SPACES[$TYPE_FUNCTION]    = "    "
+$TYPE_SPACES[$TYPE_BASICBLOCK]  = "      "
+$TYPE_SPACES[$TYPE_INSTRUCTION] = "        "
+
+$STATUS_SINGLE    = "s"
+$STATUS_DOUBLE    = "d"
+$STATUS_RPREC     = "r"
+
+$COUNT_COMMON     = "Common"
+$COUNT_ADDITIONS  = "Additions"
+$COUNT_DELETIONS  = "Deletions"
+$COUNT_HIGHER     = "Higher"
+$COUNT_LOWER      = "Lower"
+$COUNT_IDENTICAL  = "Identical"
+
+
+class PPoint
+    attr_accessor :uid              # unique regex identifier; e.g. "INSN #34: 0x804d3f"
+    attr_accessor :id               # program component identifier; e.g. 34 in line above
+    attr_accessor :type             # module, function, instruction, etc.
+    attr_accessor :orig_status      # single, double, ignore, candidate, none
+    attr_accessor :precision        # precision level
+    attr_accessor :parent           # PPoint
+    attr_accessor :children         # array of PPoints
+    attr_accessor :attrs            # string => string
+    attr_accessor :byid             # id => PPoint          (for increased lookup speed)
+
+    def initialize (uid, type, orig_status)
+        @uid = uid
+        @id = 0
+        if @uid =~ /#(\d+)/ then
+            @id = $1.to_i
+        end
+        @type = type
+        @orig_status = orig_status
+        @precision = 52
+        @parent = nil
+        @children = Array.new
+        @attrs = Hash.new
+        @byid = Hash.new
+    end
+
+    def compare(pt2, results, precisions, counts)
+        counts[$COUNT_COMMON] += 1
+        if @attrs.has_key?("prolog") then
+            @attrs["prolog"].zip(pt2.attrs["prolog"]).each do |pro1, pro2|
+                if pro1 != pro2 then
+                    results << "-#{pro1}"
+                    results << "+#{pro2}"
+                end
+            end
+        end
+        if @orig_status != pt2.orig_status then
+            if @orig_status == $STATUS_SINGLE and pt2.orig_status == $STATUS_DOUBLE then
+                counts[$COUNT_HIGHER] += 1
+            elsif @orig_status == $STATUS_DOUBLE and pt2.orig_status == $STATUS_SINGLE then
+                counts[$COUNT_LOWER] += 1
+            end
+            results << "-#{to_s}"
+            results << "+#{pt2.to_s}"
+        elsif @orig_status == $STATUS_RPREC and @precision != pt2.precision then
+            diff = pt2.precision - @precision
+            results << "#{diff > 0 ? "+" : "-"}#{"%02d" % diff.abs}: #{@uid} #{@attrs["desc"]}"
+            precisions[diff] += 1
+        else
+            counts[$COUNT_IDENTICAL] += 1
+        end
+        @children.zip(pt2.children).each do |c1,c2|
+            if c1.nil? then
+                results << "+#{c2.to_s}"
+                counts[$COUNT_ADDITIONS] += 1
+            elsif c2.nil? then
+                results << "-#{c1.to_s}"
+                counts[$COUNT_DELETIONS] += 1
+            else
+                c1.compare(c2, results, precisions, counts)
+            end
+        end
+    end
+
+    def to_s
+        prec_line = nil
+        str = "^#{@orig_status} #{$TYPE_SPACES[@type]} #{@uid}"
+        if @attrs.has_key?("desc") then
+            str += " \"#{@attrs["desc"]}\""
+        end
+        if not prec_line.nil? then
+            str += "\n#{prec_line}"
+        end
+        return str
+    end
+end
+
+
+def load_config(fn)
+    program = nil
+    mod = nil
+    func = nil
+    bblk = nil
+    prolog = ""
+    IO.foreach(fn) do |line|
+        if line =~ /(APPLICATION #\d+: [x0-9A-Fa-f]+) \"(.+)\"/ then
+            program = PPoint.new($1, $TYPE_APPLICATION, line[1,1])
+            program.attrs["desc"] = $2
+        elsif line =~ /(MODULE #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
+            mod = PPoint.new($1, $TYPE_MODULE, line[1,1])
+            mod.attrs["desc"] = $2
+            program.children << mod if program != nil
+        elsif line =~ /(FUNC #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
+            func = PPoint.new($1, $TYPE_FUNCTION, line[1,1])
+            func.attrs["desc"] = $2
+            mod.children << func if mod != nil
+        elsif line =~ /(BBLK #\d+: (0x[0-9A-Fa-f]+))/ then
+            bblk = PPoint.new($1, $TYPE_BASICBLOCK, line[1,1])
+            bblk.attrs["addr"] = $2
+            func.children << bblk if func != nil
+        elsif line =~ /(INSN #\d+: (0x[0-9A-Fa-f]+)) \"(.+)\"/ then
+            insn = PPoint.new($1, $TYPE_INSTRUCTION, line[1,1])
+            insn.attrs["addr"] = $2
+            insn.attrs["desc"] = $3
+            bblk.children << insn if bblk != nil
+            program.byid[insn.id] = insn
+        elsif line =~ /INSN_(\d+)_precision=(\d+)/ then
+            id = $1.to_i
+            prec = $2.to_i
+            insn = program.byid[id]
+            if insn.nil? then
+                puts "Cannot find instruction \##{id}"
+            else
+                insn.precision = prec
+            end
+        else
+            prolog << line.chomp
+            prolog << "\n"
+        end
+    end
+    program.attrs["prolog"] = prolog
+    if program.nil? then
+        puts "Unable to load file: #{fn}"
+        exit
+    end
+    return program
+end
+
+
+fn1 = nil
+fn2 = nil
+
+ARGV.each do |arg|
+    if arg == "-h" then
+        puts "Usage: diffcfgs <file1> <file2>"
+        exit
+    elsif fn1.nil? then
+        fn1 = arg
+    elsif fn2.nil? then
+        fn2 = arg
+    end
+end
+
+cfg1 = load_config(fn1)
+cfg2 = load_config(fn2)
+
+results = Array.new
+precisions = Hash.new(0)
+counts = Hash.new(0)
+
+counts[$COUNT_ADDITIONS] = 0
+counts[$COUNT_DELETIONS] = 0
+counts[$COUNT_COMMON] = 0
+counts[$COUNT_HIGHER] = 0
+counts[$COUNT_LOWER] = 0
+counts[$COUNT_IDENTICAL] = 0
+
+cfg1.compare(cfg2, results, precisions, counts)
+
+puts results
+
+if precisions.keys.size > 0 then
+    puts "PRECISIONS:"
+    #puts precisions.inspect
+    precisions.keys.sort.each do |diff|
+        puts "#{diff > 0 ? "+" : "-"}#{"%02d" % diff.abs}: #{precisions[diff]}"
+    end
+end
+
+puts "COUNTS:"
+counts.each do |k,v|
+    puts "%-15s %d" % [k,v]
+end
+
