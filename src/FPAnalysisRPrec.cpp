@@ -166,6 +166,12 @@ Snippet::Ptr FPAnalysisRPrec::buildReplacementCode(FPSemantics *inst,
     insnsInstrumented++;
 
     FPBinaryBlobRPrec *blob = new FPBinaryBlobRPrec(inst, instData[idx]);
+    if (!shouldReplace(inst)) {
+        logFile->addMessage(WARNING, 0,
+               "Truncation disabled", "Should not replace; no truncation code inserted",
+               "", inst);
+        blob->disableTruncation();
+    }
     if (useLockPrefix) {
         blob->enableLockPrefix();
     }
@@ -177,6 +183,7 @@ FPBinaryBlobRPrec::FPBinaryBlobRPrec(FPSemantics *inst,
     : FPBinaryBlob(inst)
 {
     this->instData = instData;
+    this->doTruncation = true;
     this->useLockPrefix = false;
 
     // set up bit masks for truncations
@@ -215,6 +222,15 @@ void FPAnalysisRPrec::disableLockPrefix()
     useLockPrefix = false;
 }
 
+void FPBinaryBlobRPrec::disableTruncation()
+{
+    doTruncation = false;
+}
+
+void FPBinaryBlobRPrec::enableTruncation()
+{
+    doTruncation = true;
+}
 
 bool FPBinaryBlobRPrec::generate(Point * /*pt*/, Buffer &buf)
 {
@@ -277,46 +293,53 @@ bool FPBinaryBlobRPrec::generate(Point * /*pt*/, Buffer &buf)
     }
     pos += buildFakeStackPushXMM(pos, temp_xmm1);
 
-    // is this a packed SSE instruction?
-    packed = (op->numOpSets > 1);
+    if (doTruncation) {
 
-    // grab the output operand
-    output = op->opSets[0].out[0];
+        // is this a packed SSE instruction?
+        packed = (op->numOpSets > 1);
 
-    // load temporary XMM register with truncating constants
-    //
-    if (output->getType() == IEEE_Double) {
-        if (precision > 52) {
-            precision = 52;
+        // grab the output operand
+        output = op->opSets[0].out[0];
+
+        assert(output->isRegisterSSE());
+            //fprintf(stderr, "Cannot reduce precision--output register is not SSE: %s\n",
+                    //inst->getDisassembly().c_str());
+
+        // load temporary XMM register with truncating constants
+        //
+        if (output->getType() == IEEE_Double) {
+            if (precision > 52) {
+                precision = 52;
+            }
+            pos += mainGen->buildMovImm64ToGPR64(pos, rprecConst64[precision], temp_gpr1);
+            pos += mainGen->buildInsertGPR64IntoXMM(pos, temp_gpr1, temp_xmm1, 0);
+            if (packed) {
+                pos += mainGen->buildInsertGPR64IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
+            } else {
+                pos += mainGen->buildMovImm64ToGPR64(pos, rprecConst64[52], temp_gpr1);
+                pos += mainGen->buildInsertGPR64IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
+            }
+        } else if (output->getType() == IEEE_Single) {
+            if (precision > 23) {
+                precision = 23;
+            }
+            pos += mainGen->buildMovImm32ToGPR32(pos, rprecConst32[precision], temp_gpr1);
+            pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 0);
+            if (packed) {
+                pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 1);
+                pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
+                pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 3);
+            } else {
+                pos += mainGen->buildMovImm32ToGPR32(pos, rprecConst32[23], temp_gpr1);
+                pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 1);
+                pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
+                pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 3);
+            }
         }
-        pos += mainGen->buildMovImm64ToGPR64(pos, rprecConst64[precision], temp_gpr1);
-        pos += mainGen->buildInsertGPR64IntoXMM(pos, temp_gpr1, temp_xmm1, 0);
-        if (packed) {
-            pos += mainGen->buildInsertGPR64IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
-        } else {
-            pos += mainGen->buildMovImm64ToGPR64(pos, rprecConst64[52], temp_gpr1);
-            pos += mainGen->buildInsertGPR64IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
-        }
-    } else if (output->getType() == IEEE_Single) {
-        if (precision > 23) {
-            precision = 23;
-        }
-        pos += mainGen->buildMovImm32ToGPR32(pos, rprecConst32[precision], temp_gpr1);
-        pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 0);
-        if (packed) {
-            pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 1);
-            pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
-            pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 3);
-        } else {
-            pos += mainGen->buildMovImm32ToGPR32(pos, rprecConst32[23], temp_gpr1);
-            pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 1);
-            pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
-            pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 3);
-        }
+
+        // perform truncation
+        pos += mainGen->buildAndXMMWithXMM(pos, output->getRegister(), temp_xmm1);
     }
-
-    // perform truncation
-    pos += mainGen->buildAndXMMWithXMM(pos, output->getRegister(), temp_xmm1);
     
     // increment instruction count
     pos += mainGen->buildIncMem64(pos,

@@ -30,6 +30,10 @@ class FPBinaryBlobRPrec : public FPBinaryBlob, public Snippet {
         void enableLockPrefix();
         void disableLockPrefix();
 
+        // allows FPAnalysisRPrec to selectively disable truncation if it wants
+        void disableTruncation();
+        void enableTruncation();
+
         bool generate(Point *pt, Buffer &buf);
 
     private:
@@ -38,6 +42,7 @@ class FPBinaryBlobRPrec : public FPBinaryBlob, public Snippet {
         uint32_t rprecConst32[23+1];
         
         FPAnalysisRPrecInstData instData;
+        bool doTruncation;
         bool useLockPrefix;
 
 };
