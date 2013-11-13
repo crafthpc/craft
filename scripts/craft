@@ -60,6 +60,16 @@ $STATUS_DNAN      = "n"
 $STATUS_TRANGE    = "t"
 $STATUS_RPREC     = "r"
 
+$FPCONF_OPTS = Hash.new("")
+$FPCONF_OPTS[$STATUS_SINGLE]  = "-c --svinp single"
+$FPCONF_OPTS[$STATUS_DOUBLE]  = "-c --svinp double"
+$FPCONF_OPTS[$STATUS_NULL]    = "-c --null"
+$FPCONF_OPTS[$STATUS_CINST]   = "-c --cinst"
+$FPCONF_OPTS[$STATUS_DCANCEL] = "-c --dcancel"
+$FPCONF_OPTS[$STATUS_DNAN]    = "-c --dnan"
+$FPCONF_OPTS[$STATUS_TRANGE]  = "-c --trange"
+$FPCONF_OPTS[$STATUS_RPREC]   = "-c --rprec 52"
+
 $FINALCFG_CUID = "FINAL"                            # special config; represents "best" final results
 
 # }}}
@@ -1414,10 +1424,12 @@ def parse_command_line
                 # debug mode
                 $status_preferred = ARGV.shift
                 $status_alternate = $STATUS_IGNORE
+                $fpconf_options = $FPCONF_OPTS[$status_preferred]
             elsif opt == "-D" then
                 # debug mode
                 $status_preferred = ARGV.shift
                 $status_alternate = ARGV.shift
+                $fpconf_options = $FPCONF_OPTS[$status_preferred]
             elsif opt == "-A" then
                 # archived/cached configuration results
                 $cached_fn = File.expand_path(ARGV.shift)
@@ -2222,6 +2234,7 @@ def print_usage
     puts "   -C \"<opts>\"    pass the given options to fpconf to generate initial base configuration"
     puts "   -d <p>         debug mode (<p> -> ignore instead of double->single)"
     puts "   -D <p> <a>     debug mode (<p> -> <a> instead of double->single)"
+    puts "                    (-d and -D also adjust the fpconf options appropriately)"
     puts "   -f             stop splitting configs at the function level"
     puts "   -F             don't test final configuration"
     puts "   -j <np>        spawn <np> worker threads"
