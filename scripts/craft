@@ -60,6 +60,16 @@ $STATUS_DNAN      = "n"
 $STATUS_TRANGE    = "t"
 $STATUS_RPREC     = "r"
 
+$FPCONF_OPTS = Hash.new("")
+$FPCONF_OPTS[$STATUS_SINGLE]  = "-c --svinp single"
+$FPCONF_OPTS[$STATUS_DOUBLE]  = "-c --svinp double"
+$FPCONF_OPTS[$STATUS_NULL]    = "-c --null"
+$FPCONF_OPTS[$STATUS_CINST]   = "-c --cinst"
+$FPCONF_OPTS[$STATUS_DCANCEL] = "-c --dcancel"
+$FPCONF_OPTS[$STATUS_DNAN]    = "-c --dnan"
+$FPCONF_OPTS[$STATUS_TRANGE]  = "-c --trange"
+$FPCONF_OPTS[$STATUS_RPREC]   = "-c --rprec 52"
+
 $FINALCFG_CUID = "FINAL"                            # special config; represents "best" final results
 
 # }}}
@@ -106,7 +116,20 @@ class PPoint
         # output() to recursively print the other levels
         fout = File.new(fn, "w")
         if @attrs.has_key?("prolog") then
-            fout << @attrs["prolog"]
+            @attrs["prolog"].each do |line|
+                if $mixed_use_rprec and only_insns then
+                    if line =~ /^sv_inp/ then
+                        if line.chomp == "sv_inp=yes" then
+                            fout.puts "r_prec=yes"
+                            fout.puts "r_prec_default_precision=52"
+                        end
+                    else
+                        fout.puts line
+                    end
+                else
+                    fout.puts line
+                end
+            end
         end
         if only_insns then
             output(config, fout, nil, nil)
@@ -210,29 +233,38 @@ class PPoint
         prec_line = nil
         fout.print("^")
         if type == $TYPE_INSTRUCTION then
+            flag = @orig_status
             if @orig_status == $STATUS_CANDIDATE then
                 # candidate for replacement; check to see if we should
                 if not overload.nil? then
                     # status overridden by something higher up the tree
-                    fout.print(overload)
+                    flag = overload
                     if overload == $STATUS_RPREC then
                         prec_line = "#{type}_#{@id}_precision=#{overload_prec}"
                     end
                 else
                     if config.exceptions.has_key?(@uid) then
                         # status overridden by current config
-                        fout.print(config.exceptions[@uid])
+                        flag = config.exceptions[@uid]
                         if config.exceptions[@uid] == $STATUS_RPREC then
                             prec_line = "#{type}_#{@id}_precision=#{config.precisions[@uid]}"
                         end
                     else
                         # no override; output configuration default
-                        fout.print(config.default)
+                        flag = config.default
                     end
                 end
-            else
-                fout.print(@orig_status)
             end
+            if $mixed_use_rprec then
+                if flag == $STATUS_SINGLE then
+                    flag = $STATUS_RPREC
+                    prec_line = "#{type}_#{@id}_precision=#{$rprec_split_threshold}"
+                elsif flag == $STATUS_DOUBLE then
+                    flag = $STATUS_RPREC
+                    prec_line = "#{type}_#{@id}_precision=52"
+                end
+            end
+            fout.print(flag)
         else
             if overload.nil? then
                 if config.exceptions.has_key?(@uid) then
@@ -751,6 +783,7 @@ def main
     $fortran_mode = false                   # pass "-N" to mutator
     $base_type = $TYPE_INSTRUCTION          # stop splitting configs at this level
     $skip_nonexecuted = true                # don't bother running configs with non-executed instructions
+    $mixed_use_rprec = false                # use rprec 23-bit truncation to simulate mixed svinp analysis
     $rprec_split_threshold = 23             # config splitting threshold for reduced precision searches
     $rprec_runtime_pct_threshold = 0.0      # config cutoff runtime percentage threshold
     $rprec_skip_app_level = false           # skip the app level for rprec search
@@ -946,7 +979,11 @@ def initialize_search
         puts "  runtime_pct_threshold=#{$rprec_runtime_pct_threshold}"
         puts "  skip_app_level=#{$rprec_skip_app_level}"
     else
-        puts  "Initializing standard search:  strategy=#{$strategy_name}"
+        puts "Initializing standard search:  strategy=#{$strategy_name}"
+        puts "  mixed_use_rprec=#{$mixed_use_rprec}"
+        if $mixed_use_rprec then
+            puts "  split_threshold=#{$rprec_split_threshold}"
+        end
     end
 
     # initial performance run
@@ -1387,10 +1424,12 @@ def parse_command_line
                 # debug mode
                 $status_preferred = ARGV.shift
                 $status_alternate = $STATUS_IGNORE
+                $fpconf_options = $FPCONF_OPTS[$status_preferred]
             elsif opt == "-D" then
                 # debug mode
                 $status_preferred = ARGV.shift
                 $status_alternate = ARGV.shift
+                $fpconf_options = $FPCONF_OPTS[$status_preferred]
             elsif opt == "-A" then
                 # archived/cached configuration results
                 $cached_fn = File.expand_path(ARGV.shift)
@@ -1427,6 +1466,11 @@ def parse_command_line
             elsif opt == '-s' then
                 # strategy
                 $strategy_name = ARGV.shift
+            elsif opt == '--mixed-use_rprec' then
+                # precision split threshold for reduced precision simulation of
+                # mixed precision
+                $mixed_use_rprec = true
+                $rprec_split_threshold = ARGV.shift.to_i
             elsif opt == '--rprec-split_threshold' then
                 # precision split threshold for reduced precision
                 $rprec_split_threshold = ARGV.shift.to_i
@@ -1440,12 +1484,16 @@ def parse_command_line
                 # disable workqueue sorting
                 $disable_queue_sort = true
             elsif !parsed_binary then
+                if not File.exists?(opt) then
+                    puts "Cannot find target binary: #{opt}"
+                    exit
+                end
                 $binary_name = File.basename(opt)
                 $binary_path = File.expand_path(opt)
                 parsed_binary = true
             else
                 if parsed_binary then
-                    puts "Invalid parameter after binary: #{opt}"
+                    puts "Invalid parameter after target binary: #{opt}"
                     exit
                 else
                     puts "Invalid resume parameter: #{opt}"
@@ -1837,6 +1885,7 @@ def save_settings
     f.puts "rprec_skip_app_level=#{$rprec_skip_app_level}"
     f.puts "disable_queue_sort=#{$disable_queue_sort.to_s}"
     f.puts "run_final_config=#{$run_final_config.to_s}"
+    f.puts "mixed_use_rprec=#{$mixed_use_rprec.to_s}"
 
     #f.puts $start_time.to_i
     #f.puts $binary_name
@@ -1856,6 +1905,7 @@ def save_settings
     #f.puts $rprec_skip_app_level
     #f.puts $disable_queue_sort
     #f.puts $run_final_config
+    #f.puts $mixed_use_rprec
 
     f.close
 end
@@ -1909,6 +1959,8 @@ def load_settings
                 $disable_queue_sort = (value == true.to_s)
             when "run_final_config"
                 $run_final_config = (value == true.to_s)
+            when "mixed_use_rprec"
+                $mixed_use_rprec = (value == true.to_s)
             end
             temp = f.gets
         end
@@ -1934,9 +1986,10 @@ def load_settings
         line = f.gets; $total_candidates      = (line != nil ? line.chomp.to_i : 0)
         line = f.gets; $rprec_split_threshold = (line != nil ? line.chomp.to_i : 0)
         line = f.gets; $rprec_runtime_pct_threshold = (line != nil ? line.chomp.to_i : 0)
-        line = f.gets; $rprec_skip_app_level = (line != nil ? line.chomp == true.to_s : false)
-        line = f.gets; $disable_queue_sort = (line != nil ? line.chomp == true.to_s : false)
-        line = f.gets; $run_final_config = (line != nil ? line.chomp == true.to_s : false)
+        line = f.gets; $rprec_skip_app_level  = (line != nil ? line.chomp == true.to_s : false)
+        line = f.gets; $disable_queue_sort    = (line != nil ? line.chomp == true.to_s : false)
+        line = f.gets; $run_final_config      = (line != nil ? line.chomp == true.to_s : false)
+        line = f.gets; $mixed_use_rprec       = (line != nil ? line.chomp == true.to_s : false)
     end
     f.close
 end
@@ -2181,6 +2234,7 @@ def print_usage
     puts "   -C \"<opts>\"    pass the given options to fpconf to generate initial base configuration"
     puts "   -d <p>         debug mode (<p> -> ignore instead of double->single)"
     puts "   -D <p> <a>     debug mode (<p> -> <a> instead of double->single)"
+    puts "                    (-d and -D also adjust the fpconf options appropriately)"
     puts "   -f             stop splitting configs at the function level"
     puts "   -F             don't test final configuration"
     puts "   -j <np>        spawn <np> worker threads"
@@ -2189,9 +2243,12 @@ def print_usage
     puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"rprec\""
     puts "   -S             disable queue sorting (improves overall performance but may converge slower"
     puts " "
+    puts "Mixed-precision-specific options:"
+    puts "   --mixed-use_rprec <X>                  use reduced-precision to simulate <X> bits for single precision"
+    puts " "
     puts "Reduced-precision-specific options:"
     puts "   --rprec-split_threshold <X>            don't descend into nodes with <=X bits of precision"
-    puts "   --rprec-runtime_pct_threshold <X>      don't descent into nodes with >X% runtime execution"
+    puts "   --rprec-runtime_pct_threshold <X>      don't descend into nodes with <X% runtime execution"
     puts "   --rprec-skip_app_level                 don't test at the whole-application level"
     puts " "
     puts "Resumption options:"

@@ -136,7 +136,7 @@ FPSemantics* FPDecoderIAPI::lookup(unsigned long iidx)
     return instCacheArray[iidx];
 }
 
-FPSemantics* FPDecoderIAPI::lookupByAddr(void* addr)
+FPSemantics* FPDecoderIAPI::lookupByAddr(void* /*addr*/)
 {
     // TODO: implement
     assert(0);
