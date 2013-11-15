@@ -86,7 +86,7 @@ bool FPAnalysisRPrec::shouldReplace(FPSemantics *inst)
     bool instrument = false;
 
     FPOperation *op;
-    FPOperand *input, *output;
+    FPOperand *output;
     size_t i, j, k;
 
     // see if there's anything besides move, zero, stack, or noop operations
@@ -97,18 +97,11 @@ bool FPAnalysisRPrec::shouldReplace(FPSemantics *inst)
         }
     }
 
-    // all operands must be double-precision
+    // all output operands must be double-precision
     // (currently no support for truncating anything else)
     for (i=0; i<inst->numOps; i++) {
         op = (*inst)[i];
         for (j=0; j<op->numOpSets; j++) {
-            for (k=0; k<op->opSets[j].nIn; k++) {
-                input = op->opSets[j].in[k];
-                if (input->getType() != IEEE_Double &&
-                    input->getType() != IEEE_Single) {
-                    instrument = false;
-                }
-            }
             for (k=0; k<op->opSets[j].nOut; k++) {
                 output = op->opSets[j].out[k];
                 if (output->getType() != IEEE_Double &&
