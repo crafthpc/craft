@@ -18,6 +18,7 @@ $TYPE_SPACES[$TYPE_FUNCTION]    = "    "
 $TYPE_SPACES[$TYPE_BASICBLOCK]  = "      "
 $TYPE_SPACES[$TYPE_INSTRUCTION] = "        "
 
+$STATUS_NONE      = " "
 $STATUS_SINGLE    = "s"
 $STATUS_DOUBLE    = "d"
 $STATUS_RPREC     = "r"
@@ -35,6 +36,7 @@ class PPoint
     attr_accessor :id               # program component identifier; e.g. 34 in line above
     attr_accessor :type             # module, function, instruction, etc.
     attr_accessor :orig_status      # single, double, ignore, candidate, none
+    attr_accessor :diff_status      # single, double, ignore, candidate, none
     attr_accessor :precision        # precision level
     attr_accessor :parent           # PPoint
     attr_accessor :children         # array of PPoints
@@ -49,6 +51,7 @@ class PPoint
         end
         @type = type
         @orig_status = orig_status
+        @diff_status = $STATUS_NONE
         @precision = 52
         @parent = nil
         @children = Array.new
@@ -69,8 +72,10 @@ class PPoint
         if @orig_status != pt2.orig_status then
             if @orig_status == $STATUS_SINGLE and pt2.orig_status == $STATUS_DOUBLE then
                 counts[$COUNT_HIGHER] += 1
+                pt2.diff_status = pt2.orig_status
             elsif @orig_status == $STATUS_DOUBLE and pt2.orig_status == $STATUS_SINGLE then
                 counts[$COUNT_LOWER] += 1
+                pt2.diff_status = pt2.orig_status
             end
             results << "-#{to_s}"
             results << "+#{pt2.to_s}"
@@ -91,6 +96,70 @@ class PPoint
             else
                 c1.compare(c2, results, precisions, counts)
             end
+        end
+    end
+
+    def flatten_to_insns
+        flatten(nil, nil)
+    end
+
+    def flatten(overload, overload_prec)
+        if type == $TYPE_INSTRUCTION then
+            if not overload.nil? then
+                if not $orig_status == $STATUS_RPREC then
+                    # final configs for rprec searches store the
+                    # precision results for higher-level nodes,
+                    # so ignore them if lower info is present
+                    @precision = overload_prec
+                end
+                $orig_status = overload
+            end
+        else
+            if overload.nil? then
+                if not @orig_status == $STATUS_NONE then
+                    overload = @diff_status
+                    if $orig_status == $STATUS_RPREC then
+                        overload_prec = @precision
+                    end
+                end
+            end
+            # clear out statuses for all non-instruction nodes
+            $orig_status = $STATUS_NONE
+        end
+        @children.each do |pt|
+            pt.flatten(overload, overload_prec)
+        end
+    end
+
+    def build_diff_file (fn)
+        fout = File.new(fn, "w")
+        if @attrs.has_key?("prolog") then
+            @attrs["prolog"].each do |line|
+                fout.puts line
+            end
+        end
+        output_diff(fout)
+        fout.close
+    end
+
+    def output_diff(fout)
+        prec_line = nil
+        fout.print("^")
+        fout.print(@diff_status)
+        fout.print(" ")
+        fout.print($TYPE_SPACES[@type])     # indentation
+        fout.print(@uid)
+        if @attrs.has_key?("desc") then
+            fout.print(" \"")
+            fout.print(@attrs["desc"])
+            fout.print("\"")
+        end
+        fout.print("\n")
+        if not prec_line.nil? then
+            fout.puts prec_line
+        end
+        @children.each do |pt|
+            pt.output_diff(fout)
         end
     end
 
@@ -175,6 +244,8 @@ end
 
 cfg1 = load_config(fn1)
 cfg2 = load_config(fn2)
+cfg1.flatten_to_insns
+cfg2.flatten_to_insns
 
 results = Array.new
 precisions = Hash.new(0)
@@ -203,4 +274,6 @@ puts "COUNTS:"
 counts.each do |k,v|
     puts "%-15s %d" % [k,v]
 end
+
+cfg2.build_diff_file("diff.cfg")
 
