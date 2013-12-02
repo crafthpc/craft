@@ -86,7 +86,7 @@ bool FPAnalysisRPrec::shouldReplace(FPSemantics *inst)
     bool instrument = false;
 
     FPOperation *op;
-    FPOperand *input, *output;
+    FPOperand *output;
     size_t i, j, k;
 
     // see if there's anything besides move, zero, stack, or noop operations
@@ -97,18 +97,11 @@ bool FPAnalysisRPrec::shouldReplace(FPSemantics *inst)
         }
     }
 
-    // all operands must be double-precision
+    // all output operands must be double-precision
     // (currently no support for truncating anything else)
     for (i=0; i<inst->numOps; i++) {
         op = (*inst)[i];
         for (j=0; j<op->numOpSets; j++) {
-            for (k=0; k<op->opSets[j].nIn; k++) {
-                input = op->opSets[j].in[k];
-                if (input->getType() != IEEE_Double &&
-                    input->getType() != IEEE_Single) {
-                    instrument = false;
-                }
-            }
             for (k=0; k<op->opSets[j].nOut; k++) {
                 output = op->opSets[j].out[k];
                 if (output->getType() != IEEE_Double &&
@@ -286,71 +279,76 @@ bool FPBinaryBlobRPrec::generate(Point * /*pt*/, Buffer &buf)
         adjustDisplacement(eip_operand->getDisp(), pos);
     }
 
-    // binary blob header and state saving
-    pos += buildHeader(pos);
-    if (temp_gpr1 != REG_EAX) {
-        pos += buildFakeStackPushGPR64(pos, temp_gpr1);
+    // is this a packed SSE instruction?
+    packed = (op->numOpSets > 1);
+
+    // grab the output operand
+    output = op->opSets[0].out[0];
+
+    // make sure we actually need to truncate
+    if (!((output->getType() == IEEE_Double && precision < 52) ||
+          (output->getType() == IEEE_Single && precision < 23))) {
+        doTruncation = false;
     }
-    pos += buildFakeStackPushXMM(pos, temp_xmm1);
 
     if (doTruncation) {
 
-        // is this a packed SSE instruction?
-        packed = (op->numOpSets > 1);
-
-        // grab the output operand
-        output = op->opSets[0].out[0];
-
         assert(output->isRegisterSSE());
-            //fprintf(stderr, "Cannot reduce precision--output register is not SSE: %s\n",
-                    //inst->getDisassembly().c_str());
+        //fprintf(stderr, "Cannot reduce precision--output register is not SSE: %s\n",
+                //inst->getDisassembly().c_str());
+
+        // binary blob header and state saving
+        pos += buildHeader(pos);
+        if (temp_gpr1 != REG_EAX) {
+            pos += buildFakeStackPushGPR64(pos, temp_gpr1);
+        }
+        pos += buildFakeStackPushXMM(pos, temp_xmm1);
 
         // load temporary XMM register with truncating constants
         //
         if (output->getType() == IEEE_Double) {
-            if (precision > 52) {
-                precision = 52;
-            }
-            pos += mainGen->buildMovImm64ToGPR64(pos, rprecConst64[precision], temp_gpr1);
-            pos += mainGen->buildInsertGPR64IntoXMM(pos, temp_gpr1, temp_xmm1, 0);
-            if (packed) {
-                pos += mainGen->buildInsertGPR64IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
-            } else {
-                pos += mainGen->buildMovImm64ToGPR64(pos, rprecConst64[52], temp_gpr1);
-                pos += mainGen->buildInsertGPR64IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
+            if (precision < 52) {
+                pos += mainGen->buildMovImm64ToGPR64(pos, rprecConst64[precision], temp_gpr1);
+                pos += mainGen->buildInsertGPR64IntoXMM(pos, temp_gpr1, temp_xmm1, 0);
+                if (packed) {
+                    pos += mainGen->buildInsertGPR64IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
+                } else {
+                    pos += mainGen->buildMovImm64ToGPR64(pos, rprecConst64[52], temp_gpr1);
+                    pos += mainGen->buildInsertGPR64IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
+                }
             }
         } else if (output->getType() == IEEE_Single) {
-            if (precision > 23) {
-                precision = 23;
-            }
-            pos += mainGen->buildMovImm32ToGPR32(pos, rprecConst32[precision], temp_gpr1);
-            pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 0);
-            if (packed) {
-                pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 1);
-                pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
-                pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 3);
-            } else {
-                pos += mainGen->buildMovImm32ToGPR32(pos, rprecConst32[23], temp_gpr1);
-                pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 1);
-                pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
-                pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 3);
+            if (precision < 23) {
+                pos += mainGen->buildMovImm32ToGPR32(pos, rprecConst32[precision], temp_gpr1);
+                pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 0);
+                if (packed) {
+                    pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 1);
+                    pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
+                    pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 3);
+                } else {
+                    pos += mainGen->buildMovImm32ToGPR32(pos, rprecConst32[23], temp_gpr1);
+                    pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 1);
+                    pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 2);
+                    pos += mainGen->buildInsertGPR32IntoXMM(pos, temp_gpr1, temp_xmm1, 3);
+                }
             }
         }
 
         // perform truncation
         pos += mainGen->buildAndXMMWithXMM(pos, output->getRegister(), temp_xmm1);
-    }
     
-    // increment instruction count
-    pos += mainGen->buildIncMem64(pos,
-            (int32_t)(unsigned long)instData.count_addr, useLockPrefix);
+        // increment instruction count
+        pos += mainGen->buildIncMem64(pos,
+                (int32_t)(unsigned long)instData.count_addr, useLockPrefix);
 
-    // binary blob state restore and footer
-    pos += buildFakeStackPopXMM(pos, temp_xmm1);
-    if (temp_gpr1 != REG_EAX) {
-        pos += buildFakeStackPopGPR64(pos, temp_gpr1);
+        // binary blob state restore and footer
+        pos += buildFakeStackPopXMM(pos, temp_xmm1);
+        if (temp_gpr1 != REG_EAX) {
+            pos += buildFakeStackPopGPR64(pos, temp_gpr1);
+        }
+        pos += buildFooter(pos);
     }
-    pos += buildFooter(pos);
+
     finalize();
 
     unsigned char *b = (unsigned char*)getBlobCode();

@@ -66,7 +66,7 @@ void FPLog::addMessage(FPLogMsgType type, long priority,
 {
     if (!fileOpen) return;
 
-    long id;
+    long tid;
     long timestamp = (long)clock();
 
     logfile << "<message time=\"" << timestamp;
@@ -82,23 +82,17 @@ void FPLog::addMessage(FPLogMsgType type, long priority,
     if (trace.length() > 0) {
         map<string, unsigned>::iterator i = traces.find(trace);
         if (i == traces.end()) {
-            id = traces.size()+1;
-            traces[trace] = id;
+            tid = traces.size()+1;
+            traces[trace] = tid;
         } else {
-            id = i->second;
+            tid = i->second;
         }
-        logfile << "<trace_id>" << id << "</trace_id>" << endl;
+        logfile << "<trace_id>" << tid << "</trace_id>" << endl;
     }
 
     if (inst != NULL) {
-        map<FPSemantics *, unsigned>::iterator i = instructions.find(inst);
-        if (i == instructions.end()) {
-            id = instructions.size()+1;
-            instructions[inst] = id;
-        } else {
-            id = i->second;
-        }
-        logfile << "<inst_id>" << id << "</inst_id>" << endl;
+        instructions[inst] = inst->getIndex();
+        logfile << "<inst_id>" << inst->getIndex() << "</inst_id>" << endl;
     }
 
     logfile << "</message>" << endl;
