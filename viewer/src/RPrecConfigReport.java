@@ -23,6 +23,12 @@ public class RPrecConfigReport extends ConfigTreeIterator implements ConfigRepor
     private BarGraphPanel insnGraphPanel = null;
     private BarGraphPanel execGraphPanel = null;
 
+    private boolean silentMode = false;
+
+    public void setSilentMode(boolean silent) {
+        silentMode = silent;
+    }
+
     public void manipulate(ConfigTreeNode node) {
         if (node.type == ConfigTreeNode.CNType.INSTRUCTION) {
             long precision = node.getEffectivePrecision();
@@ -38,17 +44,22 @@ public class RPrecConfigReport extends ConfigTreeIterator implements ConfigRepor
 
         // ask for bin size
         int binSize = 1;
-        String binSizeStr = JOptionPane.showInputDialog(null, "Enter bin size", "1");
-        try {
-            binSize = Integer.parseInt(binSizeStr);
-        } catch (NumberFormatException ex) { }
+        if (!silentMode) {
+            String binSizeStr = JOptionPane.showInputDialog(null, "Enter bin size", "1");
+            try {
+                binSize = Integer.parseInt(binSizeStr);
+            } catch (NumberFormatException ex) { }
+        }
 
         // ask whether to exclude the zero bin
-        int resp = JOptionPane.showConfirmDialog(null, "Include zero-precision bin?", "Include zero-precision bin?",
-                JOptionPane.YES_NO_OPTION);
         boolean excludeZero = false;
-        if (resp == JOptionPane.NO_OPTION) {
-            excludeZero = true;
+        if (!silentMode) {
+            int resp = JOptionPane.showConfirmDialog(null, "Include zero-precision bin?",
+                    "Include zero-precision bin?",
+                    JOptionPane.YES_NO_OPTION);
+            if (resp == JOptionPane.NO_OPTION) {
+                excludeZero = true;
+            }
         }
 
         // initialize count arrays
@@ -156,11 +167,11 @@ public class RPrecConfigReport extends ConfigTreeIterator implements ConfigRepor
         if (insnGraphPanel == null) {
             insnGraphPanel = new BarGraphPanel(insnCountBins, binLabels);
         }
-        insnGraphPanel.saveImageToFile(new File("./insn_rprec_graph.png"));
+        insnGraphPanel.saveImageToFile(new File("./insn_rprec_graph.png"), true);
         if (execGraphPanel == null) {
             execGraphPanel = new BarGraphPanel(execCountBins, binLabels);
         }
-        execGraphPanel.saveImageToFile(new File("./exec_rprec_graph.png"));
+        execGraphPanel.saveImageToFile(new File("./exec_rprec_graph.png"), true);
     }
 
     public String getTitle() {

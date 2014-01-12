@@ -15,6 +15,8 @@ import javax.swing.border.*;
 
 public class BarGraphPanel extends JPanel implements MouseListener {
     
+    private static final Font AXIS_FONT = new Font("Monospaced", Font.PLAIN, 20);
+
     private long[] values;
     private String[] labels;
 
@@ -23,11 +25,19 @@ public class BarGraphPanel extends JPanel implements MouseListener {
                         BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
                         10.0f, DASH_1, 0.0f);
 
+    private int yLabelCount;
+    private boolean showRawYAxis = false;
+
     public BarGraphPanel(long[] values, String[] labels) {
         assert(values.length == labels.length);
         this.values = values;
         this.labels = labels;
+        yLabelCount = 5;
         addMouseListener(this);
+    }
+
+    public void setShowRawYAxis(boolean show) {
+        showRawYAxis = show;
     }
 
     public void paint(Graphics g) {
@@ -35,23 +45,30 @@ public class BarGraphPanel extends JPanel implements MouseListener {
         Graphics2D g2 = (Graphics2D)g;
 
         // find max value (for scaling)
+        // and total count (for y-axis labeling)
         long max = 0;
+        long sum = 0;
         for (int i=0; i<values.length; i++) {
             if (values[i] > max) {
                 max = values[i];
             }
+            sum += values[i];
         }
 
-        // format max value (for label)
-        float nmax = (float)max;
-        String tag = "";
-        if (nmax > 1024.0) { nmax /= 1024.0; tag = "K"; }
-        if (nmax > 1024.0) { nmax /= 1024.0; tag = "M"; }
-        if (nmax > 1024.0) { nmax /= 1024.0; tag = "G"; }
-        String botLabel = "0";
-        String topLabel = ""+max;
-        if (!tag.equals("")) {
-            topLabel = String.format("%.1f%s", nmax, tag);
+        // format y-axis labels
+        String[] ylabels = new String[yLabelCount];
+        for (int i=0; i<yLabelCount; i++) {
+            float yval = (float)max * ((float)i / (float)(yLabelCount-1));
+            if (!showRawYAxis) {
+                yval /= (float)sum;
+                yval *= 100.0;
+            }
+            String tag = showRawYAxis ? "" : "%";
+            if (yval > 1024.0) { yval /= 1024.0; tag = "K"; }
+            if (yval > 1024.0) { yval /= 1024.0; tag = "M"; }
+            if (yval > 1024.0) { yval /= 1024.0; tag = "G"; }
+            String ylbl = String.format("%.1f%s", yval, tag);
+            ylabels[i] = ylbl;
         }
 
         // get draw limits
@@ -82,7 +99,7 @@ public class BarGraphPanel extends JPanel implements MouseListener {
         int firstBarBuffer = (int)(1.0*(float)barWidth);
 
         // set font
-        g.setFont(ConfigEditorApp.DEFAULT_FONT_MONO_PLAIN);
+        g.setFont(AXIS_FONT);
         FontMetrics fm = getFontMetrics(g.getFont());
 
         // draw left axis
@@ -91,12 +108,13 @@ public class BarGraphPanel extends JPanel implements MouseListener {
                    graphBounds.y,
                    graphBounds.x,
                    graphBounds.y+graphBounds.height);
-        g.drawString(botLabel,
-                graphBounds.x-fm.stringWidth(botLabel)-(int)(0.1*(float)leftAxisWidth),
-                graphBounds.y+graphBounds.height);
-        g.drawString(topLabel,
-                graphBounds.x-fm.stringWidth(topLabel)-(int)(0.1*(float)leftAxisWidth),
-                graphBounds.y+fm.getHeight());
+        for (int i=0; i<yLabelCount; i++) {
+            int offset = (int)( ((float)i / (float)(yLabelCount-1)) *
+                                (float)(graphBounds.height-fm.getHeight()) );
+            g.drawString(ylabels[i],
+                    graphBounds.x-fm.stringWidth(ylabels[i])-(int)(0.1*(float)leftAxisWidth),
+                    graphBounds.y+graphBounds.height-offset);
+        }
         
         // draw bottom axis
         g.setColor(Color.BLACK);
@@ -142,6 +160,10 @@ public class BarGraphPanel extends JPanel implements MouseListener {
     }
 
     public void saveImageToFile(File fout) {
+        saveImageToFile(fout, false);
+    }
+
+    public void saveImageToFile(File fout, boolean silent) {
         final int IMG_WIDTH  =  800;
         final int IMG_HEIGHT =  700;
         BufferedImage img = new BufferedImage(IMG_WIDTH, IMG_HEIGHT,
@@ -150,7 +172,7 @@ public class BarGraphPanel extends JPanel implements MouseListener {
         g2.setClip(0, 0, IMG_WIDTH, IMG_HEIGHT);
         paint(g2);
         try {
-            if (ImageIO.write(img, "png", fout)) {
+            if (ImageIO.write(img, "png", fout) && !silent) {
                 JOptionPane.showMessageDialog(getParent(),
                         "Image saved!", "Success",
                         JOptionPane.INFORMATION_MESSAGE);

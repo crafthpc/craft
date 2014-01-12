@@ -1234,6 +1234,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
         if (barGraphOnly) {
             RPrecConfigReport report = new RPrecConfigReport();
+            report.setSilentMode(true);
             report.runReport(app.getRootNode());
             report.saveGraphs();
             System.exit(0);
