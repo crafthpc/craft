@@ -15,11 +15,13 @@ public class InstructionModel extends AbstractTableModel {
     public java.util.List<LInstruction> instructions;
     public NumberFormat ratioFormatter;
     public NumberFormat avgDigitsFormatter;
+    public NumberFormat rangeFormatter;
 
     public InstructionModel(LLogFile log) {
         logfile = log;
         ratioFormatter = new DecimalFormat("0.####");
         avgDigitsFormatter = new DecimalFormat("0.##");
+        rangeFormatter = new DecimalFormat("0.###E0");
         refreshData();
     }
 
@@ -95,13 +97,17 @@ public class InstructionModel extends AbstractTableModel {
                         return Integer.valueOf(instr.cancellations);
             //case 8: return (Integer.valueOf(instr.cancellations)).toString();
             case 8: return Integer.valueOf(instr.cancellations);
+
+            // problem: formatting the floating-point columns makes it so we
+            // can't sort by them
+            
             //case 9: return ratioFormatter.format(instr.ratio);
             //case 10: return avgDigitsFormatter.format(instr.averageDigits);
             case 9: return Double.valueOf(instr.ratio);
             case 10: return Double.valueOf(instr.averageDigits);
-            //case 11: return (Double.valueOf(instr.min)).toString();
-            //case 12: return (Double.valueOf(instr.max)).toString();
-            //case 13: return (Double.valueOf(instr.range)).toString();
+            //case 11: return rangeFormatter.format(instr.min);
+            //case 12: return rangeFormatter.format(instr.max);
+            //case 13: return rangeFormatter.format(instr.range);
             case 11: return Double.valueOf(instr.min);
             case 12: return Double.valueOf(instr.max);
             case 13: return Double.valueOf(instr.range);
