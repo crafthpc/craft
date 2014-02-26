@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 #
-# diffcfgs
+# offset_rprec
 #
-# Compare two configuration files.
+# Apply an offset to precision values in an rprec configuration.
 #
 
 $TYPE_APPLICATION = "APPLICATION"                   # control point levels
@@ -30,6 +30,7 @@ $COUNT_HIGHER     = "Higher"
 $COUNT_LOWER      = "Lower"
 $COUNT_IDENTICAL  = "Identical"
 
+$num_zeroes = 0
 
 class PPoint
     attr_accessor :uid              # unique regex identifier; e.g. "INSN #34: 0x804d3f"
@@ -59,93 +60,72 @@ class PPoint
         @byid = Hash.new
     end
 
-    def compare(pt2, results, precisions, counts)
-        counts[$COUNT_COMMON] += 1
-        if @attrs.has_key?("prolog") then
-            @attrs["prolog"].zip(pt2.attrs["prolog"]).each do |pro1, pro2|
-                if pro1 != pro2 then
-                    results << "-#{pro1}"
-                    results << "+#{pro2}"
-                end
-            end
-        end
-        if @orig_status != pt2.orig_status then
-            if @orig_status == $STATUS_SINGLE and pt2.orig_status == $STATUS_DOUBLE then
-                counts[$COUNT_HIGHER] += 1
-                pt2.diff_status = pt2.orig_status
-            elsif @orig_status == $STATUS_DOUBLE and pt2.orig_status == $STATUS_SINGLE then
-                counts[$COUNT_LOWER] += 1
-                pt2.diff_status = pt2.orig_status
-            end
-            results << "-#{to_s}"
-            results << "+#{pt2.to_s}"
-        elsif @orig_status == $STATUS_RPREC and @precision != pt2.precision then
-            diff = pt2.precision - @precision
-            results << "#{diff > 0 ? "+" : "-"}#{"%02d" % diff.abs}: #{@uid} #{@attrs["desc"]}"
-            precisions[diff] += 1
-        else
-            counts[$COUNT_IDENTICAL] += 1
-        end
-        @children.zip(pt2.children).each do |c1,c2|
-            if c1.nil? then
-                results << "+#{c2.to_s}"
-                counts[$COUNT_ADDITIONS] += 1
-            elsif c2.nil? then
-                results << "-#{c1.to_s}"
-                counts[$COUNT_DELETIONS] += 1
-            else
-                c1.compare(c2, results, precisions, counts)
-            end
-        end
-    end
-
     def flatten_to_insns
-        flatten(nil, nil)
+        flatten(nil)
     end
 
-    def flatten(overload, overload_prec)
+    def flatten(overload_prec)
+        #puts "flattening #{to_s}: #{@orig_status} #{overload_prec}"
         if @type == $TYPE_INSTRUCTION then
-            if not overload.nil? then
-                if not @orig_status == $STATUS_RPREC then
-                    # final configs for rprec searches store the
-                    # precision results for higher-level nodes,
-                    # so ignore them if lower info is present
-                    @precision = overload_prec
-                end
-                @orig_status = overload
+            if @orig_status != $STATUS_RPREC and not overload_prec.nil? then
+                #puts " APPLY OVERLOAD: #{overload_prec}"
+                @precision = overload_prec
+                @orig_status = $STATUS_RPREC
             end
         else
-            if overload.nil? then
-                if not @orig_status == $STATUS_NONE then
-                    overload = @diff_status
-                    if @orig_status == $STATUS_RPREC then
-                        overload_prec = @precision
-                    end
-                end
+            if @orig_status == $STATUS_RPREC then
+                #puts " BEGIN OVERLOAD: #{@precision}"
+                overload_prec = @precision
             end
+
             # clear out statuses for all non-instruction nodes
             @orig_status = $STATUS_NONE
         end
         @children.each do |pt|
-            pt.flatten(overload, overload_prec)
+            pt.flatten(overload_prec)
         end
     end
 
-    def build_diff_file (fn)
+    def apply_offset (offset)
+
+        # TEMPORARY - bump zero up to 52
+        # TODO: remove this
+        if not @precision.nil? and @precision == 0 then
+            @precision = 52
+            $num_zeroes += 1
+        end
+        
+        @precision += offset if not @precision.nil?
+        @precision = 52 if @precision > 52
+        @precision = 0 if @precision < 0
+        @children.each do |c|
+            c.apply_offset(offset)
+        end
+    end
+
+    def build_config_file (fn)
+        # write out a configuration file for this config
+        # this method will only be called in an APPLICATION node; it calls
+        # output() to recursively print the other levels
         fout = File.new(fn, "w")
         if @attrs.has_key?("prolog") then
             @attrs["prolog"].each do |line|
                 fout.puts line
             end
         end
-        output_diff(fout)
+        output_all(fout)
         fout.close
     end
 
-    def output_diff(fout)
+    def output_all(fout)
         prec_line = nil
         fout.print("^")
-        fout.print(@diff_status)
+        if type == $TYPE_INSTRUCTION then
+            if @orig_status == $STATUS_RPREC then
+                prec_line = "#{type}_#{@id}_precision=#{@precision}"
+            end
+            fout.print(@orig_status)
+        end
         fout.print(" ")
         fout.print($TYPE_SPACES[@type])     # indentation
         fout.print(@uid)
@@ -159,7 +139,7 @@ class PPoint
             fout.puts prec_line
         end
         @children.each do |pt|
-            pt.output_diff(fout)
+            pt.output_all(fout)
         end
     end
 
@@ -210,7 +190,7 @@ def load_config(fn)
             bblk.children << insn if bblk != nil
             program.byid["INSN #{insn.id}"] = insn
         elsif line =~ /(\w+)_(\d+)_precision=(\d+)/ then
-            tag = $1.to_i
+            tag = $1
             id = $2.to_i
             prec = $3.to_i
             pt = program.byid["#{tag} #{id}"]
@@ -233,52 +213,26 @@ def load_config(fn)
 end
 
 
-fn1 = nil
-fn2 = nil
+fn = nil
+offset = nil
 
 ARGV.each do |arg|
     if arg == "-h" then
-        puts "Usage: diffcfgs <file1> <file2>"
+        puts "Usage: offset_rprec <file> <offset>"
         exit
-    elsif fn1.nil? then
-        fn1 = arg
-    elsif fn2.nil? then
-        fn2 = arg
+    elsif fn.nil? then
+        fn = arg
+    elsif offset.nil? then
+        offset = arg.to_i
     end
 end
 
-cfg1 = load_config(fn1)
-cfg2 = load_config(fn2)
-cfg1.flatten_to_insns
-cfg2.flatten_to_insns
+cfg = load_config(fn)
+cfg.flatten_to_insns
+cfg.apply_offset(offset)
+cfg.build_config_file("output.cfg")
 
-results = Array.new
-precisions = Hash.new(0)
-counts = Hash.new(0)
-
-counts[$COUNT_ADDITIONS] = 0
-counts[$COUNT_DELETIONS] = 0
-counts[$COUNT_COMMON] = 0
-counts[$COUNT_HIGHER] = 0
-counts[$COUNT_LOWER] = 0
-counts[$COUNT_IDENTICAL] = 0
-
-cfg1.compare(cfg2, results, precisions, counts)
-
-puts results
-
-if precisions.keys.size > 0 then
-    puts "PRECISIONS:"
-    #puts precisions.inspect
-    precisions.keys.sort.each do |diff|
-        puts "#{diff > 0 ? "+" : "-"}#{"%02d" % diff.abs}: #{precisions[diff]}"
-    end
-end
-
-puts "COUNTS:"
-counts.each do |k,v|
-    puts "%-15s %d" % [k,v]
-end
-
-cfg2.build_diff_file("diff.cfg")
+zf = File.open("zeroes.txt", "w")
+zf.puts $num_zeroes.to_s
+zf.close
 
