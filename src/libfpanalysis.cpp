@@ -8,22 +8,18 @@
 
 //#include "fpanalysis.h"
 #include "fpflag.h"
+#include "fpinfo.h"
 
+// standard C/Unix libs
 #include <stdarg.h>
 #include <unistd.h>
 
+// helpers
 #include "FPContext.h"
 #include "FPConfig.h"
 #include "FPLog.h"
 #include "FPDecoderXED.h"
 #include "FPDecoderIAPI.h"
-#include "FPAnalysisCInst.h"
-#include "FPAnalysisDCancel.h"
-#include "FPAnalysisDNan.h"
-#include "FPAnalysisTRange.h"
-#include "FPAnalysisPointer.h"
-#include "FPAnalysisInplace.h"
-#include "FPAnalysisRPrec.h"
 
 using namespace FPInst;
 
@@ -32,22 +28,12 @@ FPConfig  *mainConfig;
 FPLog     *mainLog;
 FPDecoder *mainDecoder;
 
-FPAnalysis               *mainNullAnalysis;
-extern FPAnalysisCInst   *_INST_Main_CInstAnalysis;
-const long cinstID   =  1;
-extern FPAnalysisDCancel *_INST_Main_DCancelAnalysis;
-const long dcancelID = 11;
-extern FPAnalysisDNan *_INST_Main_DNanAnalysis;
-const long dnanID    = 12;
-extern FPAnalysisTRange  *_INST_Main_TRangeAnalysis;
-const long trangeID  = 21;
+FPAnalysis *mainNullAnalysis;
+FPAnalysis *allAnalyses[TOTAL_ANALYSIS_COUNT];
+
+// hard-coded instance pointers needed for libc/libm passthroughs
 extern FPAnalysisPointer *_INST_Main_PointerAnalysis;
-const long svptrID   = 31;
 extern FPAnalysisInplace *_INST_Main_InplaceAnalysis;
-const long svinpID   = 32;
-extern FPAnalysisRPrec *_INST_Main_RPrecAnalysis;
-const long rprecID   = 41;
-FPAnalysis               *allAnalyses[10];
 
 unsigned long *_INST_reg_eip;
 unsigned long *_INST_reg_eflags;
@@ -286,42 +272,16 @@ void _INST_init_analysis ()
     
     // {{{ initialize various analyses
     analysisCount = 0;
-    if (mainConfig->hasValue("c_inst") && mainConfig->getValue("c_inst") == "yes") {
-        FPAnalysisCInst::getInstance()->configure(mainConfig, mainDecoder, mainLog, mainContext);
-        allAnalyses[analysisCount++] = FPAnalysisCInst::getInstance();
-        status << "c_inst: initialized" << endl;
-    }
-    if (mainConfig->hasValue("d_cancel") && mainConfig->getValue("d_cancel") == "yes") {
-        FPAnalysisDCancel::getInstance()->configure(mainConfig, mainDecoder, mainLog, mainContext);
-        allAnalyses[analysisCount++] = FPAnalysisDCancel::getInstance();
-        status << "d_cancel: initialized" << endl;
-    }
-    if (mainConfig->hasValue("d_nan") && mainConfig->getValue("d_nan") == "yes") {
-        FPAnalysisDNan::getInstance()->configure(mainConfig, mainDecoder, mainLog, mainContext);
-        allAnalyses[analysisCount++] = FPAnalysisDNan::getInstance();
-        status << "d_nan: initialized" << endl;
-    }
-    if (mainConfig->hasValue("t_range") && mainConfig->getValue("t_range") == "yes") {
-        FPAnalysisTRange::getInstance()->configure(mainConfig, mainDecoder, mainLog, mainContext);
-        allAnalyses[analysisCount++] = FPAnalysisTRange::getInstance();
-        status << "t_range: initialized" << endl;
-    }
-    if (mainConfig->hasValue("sv_ptr") && mainConfig->getValue("sv_ptr") == "yes") {
-        FPAnalysisPointer::getInstance()->configure(mainConfig, mainDecoder, mainLog, mainContext);
-        allAnalyses[analysisCount++] = FPAnalysisPointer::getInstance();
-        status << "sv_ptr: initialized" << endl;
-    }
-    if (mainConfig->hasValue("sv_inp") && mainConfig->getValue("sv_inp") == "yes") {
-        FPAnalysisInplace::getInstance()->configure(mainConfig, mainDecoder, mainLog, mainContext);
-        allAnalyses[analysisCount++] = FPAnalysisInplace::getInstance();
-        status << "sv_inp: initialized" << endl;
-    }
-    if (mainConfig->hasValue("r_prec") && mainConfig->getValue("r_prec") == "yes") {
-        FPAnalysisRPrec::getInstance()->configure(mainConfig, mainDecoder, mainLog, mainContext);
-        allAnalyses[analysisCount++] = FPAnalysisRPrec::getInstance();
-        status << "r_prec: initialized" << endl;
+    for (size_t aidx=0; aidx < (size_t)TOTAL_ANALYSIS_COUNT; aidx++) {
+        string tag = allAnalysisInfo[aidx].instance->getTag();
+        if (mainConfig->hasValue(tag) && mainConfig->getValue(tag) == "yes") {
+            allAnalysisInfo[aidx].instance->configure(mainConfig, mainDecoder, mainLog, mainContext);
+            allAnalyses[analysisCount++] = allAnalysisInfo[aidx].instance;
+            status << tag << ": initialized" << endl;
+        }
     }
     if (analysisCount == 0) {
+        // TODO: revisit this (should null analysis be in allAnalysisInfo?)
         mainNullAnalysis = new FPAnalysis();
         allAnalyses[analysisCount++] = mainNullAnalysis;
         status << "null instrumentation initialized" << endl;
@@ -828,39 +788,18 @@ void _INST_handle_unsupported_inst(long iidx)
 
 long _INST_get_analysis_id(FPAnalysis *analysis)
 {
-    string tag = analysis->getTag();
-    long id = 0;
-    if (tag == "cinst") {
-        id = cinstID;
-    } else if (tag == "dcancel") {
-        id = dcancelID;
-    } else if (tag == "dnan") {
-        id = dnanID;
-    } else if (tag == "trange") {
-        id = trangeID;
-    } else if (tag == "svptr") {
-        id = svptrID;
-    } else if (tag == "svinp") {
-        id = svinpID;
-    } else if (tag == "rprec") {
-        id = rprecID;
+    for (size_t aidx=0; aidx < (size_t)TOTAL_ANALYSIS_COUNT; aidx++) {
+        if (allAnalysisInfo[aidx].instance->getTag() == analysis->getTag()) {
+            return (long)aidx;
+        }
     }
-    return id;
+    return 0;
 }
 
 void _INST_handle_pre_analysis(long analysisID, long iidx)
 {
-    FPAnalysis *analysis = NULL;
-    switch (analysisID) {
-        case cinstID:   analysis = _INST_Main_CInstAnalysis;        break;
-        case dcancelID: analysis = _INST_Main_DCancelAnalysis;      break;
-        case dnanID:    analysis = _INST_Main_DNanAnalysis;         break;
-        case trangeID:  analysis = _INST_Main_TRangeAnalysis;       break;
-        case svptrID:   analysis = _INST_Main_PointerAnalysis;      break;
-        case svinpID:   analysis = _INST_Main_InplaceAnalysis;      break;
-        case rprecID:   analysis = _INST_Main_RPrecAnalysis;        break;
-        default:        assert(!"Invalid analysis ID");             break;
-    }
+    assert(analysisID >=0  && analysisID < (long)TOTAL_ANALYSIS_COUNT);
+    FPAnalysis *analysis = allAnalysisInfo[analysisID].instance;
     __asm__ ("fxsave %0;" : : "m" (*mainContext->fxsave_state));
     _INST_status = _INST_ACTIVE;
     analysis->handlePreInstruction(mainDecoder->lookup(iidx));
@@ -870,17 +809,8 @@ void _INST_handle_pre_analysis(long analysisID, long iidx)
 
 void _INST_handle_post_analysis(long analysisID, long iidx)
 {
-    FPAnalysis *analysis = NULL;
-    switch (analysisID) {
-        case cinstID:   analysis = _INST_Main_CInstAnalysis;        break;
-        case dcancelID: analysis = _INST_Main_DCancelAnalysis;      break;
-        case dnanID:    analysis = _INST_Main_DNanAnalysis;         break;
-        case trangeID:  analysis = _INST_Main_TRangeAnalysis;       break;
-        case svptrID:   analysis = _INST_Main_PointerAnalysis;      break;
-        case svinpID:   analysis = _INST_Main_InplaceAnalysis;      break;
-        case rprecID:   analysis = _INST_Main_RPrecAnalysis;        break;
-        default:        assert(!"Invalid analysis ID");             break;
-    }
+    assert(analysisID >=0  && analysisID < (long)TOTAL_ANALYSIS_COUNT);
+    FPAnalysis *analysis = allAnalysisInfo[analysisID].instance;
     __asm__ ("fxsave %0;" : : "m" (*mainContext->fxsave_state));
     _INST_status = _INST_ACTIVE;
     analysis->handlePostInstruction(mainDecoder->lookup(iidx));
@@ -890,17 +820,8 @@ void _INST_handle_post_analysis(long analysisID, long iidx)
 
 void _INST_handle_replacement(long analysisID, long iidx)
 {
-    FPAnalysis *analysis = NULL;
-    switch (analysisID) {
-        case cinstID:   analysis = _INST_Main_CInstAnalysis;        break;
-        case dcancelID: analysis = _INST_Main_DCancelAnalysis;      break;
-        case dnanID:    analysis = _INST_Main_DNanAnalysis;         break;
-        case trangeID:  analysis = _INST_Main_TRangeAnalysis;       break;
-        case svptrID:   analysis = _INST_Main_PointerAnalysis;      break;
-        case svinpID:   analysis = _INST_Main_InplaceAnalysis;      break;
-        case rprecID:   analysis = _INST_Main_RPrecAnalysis;        break;
-        default:        assert(!"Invalid analysis ID");             break;
-    }
+    assert(analysisID >=0  && analysisID < (long)TOTAL_ANALYSIS_COUNT);
+    FPAnalysis *analysis = allAnalysisInfo[analysisID].instance;
     __asm__ ("fxsave %0;" : : "m" (*mainContext->fxsave_state));
     _INST_status = _INST_ACTIVE;
     analysis->handleReplacement(mainDecoder->lookup(iidx));

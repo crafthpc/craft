@@ -33,7 +33,7 @@ FPAnalysisDCancel::FPAnalysisDCancel()
 
 string FPAnalysisDCancel::getTag()
 {
-    return "dcancel";
+    return "d_cancel";
 }
 
 string FPAnalysisDCancel::getDescription()

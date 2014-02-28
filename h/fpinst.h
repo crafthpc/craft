@@ -34,13 +34,7 @@
 #include "FPSVPolicy.h"
 
 // analyses
-#include "FPAnalysisCInst.h"
-#include "FPAnalysisDCancel.h"
-#include "FPAnalysisDNan.h"
-#include "FPAnalysisTRange.h"
-#include "FPAnalysisPointer.h"
-#include "FPAnalysisInplace.h"
-#include "FPAnalysisRPrec.h"
+#include "fpinfo.h"
 
 using namespace std;
 using namespace Dyninst;
@@ -71,7 +65,8 @@ void errorFunc(BPatchErrorLevel level, int num, const char * const *params);
 // helper functions
 string strip_to_base_filename(string fname);
 void setup_config_file(FPConfig *configuration);
-void initializeAnalyses();
+void initializeActiveAnalyses();
+bool isAnalysisEnabled(string tag);
 BPatch_function* getMutateeFunction(const char *name);
 BPatch_function* getAnalysisFunction(const char *name);
 BPatch_module* findInitFiniModule();

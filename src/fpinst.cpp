@@ -29,17 +29,13 @@ FPLog *logfile = NULL;
 
 // instrumentation modes
 bool nullInst = false;
-bool countInst = false;
-bool detectCancel = false;
-bool detectNaN = false;
-bool trackRange = false;
-bool pointerSV = false;
-bool inplaceSV = false;
-bool reducePrec = false;
 char* pointerSVType = NULL;
 char* inplaceSVType = NULL;
 unsigned long reducePrecDefaultPrec = 0;
-vector<FPAnalysis*> allAnalyses;
+
+// analysis information
+bool fpinstAnalysisEnabled[TOTAL_ANALYSIS_COUNT];
+vector<FPAnalysis*> activeAnalyses;
 
 // instrumentation file options
 char *binary = NULL;
@@ -241,64 +237,50 @@ void setup_config_file(FPConfig *configuration)
         configuration->addSetting(*i);
     }
     configuration->setValue("app_name", strip_to_base_filename(binary));
-    if (configuration->hasValue("c_inst") && configuration->getValue("c_inst") == "yes") {
-        countInst = true;
-        configuration->setValue("tag", "c_inst");
-    } else if (countInst) {
-        configuration->setValue("c_inst", "yes");
-        configuration->setValue("tag", "c_inst");
+
+    // analysis configuration options
+    for (size_t aidx=0; aidx < (size_t)TOTAL_ANALYSIS_COUNT; aidx++) {
+        string tag = allAnalysisInfo[aidx].instance->getTag();
+
+        if (configuration->hasValue(tag) && configuration->getValue(tag) == "yes") {
+
+            // enabled in the default configuration
+            fpinstAnalysisEnabled[aidx] = true;
+            configuration->setValue("tag", tag);
+
+            // special case analysis parameters
+            if (tag == "sv_ptr") {
+                assert(configuration->hasValue("sv_ptr_type"));
+                configuration->setValue("tag", string("sv_ptr_") + configuration->getValue("sv_ptr_type"));
+            } else if (tag == "sv_inp") {
+                assert(configuration->hasValue("sv_inp_type"));
+                configuration->setValue("tag", string("sv_inp_") + configuration->getValue("sv_inp_type"));
+            } else if (tag == "r_prec") {
+                assert(configuration->hasValue("r_prec_default_precision"));
+                configuration->setValue("tag", string("r_prec_") + configuration->getValue("r_prec_default_precision"));
+            }
+
+        } else if (fpinstAnalysisEnabled[aidx]) {
+
+            // enabled on the command line
+            configuration->setValue(tag, "yes");
+            configuration->setValue("tag", tag);
+
+            // special case analysis parameters
+            if (tag == "sv_ptr") {
+                configuration->setValue("sv_ptr_type", pointerSVType);
+                configuration->setValue("tag", string("sv_ptr_") + string(pointerSVType));
+            } else if (tag == "sv_inp") {
+                configuration->setValue("sv_inp_type", inplaceSVType);
+                configuration->setValue("tag", string("sv_inp_") + string(inplaceSVType));
+            } else if (tag == "r_prec") {
+                stringstream ss(""); ss << reducePrecDefaultPrec;
+                configuration->setValue("r_prec_default_precision", ss.str());
+                configuration->setValue("tag", string("r_prec_") + configuration->getValue("r_prec_default_precision"));
+            }
+        }
     }
-    if (configuration->hasValue("d_cancel") && configuration->getValue("d_cancel") == "yes") {
-        detectCancel = true;
-        configuration->setValue("tag", "d_cancel");
-    } else if (detectCancel) {
-        configuration->setValue("d_cancel", "yes");
-        configuration->setValue("tag", "d_cancel");
-    }
-    if (configuration->hasValue("d_nan") && configuration->getValue("d_nan") == "yes") {
-        detectNaN = true;
-        configuration->setValue("tag", "d_nan");
-    } else if (detectNaN) {
-        configuration->setValue("d_nan", "yes");
-        configuration->setValue("tag", "d_nan");
-    }
-    if (configuration->hasValue("t_range") && configuration->getValue("t_range") == "yes") {
-        trackRange = true;
-        configuration->setValue("tag", "t_range");
-    } else if (trackRange) {
-        configuration->setValue("t_range", "yes");
-        configuration->setValue("tag", "t_range");
-    }
-    if (configuration->hasValue("sv_ptr") && configuration->getValue("sv_ptr") == "yes") {
-        pointerSV = true;
-        assert(configuration->hasValue("sv_ptr_type"));
-        //pointerSVType = (char*)configuration->getValueC("sv_ptr_type");
-        configuration->setValue("tag", string("sv_ptr_") + configuration->getValue("sv_ptr_type"));
-    } else if (pointerSV) {
-        configuration->setValue("sv_ptr", "yes");
-        configuration->setValue("sv_ptr_type", pointerSVType);
-        configuration->setValue("tag", string("sv_ptr_") + string(pointerSVType));
-    }
-    if (configuration->hasValue("sv_inp") && configuration->getValue("sv_inp") == "yes") {
-        inplaceSV = true;
-        assert(configuration->hasValue("sv_inp_type"));
-        //pointerSVType = (char*)configuration->getValueC("sv_inp_type");
-        configuration->setValue("tag", string("sv_inp_") + configuration->getValue("sv_inp_type"));
-    } else if (inplaceSV) {
-        configuration->setValue("sv_inp", "yes");
-        configuration->setValue("sv_inp_type", inplaceSVType);
-        configuration->setValue("tag", string("sv_inp_") + string(inplaceSVType));
-    }
-    if (configuration->hasValue("r_prec") && configuration->getValue("r_prec") == "yes") {
-        reducePrec = true;
-        assert(configuration->hasValue("r_prec_default_precision"));
-        configuration->setValue("tag", string("r_prec_") + configuration->getValue("r_prec_default_precision"));
-    } else if (reducePrec) {
-        stringstream ss(""); ss << reducePrecDefaultPrec;
-        configuration->setValue("r_prec", "yes");
-        configuration->setValue("r_prec_default_precision", ss.str());
-        configuration->setValue("tag", string("r_prec_") + configuration->getValue("r_prec_default_precision"));
-    }
+
     if (logFile) {
         configuration->setValue("log_file", string(logFile));
     }
@@ -335,35 +317,22 @@ void setup_config_file(FPConfig *configuration)
     }
 }
 
-void initializeAnalyses() {
-    if (countInst) {
-        allAnalyses.push_back(FPAnalysisCInst::getInstance());
-        FPAnalysisCInst::getInstance()->configure(configuration, mainDecoder, logfile, NULL);
+void initializeActiveAnalyses() {
+    for (size_t aidx=0; aidx < (size_t)TOTAL_ANALYSIS_COUNT; aidx++) {
+        if (fpinstAnalysisEnabled[aidx]) {
+            activeAnalyses.push_back(allAnalysisInfo[aidx].instance);
+            allAnalysisInfo[aidx].instance->configure(configuration, mainDecoder, logfile, NULL);
+        }
     }
-    if (detectCancel) {
-        allAnalyses.push_back(FPAnalysisDCancel::getInstance());
-        FPAnalysisDCancel::getInstance()->configure(configuration, mainDecoder, logfile, NULL);
+}
+
+bool isAnalysisEnabled(string tag) {
+    for (size_t aidx=0; aidx < (size_t)TOTAL_ANALYSIS_COUNT; aidx++) {
+        if (fpinstAnalysisEnabled[aidx] && allAnalysisInfo[aidx].instance->getTag() == tag) {
+            return true;
+        }
     }
-    if (detectNaN) {
-        allAnalyses.push_back(FPAnalysisDNan::getInstance());
-        FPAnalysisDNan::getInstance()->configure(configuration, mainDecoder, logfile, NULL);
-    }
-    if (trackRange) {
-        allAnalyses.push_back(FPAnalysisTRange::getInstance());
-        FPAnalysisTRange::getInstance()->configure(configuration, mainDecoder, logfile, NULL);
-    }
-    if (pointerSV) {
-        allAnalyses.push_back(FPAnalysisPointer::getInstance());
-        FPAnalysisPointer::getInstance()->configure(configuration, mainDecoder, logfile, NULL);
-    }
-    if (inplaceSV) {
-        allAnalyses.push_back(FPAnalysisInplace::getInstance());
-        FPAnalysisInplace::getInstance()->configure(configuration, mainDecoder, logfile, NULL);
-    }
-    if (reducePrec) {
-        allAnalyses.push_back(FPAnalysisRPrec::getInstance());
-        FPAnalysisRPrec::getInstance()->configure(configuration, mainDecoder, logfile, NULL);
-    }
+    return false;
 }
 
 BPatch_function* getMutateeFunction(const char *name) {
@@ -1129,7 +1098,7 @@ void wrapFunction(const char* oldFuncName, const char* newFuncName)
 
 void replaceLibmFunctions()
 {
-    if (pointerSV) {
+    if (isAnalysisEnabled("sv_ptr")) {
 
         // {{{ single-precision functions
 
@@ -1233,7 +1202,7 @@ void replaceLibmFunctions()
 
     }
 
-    if (pointerSV || inplaceSV) {
+    if (isAnalysisEnabled("sv_ptr") || isAnalysisEnabled("sv_inp")) {
 
         // {{{ double-precision functions
 
@@ -1537,6 +1506,11 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
 
         // if there is a configuration tree, do what it
         // says ONLY and DO NOT iterate over every analysis
+        //
+        // NEWMODE: if you add your analysis to the config tree system, you'll
+        // need to add a handler here (as well as all the associated changes in
+        // FPConfig)
+        //
         FPReplaceEntryTag tag = configuration->getReplaceTag(addr);
         assert(tag != RETAG_CANDIDATE);
         if (tag == RETAG_NULL) {
@@ -1565,7 +1539,7 @@ bool buildInstrumentation(void* addr, FPSemantics *inst, PatchFunction *func, Pa
 
         // for each analysis
         vector<FPAnalysis*>::iterator a;
-        for (a = allAnalyses.begin(); a != allAnalyses.end(); a++) {
+        for (a = activeAnalyses.begin(); a != activeAnalyses.end(); a++) {
 
             if ((*a)->shouldReplace(inst)) {
 
@@ -1828,7 +1802,7 @@ void instrumentApplication()
 
     // replace some libm/libc functions
     replaceLibmFunctions();
-    if (pointerSV || inplaceSV) {
+    if (isAnalysisEnabled("sv_ptr") || isAnalysisEnabled("sv_inp")) {
         if (fortranMode) {
             replaceFunctionCalls("inst_fortran_report_", "_INST_fortran_report");
         } else {
@@ -1920,8 +1894,8 @@ void instrumentApplication()
     report << "  " << total_replacements << " replaced library function(s)" << endl;
     report << "  " << total_fp_instructions << " floating-point instruction(s)" << endl;
     report << "    Total: " << total_instrumented_instructions << " instrumented" << endl;
-    for (unsigned i=0; i<allAnalyses.size(); i++) {
-        report << "    " << allAnalyses[i]->finalInstReport() << endl;
+    for (unsigned i=0; i<activeAnalyses.size(); i++) {
+        report << "    " << activeAnalyses[i]->finalInstReport() << endl;
     }
     report << "    " << total_fp_instructions - total_instrumented_instructions << " ignored" << endl;
     report << "  " << total_basicblocks << " basic block(s)" << endl;
@@ -2156,15 +2130,15 @@ void usage()
     printf("\n");
     printf("  --null               null instrumentation (for overhead testing)\n");
 	printf("  --decoding-only      instruction decoding only (default--also useful for overhead testing)\n");
-	printf("  --cinst              count all floating-point instructions\n");
-	printf("  --dcancel            detect cancellation events\n");
-	printf("  --dnan               detect NaN values\n");
-	printf("  --trange             track operand value ranges\n");
-    //printf("  --svptr <policy>     pointer-replacement shadow value analysis\n");
-    //printf("                         valid policies: \"single\", \"double\"\n");
-    printf("  --svinp <policy>     in-place replacement shadow value analysis\n");
-    printf("                         valid policies: \"single\", \"double\", \"mem_single\", \"mem_double\", \"config\"\n");
-    printf("  --rprec <bits>       reduced precision analysis\n");
+
+    for (size_t aidx=0; aidx < (size_t)TOTAL_ANALYSIS_COUNT; aidx++) {
+        printf("  %-20s %s\n", allAnalysisInfo[aidx].fpinstUsage,
+                allAnalysisInfo[aidx].fpinstHelpText);
+        if (strcmp("", allAnalysisInfo[aidx].fpinstHelpText2)!=0) {
+            printf("  %20s   %s\n", "", allAnalysisInfo[aidx].fpinstHelpText2);
+        }
+    }
+
     printf("\n");
     printf(" Options:\n");
     printf("\n");
@@ -2217,6 +2191,7 @@ void parseFuncFile(char *fn, vector<string> &funcs)
     }
 }
 
+
 bool parseCommandLine(unsigned argc, char *argv[])
 {
     unsigned i;
@@ -2224,6 +2199,28 @@ bool parseCommandLine(unsigned argc, char *argv[])
 
     // analysis arguments
 	for (i = 1; i < argc; i++) {
+
+        bool foundAnalysisTag = false;
+        for (size_t aidx=0; aidx < (size_t)TOTAL_ANALYSIS_COUNT; aidx++) {
+            string param = allAnalysisInfo[aidx].fpinstParam;
+            if (strcmp(argv[i], param.c_str())==0) {
+                foundAnalysisTag = true;
+                fpinstAnalysisEnabled[aidx] = true;
+
+                // special case analysis parameters
+                if (strcmp(argv[i], "--svptr")==0 && i < argc-1) {
+                    pointerSVType = argv[++i];
+                } else if (strcmp(argv[i], "--svinp")==0 && i < argc-1) {
+                    inplaceSVType = argv[++i];
+                } else if (strcmp(argv[i], "--rprec")==0 && i < argc-1) {
+                    reducePrecDefaultPrec = strtoul(argv[++i], NULL, 10);
+                }
+            }
+        }
+        if (foundAnalysisTag) {
+            continue;
+        }
+
 		if (strcmp(argv[i], "-h")==0) {
 			usage();
 			exit(EXIT_SUCCESS);
@@ -2265,23 +2262,6 @@ bool parseCommandLine(unsigned argc, char *argv[])
 			nullInst = true;
 		} else if (strcmp(argv[i], "--decoding-only")==0) {
             // default
-		} else if (strcmp(argv[i], "--cinst")==0) {
-            countInst = true;
-		} else if (strcmp(argv[i], "--dcancel")==0) {
-            detectCancel = true;
-		} else if (strcmp(argv[i], "--dnan")==0) {
-            detectNaN = true;
-		} else if (strcmp(argv[i], "--trange")==0) {
-            trackRange = true;
-		} else if (strcmp(argv[i], "--svptr")==0 && i < argc-1) {
-            pointerSV = true;
-            pointerSVType = argv[++i];
-		} else if (strcmp(argv[i], "--svinp")==0) {
-            inplaceSV = true;
-            inplaceSVType = argv[++i];
-		} else if (strcmp(argv[i], "--rprec")==0) {
-            reducePrec = true;
-            reducePrecDefaultPrec = strtoul(argv[++i], NULL, 10);
 		} else if (strcmp(argv[i], "-c")==0 && i < argc-1) {
             configFile = argv[++i];
 		} else if (strcmp(argv[i], "-L")==0 && i < argc-1) {
@@ -2334,6 +2314,11 @@ int main(int argc, char *argv[])
     // enable to get profiling data on the instrumenter
     //_INST_begin_profiling();
 
+    // initialize top-level analysis activation flags
+    for (size_t aidx=0; aidx<(size_t)TOTAL_ANALYSIS_COUNT; aidx++) {
+        fpinstAnalysisEnabled[aidx] = false;
+    }
+
     logfile = new FPLog("fpinst.log");
 
     // analysis configuration
@@ -2347,7 +2332,7 @@ int main(int argc, char *argv[])
     setup_config_file(configuration);
 
     // initialize analysis stubs
-    initializeAnalyses();
+    initializeActiveAnalyses();
 
 	// initalize DynInst library
 	bpatch = new BPatch;

@@ -28,7 +28,7 @@ FPAnalysisDNan::FPAnalysisDNan()
 
 string FPAnalysisDNan::getTag()
 {
-    return "dnan";
+    return "d_nan";
 }
 
 string FPAnalysisDNan::getDescription()

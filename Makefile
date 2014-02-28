@@ -40,7 +40,7 @@ PROF_LDFLAGS   = $(DEBUG_FLAGS) $(WARN_FLAGS) -L./$(PLATFORM) -lfpanalysis $(DYN
 DEPEND_CFLAGS  = $(DEBUG_FLAGS) $(WARN_FLAGS) $(DYNINST_CFLAGS) $(COMMON_CFLAGS) -msse2 -mfpmath=sse -O1
 
 # modules to build for analysis library
-LIB_MODULES = libfpanalysis fpflag FPAnalysis \
+LIB_MODULES = libfpanalysis fpflag fpinfo FPAnalysis \
 			  FPAnalysisCInst FPAnalysisTRange \
 			  FPAnalysisDCancel FPAnalysisDNan \
 			  FPAnalysisInplace FPAnalysisPointer \
@@ -50,11 +50,12 @@ LIB_MODULES = libfpanalysis fpflag FPAnalysis \
 			  FPConfig FPShadowEntry FPReplaceEntry \
               FPBinaryBlob FPCodeGen FPContext FPLog \
 			  FPDecoderXED FPDecoderIAPI FPFilterFunc \
-			  FPOperand FPOperation FPSemantics
+			  FPOperand FPOperation FPSemantics \
+			  FPAnalysisExample
 
 # executable modules
 CONF_MODULES = fpconf
-PROF_MODULES = fpinst
+PROF_MODULES = fpinst fpinfo
 
 # make rules
 TARGETS = $(PLATFORM)/libfpanalysis.so $(PLATFORM)/libfpshift.so $(PLATFORM)/fpconf $(PLATFORM)/fpinst
@@ -105,7 +106,7 @@ $(CONF_MODULE_FILES): $(PLATFORM)/%.o: src/%.cpp
 	$(CC) $(CONF_CFLAGS) -c -o $@ $<
 
 $(PROF_MODULE_FILES): $(PLATFORM)/%.o: src/%.cpp
-	$(CC) $(PROF_CFLAGS) -c -o $@ $<
+	$(CC) $(PROF_CFLAGS) -fPIC -c -o $@ $<
 
 $(DEPEND_FILES): src/%.depends: src/%.cpp
 	$(CC) -MM -MF $@ $(DEPEND_CFLAGS) $<
@@ -117,8 +118,8 @@ $(DEPEND_FILES): src/%.depends: src/%.cpp
 	#cpp $(LIB_CFLAGS) -o processed_libfpanalysis.cpp $<
 	#$(CC) $(LIB_CFLAGS) -fPIC -c -o $@ $<
 
-#$(PLATFORM)/FPDecoderXED.o: src/FPDecoderXED.cpp
-	#cpp $(LIB_CFLAGS) -o processed_decoderXED.cpp $<
+#$(PLATFORM)/fpinfo.o: src/fpinfo.cpp
+	#cpp $(LIB_CFLAGS) -o processed_fpinfo.cpp $<
 	#$(CC) $(LIB_CFLAGS) -fPIC -c -o $@ $<
 
 

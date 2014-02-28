@@ -31,7 +31,7 @@ FPAnalysisRPrec::FPAnalysisRPrec()
 
 string FPAnalysisRPrec::getTag()
 {
-    return "rprec";
+    return "r_prec";
 }
 
 string FPAnalysisRPrec::getDescription()

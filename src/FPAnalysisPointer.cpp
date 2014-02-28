@@ -193,7 +193,7 @@ FPAnalysisPointer::FPAnalysisPointer()
 
 string FPAnalysisPointer::getTag()
 {
-    return "svptr";
+    return "sv_ptr";
 }
 
 string FPAnalysisPointer::getDescription()

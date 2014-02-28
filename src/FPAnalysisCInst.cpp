@@ -31,7 +31,7 @@ FPAnalysisCInst::FPAnalysisCInst()
 
 string FPAnalysisCInst::getTag()
 {
-    return "cinst";
+    return "c_inst";
 }
 
 string FPAnalysisCInst::getDescription()
