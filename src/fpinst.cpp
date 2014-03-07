@@ -34,7 +34,8 @@ char* inplaceSVType = NULL;
 unsigned long reducePrecDefaultPrec = 0;
 
 // analysis information
-bool fpinstAnalysisEnabled[TOTAL_ANALYSIS_COUNT];
+bool  fpinstAnalysisEnabled[TOTAL_ANALYSIS_COUNT];
+char* fpinstAnalysisParam[TOTAL_ANALYSIS_COUNT];
 vector<FPAnalysis*> activeAnalyses;
 
 // instrumentation file options
@@ -266,17 +267,13 @@ void setup_config_file(FPConfig *configuration)
             configuration->setValue(tag, "yes");
             configuration->setValue("tag", tag);
 
-            // special case analysis parameters
-            if (tag == "sv_ptr") {
-                configuration->setValue("sv_ptr_type", pointerSVType);
-                configuration->setValue("tag", string("sv_ptr_") + string(pointerSVType));
-            } else if (tag == "sv_inp") {
-                configuration->setValue("sv_inp_type", inplaceSVType);
-                configuration->setValue("tag", string("sv_inp_") + string(inplaceSVType));
-            } else if (tag == "r_prec") {
-                stringstream ss(""); ss << reducePrecDefaultPrec;
-                configuration->setValue("r_prec_default_precision", ss.str());
-                configuration->setValue("tag", string("r_prec_") + configuration->getValue("r_prec_default_precision"));
+            // optional analysis parameter
+            if (fpinstAnalysisParam[aidx] && strcmp("",fpinstAnalysisParam[aidx])!=0) {
+                configuration->setValue(
+                        string(allAnalysisInfo[aidx].fpinstParam),
+                        string(fpinstAnalysisParam[aidx]));
+                configuration->setValue("tag", allAnalysisInfo[aidx].instance->getTag()
+                        + string("_") + string(fpinstAnalysisParam[aidx]));
             }
         }
     }
@@ -2202,18 +2199,12 @@ bool parseCommandLine(unsigned argc, char *argv[])
 
         bool foundAnalysisTag = false;
         for (size_t aidx=0; aidx < (size_t)TOTAL_ANALYSIS_COUNT; aidx++) {
-            string param = allAnalysisInfo[aidx].fpinstParam;
+            string param = allAnalysisInfo[aidx].fpinstSwitch;
             if (strcmp(argv[i], param.c_str())==0) {
                 foundAnalysisTag = true;
                 fpinstAnalysisEnabled[aidx] = true;
-
-                // special case analysis parameters
-                if (strcmp(argv[i], "--svptr")==0 && i < argc-1) {
-                    pointerSVType = argv[++i];
-                } else if (strcmp(argv[i], "--svinp")==0 && i < argc-1) {
-                    inplaceSVType = argv[++i];
-                } else if (strcmp(argv[i], "--rprec")==0 && i < argc-1) {
-                    reducePrecDefaultPrec = strtoul(argv[++i], NULL, 10);
+                if (allAnalysisInfo[aidx].fpinstParam && strcmp("", allAnalysisInfo[aidx].fpinstParam)!=0) {
+                    fpinstAnalysisParam[aidx] = argv[++i];
                 }
             }
         }
@@ -2317,6 +2308,7 @@ int main(int argc, char *argv[])
     // initialize top-level analysis activation flags
     for (size_t aidx=0; aidx<(size_t)TOTAL_ANALYSIS_COUNT; aidx++) {
         fpinstAnalysisEnabled[aidx] = false;
+        fpinstAnalysisParam[aidx] = NULL;
     }
 
     logfile = new FPLog("fpinst.log");

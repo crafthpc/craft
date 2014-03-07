@@ -26,7 +26,11 @@ struct FPAnalysisInfo {
 
         FPAnalysis *instance;       // pointer to analysis instance at instrumentation or run time
 
-        const char* fpinstParam;         // command-line parameter to enable (i.e., "--cinst")
+        const char* fpinstSwitch;        // command-line parameter to enable (i.e., "--cinst")
+        const char* fpinstParam;         // if present, the parameter immediately following the switch
+                                         // will be added to the configuration using this setting name;
+                                         // specify NULL for no parameter
+
         const char* fpinstUsage;         // usage text for "-h"
         const char* fpinstHelpText;      // description for "-h"
         const char* fpinstHelpText2;     // second line help for "-h" (ignored if blank)

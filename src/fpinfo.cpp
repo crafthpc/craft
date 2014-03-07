@@ -5,7 +5,8 @@ FPAnalysisInfo allAnalysisInfo[] = {
     /* TEMPLATE:
     {   
         <singleton instance of FPAnalysis subclass>,
-        <fpinst command-line parameter>, <fpinst usage text>,
+        <fpinst command-line switch>, <fpinst command-line parameter> (optional),
+        <fpinst usage text>,
         <fpinst help text (line 1)>,
         <fpinst help text (line 2)>
     }
@@ -16,49 +17,57 @@ FPAnalysisInfo allAnalysisInfo[] = {
     //
 
     {   FPAnalysisCInst::getInstance(),
-        "--cinst", "--cinst",
+        "--cinst", NULL,
+        "--cinst",
         "count all floating-point instructions",
         ""
     },
 
     {   FPAnalysisExample::getInstance(),
-        "--dprint", "--dprint",
+        "--dprint", NULL,
+        "--dprint",
         "debug printing (example analysis",
         ""
     },
     
     {   FPAnalysisDCancel::getInstance(),
-        "--dcancel", "--dcancel",
+        "--dcancel", NULL,
+        "--dcancel",
         "detect cancellation events",
         ""
     },
 
     {   FPAnalysisDNan::getInstance(),
-        "--dnan", "--dnan",
+        "--dnan", NULL,
+        "--dnan",
         "detect NaN values",
         ""
     },
 
-    {   FPAnalysisDNan::getInstance(),
-        "--trange", "--trange",
+    {   FPAnalysisTRange::getInstance(),
+        "--trange", NULL,
+        "--trange",
         "track operand value ranges",
         ""
     },
 
     {   FPAnalysisPointer::getInstance(),
-        "--svptr", "--svptr <policy>",
+        "--svptr", "sv_ptr_type",
+        "--svptr <policy>",
         "pointer-based replacement analysis",
         "valid policies: \"single\", \"double\""
     },
 
     {   FPAnalysisInplace::getInstance(),
-        "--svinp", "--svinp <policy>",
+        "--svinp", "sv_inp_type",
+        "--svinp <policy>",
         "in-place replacement analysis",
         "valid policies: \"single\", \"double\", \"mem_single\", \"mem_double\", \"config\""
     },
 
     {   FPAnalysisRPrec::getInstance(),
-        "--rprec", "--rprec <bits>",
+        "--rprec", "r_prec_default_precision",
+        "--rprec <bits>",
         "reduced-precision analysis",
         ""
     }
