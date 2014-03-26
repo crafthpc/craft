@@ -427,6 +427,10 @@ class Strategy
         update_icount(@program)
     end
 
+    def is_single_thread?
+        return false
+    end
+
     def update_icount(point)
         # allow us to ignore branches of the program that don't actually contain
         # any FP instructions
@@ -586,6 +590,134 @@ class BinaryStrategy < Strategy
     end
 end # }}}
 
+
+# DeltaDebugStrategy
+#
+# Implements a lower-cost delta-debugging strategy as described in
+# Rubio-Gonzalez et al. [SC'13].
+#
+class DeltaDebugStrategy < Strategy
+
+    def is_single_thread?
+        return true
+    end
+
+    def run_single_thread_loop
+        parent = build_initial_configs.first
+        div = 2
+        lc_cfg = parent
+        lc_cfg.attrs["cinst"] = 0
+
+        done = false
+        while not done do
+
+            puts "Current LC: #{lc_cfg.exceptions.size} change(s), #{lc_cfg.attrs["cinst"]} execution(s)"
+
+            lc_div = div
+            divs = parent.exceptions.each_slice([1,(parent.exceptions.size.to_f/div.to_f).ceil.to_i].max).to_a
+            changed = false
+            divs.size.times do |i|
+
+                puts "Test #{i+1} in round of #{div}"
+
+                # build test subset
+                setuid = parent.cuid + " S_#{i+1}_#{div}"
+                set = AppConfig.new(setuid, setuid, parent.default)
+                set.attrs["cinst"] = 0
+                divs[i].each do |k,v|
+                    set.exceptions[k] = v
+                    set.attrs["cinst"] += @program.lookup_by_uid(k).attrs["cinst"].to_i
+                    #puts "  #{k} => #{v}"
+                end
+                puts "SET: #{set.exceptions.size} change(s), #{set.attrs["cinst"]} execution(s)"
+                if run_config(set) == $RESULT_PASS and set.attrs["cinst"].to_i > lc_cfg.attrs["cinst"].to_i
+                    lc_cfg = set
+                    lc_div = 2
+                    changed = true
+                    puts "  LC REPLACED!"
+                end
+                add_tested_config(set)
+
+                # build and test complement set
+                comuid = parent.cuid + " C_#{i+1}_#{div}"
+                com = AppConfig.new(setuid, setuid, parent.default)
+                com.attrs["cinst"] = 0
+                divs.size.times do |j|
+                    if i != j then
+                        divs[j].each do |k,v|
+                            com.exceptions[k] = v
+                            com.attrs["cinst"] += @program.lookup_by_uid(k).attrs["cinst"].to_i
+                            #puts "  #{k} => #{v}"
+                        end
+                    end
+                end
+                puts "COMPLEMENT: #{com.exceptions.size} change(s), #{com.attrs["cinst"]} execution(s)"
+                if run_config(com) == $RESULT_PASS and com.attrs["cinst"].to_i > lc_cfg.attrs["cinst"].to_i
+                    lc_cfg = com
+                    lc_div = div-1
+                    changed = true
+                    puts "  LC REPLACED!"
+                end
+                add_tested_config(com)
+
+            end
+
+            if changed then
+                parent = lc_cfg
+                puts "NEW LC: #{parent.inspect}"
+                div = lc_div
+            else
+                if div > parent.exceptions.size then
+                    done = true
+                else
+                    div = 2 * div
+                end
+            end
+
+            puts ""
+        end
+    end
+
+    def build_final_config(results)
+        final_cfg = AppConfig.new("FINAL", "FINAL", @alternate)
+        final_cfg.attrs["cinst"] = 0
+        results.each do |r|
+            if r.attrs.has_key?("result") and r.attrs["result"] == $RESULT_PASS then
+                if final_cfg.nil? or r.attrs["cinst"].to_i > final_cfg.attrs["cinst"].to_i then
+                    final_cfg = r
+                end
+            end
+        end
+        puts "FINAL: #{final_cfg.inspect}"
+        return final_cfg
+    end
+
+    def build_initial_configs
+        # put all base_type-level points in a single config
+        cfg = AppConfig.new("ALL", "ALL", @alternate)
+        cfg.attrs["level"] = @base_type
+        cfg.attrs["bslevel"] = 1.to_s       # binary search level
+        cfg.attrs["div"] = 1.to_s           # number of di
+        find_configs(@program, cfg)
+        return [cfg]
+    end
+
+    def find_configs(pt, cfg)
+        if pt.type == @base_type then
+            cfg.add_pt_info(pt)
+            cfg.exceptions[pt.uid] = @preferred
+        else
+            pt.children.each do |child|
+                find_configs(child, cfg)
+            end
+        end
+    end
+
+    def split_config(config)
+        # TODO: implement multi-threaded version
+        return []
+    end
+end
 
 # ExhaustiveStrategy
 #
@@ -881,7 +1013,11 @@ def main
         initialize_program
         read_profiler_data
         initialize_strategy
-        run_main_search_loop                      # main loop
+        if $strategy.is_single_thread? then
+            $strategy.run_single_thread_loop
+        else
+            run_main_search_loop                      # main loop
+        end
         #puts "Worker finished.  [Empty queue]"
 
     else
@@ -925,31 +1061,47 @@ def main
             end
         end
 
-        # set up worker thread folders
-        $num_workers.times do |id|
-            worker_dir = "#{$search_path + $binary_name}_#{Process.pid}_worker#{id}"
-            if File.exist?(worker_dir) then
-                FileUtils.rm_rf(worker_dir)
-            end
-            Dir.mkdir(worker_dir)
-            $workers[id] = worker_dir
-        end
+        if not $strategy.is_single_thread? then
 
-        # spawn worker threads (don't spawn more than we need right now, though)
-        [get_workqueue_length, $num_workers].min.times do |id|
-            worker_dir = "#{$search_path + $binary_name}_#{Process.pid}_worker#{id}"
-            job = fork do
-                exec "cd #{worker_dir} && #{$self_invoke} worker #{id} #{$search_path}"
+            # set up worker thread folders
+            $num_workers.times do |id|
+                worker_dir = "#{$search_path + $binary_name}_#{Process.pid}_worker#{id}"
+                if File.exist?(worker_dir) then
+                    FileUtils.rm_rf(worker_dir)
+                end
+                Dir.mkdir(worker_dir)
+                $workers[id] = worker_dir
             end
-            $workers.delete(id)
-            $workers[job] = worker_dir
-            #puts "Spawned worker thread #{id} (pid=#{job})."
+
+            # spawn worker threads (don't spawn more than we need right now, though)
+            [get_workqueue_length, $num_workers].min.times do |id|
+                worker_dir = "#{$search_path + $binary_name}_#{Process.pid}_worker#{id}"
+                job = fork do
+                    exec "cd #{worker_dir} && #{$self_invoke} worker #{id} #{$search_path}"
+                end
+                $workers.delete(id)
+                $workers[job] = worker_dir
+                #puts "Spawned worker thread #{id} (pid=#{job})."
+            end
         end
 
         # main loop
         puts "Initialization complete. Starting main search routine."
         puts ""
-        run_main_supervisor_loop
+        if $strategy.is_single_thread? then
+            worker_dir = "#{$search_path + $binary_name}_#{Process.pid}_worker"
+            Dir.mkdir(worker_dir)
+            job = fork do
+                exec "cd #{worker_dir} && #{$self_invoke} worker 0 #{$search_path}"
+            end
+            begin
+                Process.wait(job.to_i)
+            rescue
+            end
+            FileUtils.rm_rf(worker_dir)
+        else
+            run_main_supervisor_loop
+        end
 
         # test final config, assemble results, etc.
         finalize_search
@@ -1155,11 +1307,22 @@ def run_main_search_loop
             # always add children, but reload results first
             # so the strategy can make an informed decision
             $strategy.reload_bounds_from_results(get_tested_configs)
+
+        elsif $strategy_name == "ddebug" then
+
+            # reverse of normal; only split configs that pass
+            if result != $RESULT_PASS then
+                add_children = false
+            end
+
+            # TODO: is_single_base check?
+
         else
 
             # check to see if we passed
             if result == $RESULT_PASS then
                 add_children = false
+                $strategy.check_for_divide(get_tested_configs)
             end
 
             # check to see if we're at the base type; stop if so
@@ -1580,6 +1743,8 @@ def initialize_strategy
         $strategy.split_threshold = $rprec_split_threshold
         $strategy.runtime_pct_threshold = $rprec_runtime_pct_threshold
         $strategy.skip_app_level = $rprec_skip_app_level
+    elsif $strategy_name == "ddebug" then
+        $strategy = DeltaDebugStrategy.new($program, $status_preferred, $status_alternate)
     else
         puts "Unrecognized search strategy \"#{$strategy_name}\""
         puts "Aborting search."
