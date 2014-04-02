@@ -58,7 +58,11 @@ CONF_MODULES = fpconf
 PROF_MODULES = fpinst fpinfo
 
 # make rules
-TARGETS = $(PLATFORM)/libfpanalysis.so $(PLATFORM)/libfpshift.so $(PLATFORM)/fpconf $(PLATFORM)/fpinst
+TARGETS = $(PLATFORM)/libfpanalysis.so $(PLATFORM)/libfpc.so $(PLATFORM)/libfpm.so $(PLATFORM)/fpconf $(PLATFORM)/fpinst
+
+# uncomment this line to enable the MPI wrapper library
+#TARGETS += $(PLATFORM)/libfpshift.so
+
 CONF_MODULE_FILES = $(foreach module, $(CONF_MODULES), $(PLATFORM)/$(module).o)
 PROF_MODULE_FILES = $(foreach module, $(PROF_MODULES), $(PLATFORM)/$(module).o)
 LIB_MODULE_FILES = $(foreach module, $(LIB_MODULES), $(PLATFORM)/$(module).o)
@@ -87,8 +91,14 @@ $(PLATFORM)/:
 $(PLATFORM)/libfpanalysis.so: $(PLATFORM)/ $(EXTERN_LIBS) $(LIB_MODULE_FILES)
 	$(CC) $(LIB_MODULE_FILES) $(LIB_LDFLAGS) -shared -o $@ 
 
+$(PLATFORM)/libfpc.so: src/libfpc.c
+	$(CC) $(DEBUG_FLAGS) -I./h -fPIC -DPIC -shared -o $(PLATFORM)/libfpc.so src/libfpc.c
+
+$(PLATFORM)/libfpm.so: src/libfpm.c
+	$(CC) $(DEBUG_FLAGS) -I./h -fPIC -DPIC -shared -lm -o $(PLATFORM)/libfpm.so src/libfpm.c
+
 $(PLATFORM)/libfpshift.so: src/libfpshift.c
-	$(MPICC) -fPIC -DPIC -shared -o $(PLATFORM)/libfpshift.so src/libfpshift.c
+	$(MPICC) $(DEBUG_FLAGS) -fPIC -DPIC -shared -o $(PLATFORM)/libfpshift.so src/libfpshift.c
 
 src/libfpshift.c: src/libfpshift.w
 	extern/wrap/wrap.py -f -i pmpi_init_ -o src/libfpshift.c src/libfpshift.w

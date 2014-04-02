@@ -17,7 +17,9 @@
 BPatch *bpatch = NULL;
 BPatch_addressSpace *mainApp = NULL;
 BPatch_image *mainImg = NULL;
-BPatch_object *libObj = NULL;
+BPatch_object *libFPAnalysis = NULL;
+BPatch_object *libFPC = NULL;
+BPatch_object *libFPM = NULL;
 PatchMgr::Ptr mainMgr;
 bool patchAPI_debug = false;
 
@@ -340,7 +342,7 @@ BPatch_function* getMutateeFunction(const char *name) {
 }
 
 BPatch_function* getAnalysisFunction(const char *name) {
-    // should this be searching libObj instead of mainImg?
+    // should this be searching libFPAnalysis instead of mainImg?
     return getMutateeFunction(name);
 }
 
@@ -408,10 +410,10 @@ BPatch_constExpr* saveStringToBinary(const char *str, size_t nbytes)
     return ptr;
 }
 
-Symbol *findAnalysisLibSymbol(string name) {
-    assert(libObj != NULL);
+Symbol *findLibFPMSymbol(string name) {
+    assert(libFPAnalysis != NULL);
 
-    Symtab *st = SymtabAPI::convert(libObj);
+    Symtab *st = SymtabAPI::convert(libFPM);
     assert(st != NULL);
 
     std::vector<Symbol *> syms;
@@ -899,7 +901,7 @@ void replaceFunctionCalls(const char* oldFuncName, const char* newFuncName)
     funcs.clear();
     mainImg->findFunction(newFuncName, funcs, false);
     if (!funcs.size()) {
-        //cout << "WARNING: cannot find function \"" << newFuncName << "\"" << endl;
+        cout << "WARNING: cannot find function \"" << newFuncName << "\"" << endl;
         return;
     }
     newFunc = funcs[0];
@@ -1050,22 +1052,27 @@ void wrapFunction(const char* oldFuncName, const char* newFuncName)
     BPatch_function *oldFunc;
     BPatch_function *newFunc;
 
-    //cout << " wrapping calls to \"" << oldFuncName << "\" with calls to \"" << newFuncName << "\"" << endl;
+    //cout << " wrapping calls to \"" << oldFuncName << "\" with calls to \"" << newFuncName << "\"";
 
     // find original function
     mainImg->findFunction(oldFuncName, funcs, false);
     if (!funcs.size() || !funcs[0]) {
         // the function to be replaced does not exist; ignore it
         //cout << "WARNING: cannot find function \"" << oldFuncName << "\"" << endl;
+        //cout << " - not found" << endl;
         return;
     }
     oldFunc = funcs[0];
+
+    //char buffer[50];
+    //oldFunc->getModule()->getName(buffer, 50);
+    //cout << " in library " << buffer << endl;
 
     // find new function
     funcs.clear();
     mainImg->findFunction(newFuncName, funcs, false);
     if (!funcs.size()) {
-        //cout << "WARNING: cannot find function \"" << newFuncName << "\"" << endl;
+        cout << "WARNING: cannot find function \"" << newFuncName << "\"" << endl;
         return;
     }
     newFunc = funcs[0];
@@ -1076,7 +1083,7 @@ void wrapFunction(const char* oldFuncName, const char* newFuncName)
         return;
     }
 
-    Symbol *cloneSym = findAnalysisLibSymbol("_ORIG" + string(newFuncName));
+    Symbol *cloneSym = findLibFPMSymbol("_ORIG_" + string(oldFuncName));
     assert(cloneSym != NULL);
     mainApp->wrapFunction(oldFunc, newFunc, cloneSym);
     //cout << "Wrapped function \"" << oldFuncName << "\""
@@ -1095,113 +1102,7 @@ void wrapFunction(const char* oldFuncName, const char* newFuncName)
 
 void replaceLibmFunctions()
 {
-    if (isAnalysisEnabled("sv_ptr")) {
-
-        // {{{ single-precision functions
-
-        if (sizeof(float) >= sizeof(void*)) {
-
-            replaceFunctionCalls("fabsf",  "_INST_fabsf");
-            replaceFunctionCalls("ceilf",  "_INST_ceilf");
-            replaceFunctionCalls("erff",   "_INST_erff");
-            replaceFunctionCalls("erfcf",  "_INST_erfcf");
-            replaceFunctionCalls("expf",   "_INST_expf");
-            replaceFunctionCalls("exp2f",  "_INST_exp2f");
-            replaceFunctionCalls("floorf", "_INST_floorf");
-            replaceFunctionCalls("logf",   "_INST_logf");
-            replaceFunctionCalls("logbf", "_INST_logbf");
-            replaceFunctionCalls("log10f", "_INST_log10f");
-            replaceFunctionCalls("sqrtf",  "_INST_sqrtf");
-            replaceFunctionCalls("cbrtf",  "_INST_cbrtf");
-            replaceFunctionCalls("truncf", "_INST_truncf");
-
-            replaceFunctionCalls("sinf",   "_INST_sinf");
-            replaceFunctionCalls("cosf",   "_INST_cosf");
-            replaceFunctionCalls("tanf",   "_INST_tanf");
-            replaceFunctionCalls("asinf",  "_INST_asinf");
-            replaceFunctionCalls("acosf",  "_INST_acosf");
-            replaceFunctionCalls("atanf",  "_INST_atanf");
-            replaceFunctionCalls("sinhf",  "_INST_sinhf");
-            replaceFunctionCalls("coshf",  "_INST_coshf");
-            replaceFunctionCalls("tanhf",  "_INST_tanhf");
-            replaceFunctionCalls("asinhf", "_INST_asinhf");
-            replaceFunctionCalls("acoshf", "_INST_acoshf");
-            replaceFunctionCalls("atanhf", "_INST_atanhf");
-
-            replaceFunctionCalls("atan2f", "_INST_atan2f");
-            replaceFunctionCalls("copysignf", "_INST_copysignf");
-            replaceFunctionCalls("powf", "_INST_powf");
-            replaceFunctionCalls("fmodf", "_INST_fmodf");
-
-            replaceFunctionCalls("sincosf", "_INST_sincosf");
-            replaceFunctionCalls("modff", "_INST_modff");
-            replaceFunctionCalls("ldexpf", "_INST_ldexpf");
-            replaceFunctionCalls("frexpf", "_INST_frexpf");
-
-            replaceFunctionCalls("fpclassifyf", "_INST_fpclassifyf");
-            replaceFunctionCalls("isfinitef",   "_INST_isfinitef");
-            replaceFunctionCalls("finitef",     "_INST_finitef");
-            replaceFunctionCalls("isnormalf",   "_INST_isnormalf");
-            replaceFunctionCalls("isnanf",      "_INST_isnanf");
-            replaceFunctionCalls("isinff",      "_INST_isinff");
-        
-        }
-
-        // }}}
-
-        // {{{ extended double-precision functions
-
-        replaceFunctionCalls("fabsl",  "_INST_fabsl");
-        replaceFunctionCalls("ceill",  "_INST_ceill");
-        replaceFunctionCalls("erfl",   "_INST_erfl");
-        replaceFunctionCalls("erfcl",  "_INST_erfcl");
-        replaceFunctionCalls("expl",   "_INST_expl");
-        replaceFunctionCalls("exp2l",  "_INST_exp2l");
-        replaceFunctionCalls("floorl", "_INST_floorl");
-        replaceFunctionCalls("logl",   "_INST_logl");
-        replaceFunctionCalls("logbl", "_INST_logbl");
-        replaceFunctionCalls("log10l", "_INST_log10l");
-        replaceFunctionCalls("sqrtl",  "_INST_sqrtl");
-        replaceFunctionCalls("cbrtl",  "_INST_cbrtl");
-        replaceFunctionCalls("truncl", "_INST_truncl");
-
-        replaceFunctionCalls("sinl",   "_INST_sinl");
-        replaceFunctionCalls("cosl",   "_INST_cosl");
-        replaceFunctionCalls("tanl",   "_INST_tanl");
-        replaceFunctionCalls("asinl",  "_INST_asinl");
-        replaceFunctionCalls("acosl",  "_INST_acosl");
-        replaceFunctionCalls("atanl",  "_INST_atanl");
-        replaceFunctionCalls("sinhl",  "_INST_sinhl");
-        replaceFunctionCalls("coshl",  "_INST_coshl");
-        replaceFunctionCalls("tanhl",  "_INST_tanhl");
-        replaceFunctionCalls("asinhl", "_INST_asinhl");
-        replaceFunctionCalls("acoshl", "_INST_acoshl");
-        replaceFunctionCalls("atanhl", "_INST_atanhl");
-
-        replaceFunctionCalls("atan2l", "_INST_atan2l");
-        replaceFunctionCalls("copysignl", "_INST_copysignl");
-        replaceFunctionCalls("powl", "_INST_powl");
-        replaceFunctionCalls("fmodl", "_INST_fmodl");
-
-        replaceFunctionCalls("sincosl", "_INST_sincosl");
-        replaceFunctionCalls("modfl", "_INST_modfl");
-        replaceFunctionCalls("ldexpl", "_INST_ldexpl");
-        replaceFunctionCalls("frexpl", "_INST_frexpl");
-        
-        replaceFunctionCalls("fpclassifyl", "_INST_fpclassifyl");
-        replaceFunctionCalls("isfinitel",   "_INST_isfinitel");
-        replaceFunctionCalls("finitel",     "_INST_finitel");
-        replaceFunctionCalls("isnormall",   "_INST_isnormall");
-        replaceFunctionCalls("isnanl",      "_INST_isnanl");
-        replaceFunctionCalls("isinfl",      "_INST_isinfl");
-
-        // }}}
-
-    }
-
     if (isAnalysisEnabled("sv_ptr") || isAnalysisEnabled("sv_inp")) {
-
-        // {{{ double-precision functions
 
         wrapFunction("fabs",  "_INST_fabs");
         wrapFunction("ceil",  "_INST_ceil");
@@ -1231,23 +1132,25 @@ void replaceLibmFunctions()
         wrapFunction("atanh", "_INST_atanh");
 
         wrapFunction("atan2", "_INST_atan2");
-        wrapFunction("copysign", "_INST_copysign");
-        wrapFunction("pow", "_INST_pow");
-        wrapFunction("fmod", "_INST_fmod");
-
-        wrapFunction("sincos", "_INST_sincos");
-        wrapFunction("modf", "_INST_modf");
-        wrapFunction("ldexp", "_INST_ldexp");
-        wrapFunction("frexp", "_INST_frexp");
+        wrapFunction("fmod",  "_INST_fmod");
+        wrapFunction("pow",   "_INST_pow");
         
         wrapFunction("fpclassify", "_INST_fpclassify");
-        wrapFunction("isfinite",   "_INST_isfinite");
-        wrapFunction("finite",     "_INST_finite");
         wrapFunction("isnormal",   "_INST_isnormal");
-        wrapFunction("isnan",      "_INST_isnan");
-        wrapFunction("isinf",      "_INST_isinf");
 
-        // }}}
+        wrapFunction("sincos", "_INST_sincos");
+
+        // these are actually in libc (at least on Ubuntu),
+        // so we need to handle them separately
+        //
+        //wrapFunction("copysign", "_INST_copysign");
+        //wrapFunction("modf", "_INST_modf");
+        //wrapFunction("ldexp", "_INST_ldexp");
+        //wrapFunction("frexp", "_INST_frexp");
+        //wrapFunction("isfinite",   "_INST_isfinite");
+        //wrapFunction("finite",     "_INST_finite");
+        //wrapFunction("isnan",      "_INST_isnan");
+        //wrapFunction("isinf",      "_INST_isinf");
         
     }
 }
@@ -2366,8 +2269,8 @@ int main(int argc, char *argv[])
     mainMgr = PatchAPI::convert(mainApp);
 
     // add the instrumentation library
-    libObj = ((BPatch_binaryEdit*)app)->loadLibrary("libfpanalysis.so");
-	if (libObj == NULL) {
+    libFPAnalysis = ((BPatch_binaryEdit*)app)->loadLibrary("libfpanalysis.so");
+	if (libFPAnalysis == NULL) {
 		printf("ERROR: Unable to open libfpanalysis.so.\n");
         exit(EXIT_FAILURE);
     }
@@ -2375,7 +2278,7 @@ int main(int argc, char *argv[])
     // DEBUG: list modules in library
     /*
      *vector<BPatch_module *> libMods;
-     *libObj->modules(libMods);
+     *libFPAnalysis->modules(libMods);
      *printf("Loaded libfpanalysis with %lu module(s):\n", libMods.size());
      *char mname[1024];
      *for (unsigned i=0; i<libMods.size(); i++) {
@@ -2394,6 +2297,20 @@ int main(int argc, char *argv[])
      *   printf(" - %s\n", f->getName().c_str());
      *}
      */
+
+    // add the libc/libm instrumentation runtime libraries (if necessary)
+    if (isAnalysisEnabled("sv_ptr") || isAnalysisEnabled("sv_inp")) {
+        libFPC = ((BPatch_binaryEdit*)app)->loadLibrary("libfpc.so");
+        if (libFPC == NULL) {
+            printf("ERROR: Unable to open libfpc.so.\n");
+            exit(EXIT_FAILURE);
+        }
+        libFPM = ((BPatch_binaryEdit*)app)->loadLibrary("libfpm.so");
+        if (libFPM == NULL) {
+            printf("ERROR: Unable to open libfpm.so.\n");
+            exit(EXIT_FAILURE);
+        }
+    }
 
     // perform instrumentation (agnostic to process/rewrite status)
     printf("Configuration:\n%s", configuration->getSummary().c_str());

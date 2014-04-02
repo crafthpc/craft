@@ -1738,5 +1738,160 @@ void FPAnalysisPointer::finalOutput()
     //cout << "done with final output for pointer analysis" << endl;
 }
 
+
+/**
+ * OLD PASSTHROUGH AND FAST-HANDLING FUNCTIONS
+ * these are probably out of date, since this analysis type has
+ * not been used recently (as of 03/2014)
+ */
+#if 0
+
+// FROM replaceLibmFunctions() in fpinst.cpp:
+//
+    if (isAnalysisEnabled("sv_ptr")) {
+        // {{{ single-precision functions
+
+        if (sizeof(float) >= sizeof(void*)) {
+
+            replaceFunctionCalls("fabsf",  "_INST_fabsf");
+            replaceFunctionCalls("ceilf",  "_INST_ceilf");
+            replaceFunctionCalls("erff",   "_INST_erff");
+            replaceFunctionCalls("erfcf",  "_INST_erfcf");
+            replaceFunctionCalls("expf",   "_INST_expf");
+            replaceFunctionCalls("exp2f",  "_INST_exp2f");
+            replaceFunctionCalls("floorf", "_INST_floorf");
+            replaceFunctionCalls("logf",   "_INST_logf");
+            replaceFunctionCalls("logbf", "_INST_logbf");
+            replaceFunctionCalls("log10f", "_INST_log10f");
+            replaceFunctionCalls("sqrtf",  "_INST_sqrtf");
+            replaceFunctionCalls("cbrtf",  "_INST_cbrtf");
+            replaceFunctionCalls("truncf", "_INST_truncf");
+
+            replaceFunctionCalls("sinf",   "_INST_sinf");
+            replaceFunctionCalls("cosf",   "_INST_cosf");
+            replaceFunctionCalls("tanf",   "_INST_tanf");
+            replaceFunctionCalls("asinf",  "_INST_asinf");
+            replaceFunctionCalls("acosf",  "_INST_acosf");
+            replaceFunctionCalls("atanf",  "_INST_atanf");
+            replaceFunctionCalls("sinhf",  "_INST_sinhf");
+            replaceFunctionCalls("coshf",  "_INST_coshf");
+            replaceFunctionCalls("tanhf",  "_INST_tanhf");
+            replaceFunctionCalls("asinhf", "_INST_asinhf");
+            replaceFunctionCalls("acoshf", "_INST_acoshf");
+            replaceFunctionCalls("atanhf", "_INST_atanhf");
+
+            replaceFunctionCalls("atan2f", "_INST_atan2f");
+            replaceFunctionCalls("copysignf", "_INST_copysignf");
+            replaceFunctionCalls("powf", "_INST_powf");
+            replaceFunctionCalls("fmodf", "_INST_fmodf");
+
+            replaceFunctionCalls("sincosf", "_INST_sincosf");
+            replaceFunctionCalls("modff", "_INST_modff");
+            replaceFunctionCalls("ldexpf", "_INST_ldexpf");
+            replaceFunctionCalls("frexpf", "_INST_frexpf");
+
+            replaceFunctionCalls("fpclassifyf", "_INST_fpclassifyf");
+            replaceFunctionCalls("isfinitef",   "_INST_isfinitef");
+            replaceFunctionCalls("finitef",     "_INST_finitef");
+            replaceFunctionCalls("isnormalf",   "_INST_isnormalf");
+            replaceFunctionCalls("isnanf",      "_INST_isnanf");
+            replaceFunctionCalls("isinff",      "_INST_isinff");
+        
+        }
+
+        // }}}
+        // {{{ extended double-precision functions
+
+        replaceFunctionCalls("fabsl",  "_INST_fabsl");
+        replaceFunctionCalls("ceill",  "_INST_ceill");
+        replaceFunctionCalls("erfl",   "_INST_erfl");
+        replaceFunctionCalls("erfcl",  "_INST_erfcl");
+        replaceFunctionCalls("expl",   "_INST_expl");
+        replaceFunctionCalls("exp2l",  "_INST_exp2l");
+        replaceFunctionCalls("floorl", "_INST_floorl");
+        replaceFunctionCalls("logl",   "_INST_logl");
+        replaceFunctionCalls("logbl", "_INST_logbl");
+        replaceFunctionCalls("log10l", "_INST_log10l");
+        replaceFunctionCalls("sqrtl",  "_INST_sqrtl");
+        replaceFunctionCalls("cbrtl",  "_INST_cbrtl");
+        replaceFunctionCalls("truncl", "_INST_truncl");
+
+        replaceFunctionCalls("sinl",   "_INST_sinl");
+        replaceFunctionCalls("cosl",   "_INST_cosl");
+        replaceFunctionCalls("tanl",   "_INST_tanl");
+        replaceFunctionCalls("asinl",  "_INST_asinl");
+        replaceFunctionCalls("acosl",  "_INST_acosl");
+        replaceFunctionCalls("atanl",  "_INST_atanl");
+        replaceFunctionCalls("sinhl",  "_INST_sinhl");
+        replaceFunctionCalls("coshl",  "_INST_coshl");
+        replaceFunctionCalls("tanhl",  "_INST_tanhl");
+        replaceFunctionCalls("asinhl", "_INST_asinhl");
+        replaceFunctionCalls("acoshl", "_INST_acoshl");
+        replaceFunctionCalls("atanhl", "_INST_atanhl");
+
+        replaceFunctionCalls("atan2l", "_INST_atan2l");
+        replaceFunctionCalls("copysignl", "_INST_copysignl");
+        replaceFunctionCalls("powl", "_INST_powl");
+        replaceFunctionCalls("fmodl", "_INST_fmodl");
+
+        replaceFunctionCalls("sincosl", "_INST_sincosl");
+        replaceFunctionCalls("modfl", "_INST_modfl");
+        replaceFunctionCalls("ldexpl", "_INST_ldexpl");
+        replaceFunctionCalls("frexpl", "_INST_frexpl");
+        
+        replaceFunctionCalls("fpclassifyl", "_INST_fpclassifyl");
+        replaceFunctionCalls("isfinitel",   "_INST_isfinitel");
+        replaceFunctionCalls("finitel",     "_INST_finitel");
+        replaceFunctionCalls("isnormall",   "_INST_isnormall");
+        replaceFunctionCalls("isnanl",      "_INST_isnanl");
+        replaceFunctionCalls("isinfl",      "_INST_isinfl");
+
+        // }}}
+    }
+
+unsigned long _INST_fast_handle_pointer(long iidx,
+        unsigned long eflags)
+{
+    //cout << hex << "esp: 0x" << esp << "  ebp: 0x" << ebp << "  flags: 0x" << eflags << dec << endl;
+    __asm__ ("fxsave %0;" : : "m" (*mainContext->fxsave_state));
+    //__asm__ ("movups %%xmm0, %0;" : : "m" (mainContext->fxsave_state->xmm_space[0]));
+    //__asm__ ("movups %%xmm1, %0;" : : "m" (mainContext->fxsave_state->xmm_space[4]));
+    //__asm__ ("movups %%xmm2, %0;" : : "m" (mainContext->fxsave_state->xmm_space[8]));
+    CHECK_FPSTSW
+    //mainContext->fxsave_state->fsw &= 0x3800; // TODO: re-enable?
+    //__asm__ ("emms;");
+    //_INST_print_flags("saved", mainContext->flags);
+#if 0
+    mainContext->reg_eax = eax; mainContext->reg_ebx = ebx;
+    mainContext->reg_ecx = ecx; mainContext->reg_edx = edx;
+    mainContext->reg_esp = esp /*+sizeof(unsigned long)*/; mainContext->reg_ebp = ebp;
+    mainContext->reg_esi = esi; mainContext->reg_edi = edi;
+#endif
+    mainContext->flags = eflags;
+    _INST_status = _INST_ACTIVE;
+
+    // BEGIN INST
+    FPSemantics *inst = mainDecoder->lookup(iidx);
+#if 0
+    mainContext->reg_eip = (unsigned long)inst->getAddress() + (unsigned long)inst->getNumBytes();
+#endif
+    //printf("zf: %lx  pf: %lx  cf: %lx\n", zf, pf, cf);
+    //cout << "reg_eip = " << hex << mainContext->reg_eip << dec << endl;
+    if (_INST_Main_PointerAnalysis) {
+        _INST_Main_PointerAnalysis->handleInstruction(inst);
+    }
+    _INST_fast_count++;
+    // END INST
+
+    _INST_status = _INST_INACTIVE;
+    //_INST_print_flags("restoring", mainContext->flags);
+    __asm__ ("fxrstor %0;" : : "m" (*mainContext->fxsave_state));
+    //__asm__ ("movups %0, %%xmm0;" : : "m" (mainContext->fxsave_state->xmm_space[0]));
+    //__asm__ ("movups %0, %%xmm1;" : : "m" (mainContext->fxsave_state->xmm_space[4]));
+    //__asm__ ("movups %0, %%xmm2;" : : "m" (mainContext->fxsave_state->xmm_space[8]));
+    return mainContext->flags;
+}
+#endif
+
 }
 
