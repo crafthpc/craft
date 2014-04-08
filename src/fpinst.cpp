@@ -1140,6 +1140,14 @@ void replaceLibmFunctions()
 
         wrapFunction("sincos", "_INST_sincos");
 
+        wrapFunction("__ceil_sse41",  "_INST_ceil_sse");
+        wrapFunction("__floor_sse41", "_INST_floor_sse");
+        wrapFunction("__sin_sse2",   "_INST_sin_sse");
+        wrapFunction("__cos_sse2",   "_INST_cos_sse");
+        wrapFunction("__tan_sse2",   "_INST_tan_sse");
+        wrapFunction("__atan_sse2",  "_INST_atan_sse");
+        wrapFunction("__fpclassify", "_INST_fpclassify_");
+
         // these are actually in libc (at least on Ubuntu),
         // so we need to handle them separately
         //
@@ -1709,6 +1717,8 @@ void instrumentApplication()
             replaceFunctionCalls("printf", "_INST_printf");
             replaceFunctionCalls("fprintf", "_INST_fprintf");
             replaceFunctionCalls("sprintf", "_INST_sprintf");
+
+            replaceFunctionCalls("__printf_chk", "_INST_printf_chk");
         }
     }
 

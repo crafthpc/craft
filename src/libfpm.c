@@ -77,6 +77,14 @@ LIBM_WRAPPER_DBL_TWOARG(pow,   _INST_pow);
 LIBM_WRAPPER_VAR_ONEARG(fpclassify, _INST_fpclassify, int, double);
 LIBM_WRAPPER_VAR_ONEARG(isnormal,   _INST_isnormal,   int, double);
 
+LIBM_WRAPPER_DBL_ONEARG(__ceil_sse41,  _INST_ceil_sse);
+LIBM_WRAPPER_DBL_ONEARG(__floor_sse41, _INST_floor_sse);
+LIBM_WRAPPER_DBL_ONEARG(__sin_sse2,   _INST_sin_sse);
+LIBM_WRAPPER_DBL_ONEARG(__cos_sse2,   _INST_cos_sse);
+LIBM_WRAPPER_DBL_ONEARG(__tan_sse2,   _INST_tan_sse);
+LIBM_WRAPPER_DBL_ONEARG(__atan_sse2,  _INST_atan_sse);
+LIBM_WRAPPER_VAR_ONEARG(__fpclassify, _INST_fpclassify_, int, double);
+
 extern "C" void _ORIG_sincos(double, double*, double*) {}
 extern "C" void _INST_sincos(double x, double *sin, double *cos)
 {

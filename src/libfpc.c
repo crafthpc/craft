@@ -40,6 +40,26 @@ int _INST_printf(const char *fmt, ...) {
     return ret;
 }
 
+// NOTE: this implementation ignores the "check" flag
+int _INST_printf_chk(int chk_flag, const char *fmt, ...) {
+    if (_INST_cflag) {
+        va_list args;
+        va_start(args, fmt);
+        return vprintf(fmt, args);
+    }
+    _INST_cflag = 1;
+    //puts("_INST_printf_chk: "); puts(fmt); puts ("\n");
+#define PRINT_ORIG fprintf
+#define PRINT_VORIG vfprintf
+#define PRINT_OUT stdout
+#include "fprintf.c"
+#undef PRINT_ORIG
+#undef PRINT_VORIG
+#undef PRINT_OUT
+    _INST_cflag = 0;
+    return ret;
+}
+
 int _INST_sprintf(char *str, const char *fmt, ...) {
     if (_INST_cflag) {
         va_list args;
