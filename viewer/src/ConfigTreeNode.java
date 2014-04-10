@@ -561,6 +561,10 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
     }
 
     public String toString(ConfigTreeRenderer.ViewOptions viewOptions) {
+        return toString(viewOptions, -1);
+    }
+
+    public String toString(ConfigTreeRenderer.ViewOptions viewOptions, int labelLimit) {
         StringBuffer str = new StringBuffer();
         switch (type) {
             case APPLICATION:       str.append("APPLICATION");    break;
@@ -578,7 +582,13 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             str.append(address);
             str.append(" ");
         }
-        str.append(label);
+        if (labelLimit > 0 && labelLimit < label.length()) {
+            str.append(label.substring(0,labelLimit));
+            str.append("... ");
+        } else {
+            str.append(label);
+            str.append(" ");
+        }
         if (viewOptions.showError) {
             str.append("  Err=");
             str.append(error);

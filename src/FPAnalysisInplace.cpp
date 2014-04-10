@@ -81,7 +81,7 @@ FPAnalysisInplace::FPAnalysisInplace()
 
 string FPAnalysisInplace::getTag()
 {
-    return "svinp";
+    return "sv_inp";
 }
 
 string FPAnalysisInplace::getDescription()

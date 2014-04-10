@@ -31,7 +31,7 @@ FPAnalysisTRange::FPAnalysisTRange()
 
 string FPAnalysisTRange::getTag()
 {
-    return "trange";
+    return "t_range";
 }
 
 string FPAnalysisTRange::getDescription()

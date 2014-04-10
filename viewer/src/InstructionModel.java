@@ -46,7 +46,7 @@ public class InstructionModel extends AbstractTableModel {
                 if (msg.type.equals("InstCount")) {
                     if (msg.instruction.disassembly.equals(""))
                         msg.instruction.disassembly = msg.label;
-                    msg.instruction.count = Integer.parseInt(msg.priority);
+                    msg.instruction.count = Long.parseLong(msg.priority);
                     msg.instruction.updateRatio();
                 } else if (msg.type.equals("Cancellation")) {
                     msg.instruction.cancellations += 1;
@@ -54,7 +54,7 @@ public class InstructionModel extends AbstractTableModel {
                 } else if (msg.type.equals("Summary") && msg.label.equals("CANCEL_DATA")) {
                     String[] data = msg.details.split("\n|=");
                     if (data.length > 2) {
-                        msg.instruction.totalCancels = Integer.parseInt(data[2]);
+                        msg.instruction.totalCancels = Long.parseLong(data[2]);
                         msg.instruction.updateRatio();
                     }
                     if (data.length > 6) {
@@ -87,16 +87,16 @@ public class InstructionModel extends AbstractTableModel {
             case 3: return instr.getSource();
             case 4: return instr.disassembly;
             case 5: return instr.rstatus;
-            //case 6: return (Integer.valueOf(instr.count)).toString();
-            case 6: return Integer.valueOf(instr.count);
+            //case 6: return (Long.valueOf(instr.count)).toString();
+            case 6: return Long.valueOf(instr.count);
             case 7: if (instr.totalCancels > 0)
-                        //return (Integer.valueOf(instr.totalCancels)).toString();
-                        return Integer.valueOf(instr.totalCancels);
+                        //return (Long.valueOf(instr.totalCancels)).toString();
+                        return Long.valueOf(instr.totalCancels);
                     else
-                        //return (Integer.valueOf(instr.cancellations)).toString();
-                        return Integer.valueOf(instr.cancellations);
-            //case 8: return (Integer.valueOf(instr.cancellations)).toString();
-            case 8: return Integer.valueOf(instr.cancellations);
+                        //return (Long.valueOf(instr.cancellations)).toString();
+                        return Long.valueOf(instr.cancellations);
+            //case 8: return (Long.valueOf(instr.cancellations)).toString();
+            case 8: return Long.valueOf(instr.cancellations);
 
             // problem: formatting the floating-point columns makes it so we
             // can't sort by them

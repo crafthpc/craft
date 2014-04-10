@@ -427,6 +427,10 @@ class Strategy
         update_icount(@program)
     end
 
+    def has_custom_supervisor?
+        return false
+    end
+
     def update_icount(point)
         # allow us to ignore branches of the program that don't actually contain
         # any FP instructions
@@ -586,6 +590,164 @@ class BinaryStrategy < Strategy
     end
 end # }}}
 
+
+# DeltaDebugStrategy
+#
+# Implements a lower-cost delta-debugging strategy as described in
+# Rubio-Gonzalez et al. [SC'13].
+#
+class DeltaDebugStrategy < Strategy
+
+    def has_custom_supervisor?
+        return true
+    end
+
+    def get_cost(cfg)
+        if cfg.attrs.has_key?("cinst") and cfg.attrs["cinst"].to_i != 0 then
+            return 1.0 / cfg.attrs["cinst"].to_f
+        else
+            return 1.0
+        end
+    end
+
+    def run_custom_supervisor
+        
+        # get set of all possible basetype-level changes
+        root = AppConfig.new("ALL", "ALL", @alternate)
+        find_configs(@program, root)
+
+        # number of divisions at current level
+        div = 2
+
+        # lowest-cost (most replacements) config found so far
+        @lc_cfg = root
+        @lc_cfg.attrs["cinst"] = 0
+
+        done = false
+        while not done do
+
+            puts "Current LC: #{@lc_cfg.exceptions.size} change(s), #{@lc_cfg.attrs["cinst"]} execution(s), cost=#{get_cost(@lc_cfg)}"
+
+            # partition current 
+            
+            lc_div = div
+            divs = @lc_cfg.exceptions.each_slice([1,(@lc_cfg.exceptions.size.to_f/div.to_f).ceil.to_i].max).to_a
+            set_cuids = []
+            com_cuids = []
+            divs.size.times do |i|
+
+                puts "Test #{i+1}/#{divs.size} in round of #{div}"
+
+                # build test subset
+                setuid = @lc_cfg.cuid + " S_#{i+1}_#{div}"
+                set = AppConfig.new(setuid, setuid, @lc_cfg.default)
+                set.attrs["cinst"] = 0
+                divs[i].each do |k,v|
+                    set.exceptions[k] = v
+                    set.attrs["cinst"] += @program.lookup_by_uid(k).attrs["cinst"].to_i
+                end
+                puts "SET: #{set.exceptions.size} change(s), #{set.attrs["cinst"]} execution(s)"
+                add_to_workqueue(set)
+                set_cuids << setuid
+
+                # build and test complement set
+                comuid = @lc_cfg.cuid + " C_#{i+1}_#{div}"
+                com = AppConfig.new(comuid, comuid, @lc_cfg.default)
+                com.attrs["cinst"] = 0
+                divs.size.times do |j|
+                    if i != j then
+                        divs[j].each do |k,v|
+                            com.exceptions[k] = v
+                            com.attrs["cinst"] += @program.lookup_by_uid(k).attrs["cinst"].to_i
+                        end
+                    end
+                end
+                puts "COMPLEMENT: #{com.exceptions.size} change(s), #{com.attrs["cinst"]} execution(s)"
+                add_to_workqueue(com)
+                com_cuids << comuid
+
+            end
+            puts "ADDED #{set_cuids.size + com_cuids.size} configs to queue"
+
+            # wait until all the previously-added configs are finished
+            run_main_supervisor_loop
+
+            # look through the tested configurations and update LC if
+            # appropriate
+            changed = false
+            configs = get_tested_configs
+            configs.each do |cfg|
+                #puts "EVALUATING: #{cfg.inspect}  cost=#{get_cost(cfg)}"
+                if set_cuids.include?(cfg.cuid) and cfg.attrs["result"] == $RESULT_PASS and
+                        get_cost(cfg) < get_cost(@lc_cfg) then
+                    @lc_cfg = cfg
+                    lc_div = 2
+                    changed = true
+                    puts "LC REPLACED by #{cfg.cuid}!  cost=#{get_cost(cfg)}"
+                end
+                if com_cuids.include?(cfg.cuid) and cfg.attrs["result"] == $RESULT_PASS and
+                        get_cost(cfg) < get_cost(@lc_cfg) then
+                    @lc_cfg = cfg
+                    lc_div = div-1
+                    changed = true
+                    puts "LC REPLACED by #{cfg.cuid}!  cost=#{get_cost(cfg)}"
+                end
+            end
+
+            # set up next iteration (if not done)
+            if changed then
+                #puts "FOUND NEW LC: #{@lc_cfg.inspect}  cost=#{get_cost(@lc_cfg)}"
+                div = lc_div
+            else
+                print "NO NEW LC - "
+                if div > @lc_cfg.exceptions.size then
+                    puts "DONE!"
+                    done = true
+                else
+                    puts "moving to next round (round of #{2*div})"
+                    div = 2 * div
+                end
+            end
+
+            puts ""
+        end
+    end
+
+    def build_final_config(results)
+        final_cfg = AppConfig.new("FINAL", "FINAL", @alternate)
+        final_cfg.attrs["cinst"] = 0
+        results.each do |r|
+            if not @lc_cfg.nil? and r.cuid == @lc_cfg.cuid then
+                return r
+            end
+            if r.attrs.has_key?("result") and r.attrs["result"] == $RESULT_PASS then
+                if final_cfg.nil? or get_cost(r) < get_cost(final_cfg) then
+                    final_cfg = r
+                end
+            end
+        end
+        return final_cfg
+    end
+
+    def build_initial_configs
+        return []
+    end
+
+    def find_configs(pt, cfg)
+        if pt.type == @base_type then
+            cfg.add_pt_info(pt)
+            cfg.exceptions[pt.uid] = @preferred
+        else
+            pt.children.each do |child|
+                find_configs(child, cfg)
+            end
+        end
+    end
+
+    def split_config(config)
+        return []
+    end
+end
 
 # ExhaustiveStrategy
 #
@@ -949,7 +1111,11 @@ def main
         # main loop
         puts "Initialization complete. Starting main search routine."
         puts ""
-        run_main_supervisor_loop
+        if $strategy.has_custom_supervisor? then
+            $strategy.run_custom_supervisor
+        else
+            run_main_supervisor_loop
+        end
 
         # test final config, assemble results, etc.
         finalize_search
@@ -1155,6 +1321,12 @@ def run_main_search_loop
             # always add children, but reload results first
             # so the strategy can make an informed decision
             $strategy.reload_bounds_from_results(get_tested_configs)
+
+        elsif $strategy_name == "ddebug" then
+
+            # supervisor thread handles splitting
+            add_children = false
+
         else
 
             # check to see if we passed
@@ -1212,6 +1384,56 @@ def run_main_search_loop
         cfg = get_next_workqueue_item
     end
 end # }}}
+#{{{ worker thread helper functions (can be used by custom supervisors)
+def get_dead_workers
+    #print "Checking for dead workers ... "
+    dead_workers = Array.new
+    $workers.each_pair do |job, dir|
+        if job < $num_workers then
+            # this job has never actually been started
+            # (pid < $num_workers)
+            dead_workers << [job, dir]
+        else
+            cmd = "ps -o s= p #{job.to_i}"
+            stat = `#{cmd}`
+            stat.chomp!
+            if stat != "S" then
+                dead_workers << [job, dir]
+            end
+        end
+    end
+    #puts "#{dead_workers.size} dead worker(s) found."
+    return dead_workers
+end
+def restart_dead_workers(dead_workers)
+    [get_workqueue_length, dead_workers.size].min.times do |i|
+        job,dir = dead_workers.pop
+        $workers.delete(job)
+        id = File.basename(dir)
+        if id =~ /worker(\d+)/ then
+            id = $1
+        else
+            id = id[$binary_name.length+1,id.length-$binary_name.length-1]
+        end
+        FileUtils.rm_rf(dir)
+        Dir.mkdir(dir)
+        job = fork do
+            exec "cd #{dir} && #{$self_invoke} worker #{id} #{$search_path}"
+        end
+        #puts "Respawned worker thread #{id} (pid=#{job})."
+        $workers[job] = dir
+    end
+end
+def wait_for_workers
+    $workers.each_pair do |job, dir|
+        begin
+            Process.wait(job.to_i)
+        rescue
+        end
+        FileUtils.rm_rf(dir)
+    end
+end
+# }}}
 # {{{ run_main_supervisor_loop
 def run_main_supervisor_loop
 
@@ -1224,23 +1446,7 @@ def run_main_supervisor_loop
             $max_queue_length = get_workqueue_length if get_workqueue_length > $max_queue_length
 
             # check for dead worker processes
-            #print "Checking for dead workers ... "
-            dead_workers = Array.new
-            $workers.each_pair do |job, dir|
-                if job < $num_workers then
-                    # this job has never actually been started
-                    # (pid < $num_workers)
-                    dead_workers << [job, dir]
-                else
-                    cmd = "ps -o s= p #{job.to_i}"
-                    stat = `#{cmd}`
-                    stat.chomp!
-                    if stat != "S" then
-                        dead_workers << [job, dir]
-                    end
-                end
-            end
-            #puts "#{dead_workers.size} dead worker(s) found."
+            dead_workers = get_dead_workers
 
             if dead_workers.size == $num_workers and get_workqueue_length == 0 then
 
@@ -1250,23 +1456,8 @@ def run_main_supervisor_loop
             elsif get_workqueue_length > 0 then
 
                 # there's still stuff to do; restart dead workers
-                [get_workqueue_length, dead_workers.size].min.times do |i|
-                    job,dir = dead_workers.pop
-                    $workers.delete(job)
-                    id = File.basename(dir)
-                    if id =~ /worker(\d+)/ then
-                        id = $1
-                    else
-                        id = id[$binary_name.length+1,id.length-$binary_name.length-1]
-                    end
-                    FileUtils.rm_rf(dir)
-                    Dir.mkdir(dir)
-                    job = fork do
-                        exec "cd #{dir} && #{$self_invoke} worker #{id} #{$search_path}"
-                    end
-                    #puts "Respawned worker thread #{id} (pid=#{job})."
-                    $workers[job] = dir
-                end
+                restart_dead_workers(dead_workers)
+
             end
 
             # wait a while
@@ -1274,13 +1465,7 @@ def run_main_supervisor_loop
         end
 
         # clean up any workers and directories
-        $workers.each_pair do |job, dir|
-            begin
-                Process.wait(job.to_i)
-            rescue
-            end
-            FileUtils.rm_rf(dir)
-        end
+        wait_for_workers
 
         # if the workqueue is empty and all the workers are dead but there
         # are still configs in the inproc queue, then something was aborted;
@@ -1580,6 +1765,8 @@ def initialize_strategy
         $strategy.split_threshold = $rprec_split_threshold
         $strategy.runtime_pct_threshold = $rprec_runtime_pct_threshold
         $strategy.skip_app_level = $rprec_skip_app_level
+    elsif $strategy_name == "ddebug" then
+        $strategy = DeltaDebugStrategy.new($program, $status_preferred, $status_alternate)
     else
         puts "Unrecognized search strategy \"#{$strategy_name}\""
         puts "Aborting search."

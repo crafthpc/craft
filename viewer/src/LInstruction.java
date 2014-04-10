@@ -14,9 +14,9 @@ public class LInstruction {
     public String file;
     public String lineno;
     public String module;
-    public int count;
-    public int cancellations;
-    public int totalCancels;
+    public long count;
+    public long cancellations;
+    public long totalCancels;
     public double ratio;
     public double averageDigits;
     public double min;
