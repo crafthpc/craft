@@ -129,11 +129,11 @@
                     }
 
                     if (is_replaced) {
-                        chars = PRINT_ORIG(PRINT_OUT, "^^");
+                        /*chars = PRINT_ORIG(PRINT_OUT, "^^");*/
 #ifdef PRINT_INC
-                        PRINT_INC += chars;
+                        /*PRINT_INC += chars;*/
 #endif
-                        ret += chars;
+                        /*ret += chars;*/
                         chars = PRINT_ORIG(PRINT_OUT, flag, b_ldbl);
 #ifdef PRINT_INC
                         PRINT_INC += chars;
@@ -157,11 +157,11 @@
                     }
 
                     if (is_replaced) {
-                        chars = PRINT_ORIG(PRINT_OUT, "^");
+                        /*chars = PRINT_ORIG(PRINT_OUT, "^");*/
 #ifdef PRINT_INC
-                        PRINT_INC += chars;
+                        /*PRINT_INC += chars;*/
 #endif
-                        ret += chars;
+                        /*ret += chars;*/
                         chars = PRINT_ORIG(PRINT_OUT, flag, b_dbl);
 #ifdef PRINT_INC
                         PRINT_INC += chars;
