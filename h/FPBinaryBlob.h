@@ -38,9 +38,7 @@ class FPBinaryBlob {
 
         void adjustDisplacement(long oldDisp, unsigned char *pos);
 
-        size_t buildDyninstHeader(unsigned char *pos);
         size_t buildHeader(unsigned char *pos);
-        size_t buildDyninstFooter(unsigned char *pos);
         size_t buildFooter(unsigned char *pos);
 
         size_t buildFakeStackPushGPR64(unsigned char *pos, FPRegister gpr);
