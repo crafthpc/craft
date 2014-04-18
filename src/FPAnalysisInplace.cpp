@@ -72,8 +72,6 @@ FPAnalysisInplace::FPAnalysisInplace()
     instCountSize = 0;
     instCountSingle = NULL;
     instCountDouble = NULL;
-    detectCancellations = false;
-    cancelAnalysis = NULL;
     reportAllGlobals = false;
     insnsInstrumentedSingle = 0;
     insnsInstrumentedDouble = 0;
@@ -136,21 +134,6 @@ void FPAnalysisInplace::configure(FPConfig *config, FPDecoder *decoder,
     vector<FPShadowEntry*> entries;
     config->getAllShadowEntries(entries);
     setShadowEntries(entries);
-}
-
-void FPAnalysisInplace::enableCancellationDetection(int minPriority)
-{
-    detectCancellations = true;
-    if (cancelAnalysis == NULL) {
-        cancelAnalysis = FPAnalysisDCancel::getInstance();
-        cancelAnalysis->configure(configuration, decoder, logFile, context);
-        cancelAnalysis->setMinPriority(minPriority);
-    }
-}
-
-void FPAnalysisInplace::disableCancellationDetection()
-{
-    detectCancellations = false;
 }
 
 void FPAnalysisInplace::enableReportAllGlobals()

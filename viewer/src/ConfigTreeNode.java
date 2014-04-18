@@ -601,6 +601,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             } else {
                 str.append(precision);
             }
+            str.append(" ");
         }
 
         if (type == CNType.MODULE || type == CNType.FUNCTION) {

@@ -8,10 +8,7 @@ opts="-O0 -O1 -O2 -O3"
 #opts="-O0"
 
 # change this to set which instrumentation modes are tested
-#modes="dcancel svinp_single svinp_double"
-#modes="svinp_single"
-modes="cinst dcancel dnan trange svinp_single svinp_double svinp_mem_single svinp_mem_double rprec52"
-#modes="svinp_mem_single svinp_mem_double"
+modes="cinst dcancel dnan trange svinp_single svinp_double svinp_mem_single svinp_mem_double rprec51"
 
 # change this to set which tests are run
 #tests="pushpop"    # old x87-based test
@@ -101,8 +98,8 @@ do
             then modeopt="--svinp mem_single"
             elif [ "$m" = "svinp_mem_double" ]
             then modeopt="--svinp mem_double"
-            elif [ "$m" = "rprec52" ]
-            then modeopt="--rprec 52"
+            elif [ "$m" = "rprec51" ]
+            then modeopt="--rprec 51"
             else
                 echo "Invalid test mode: $m"
                 exit
