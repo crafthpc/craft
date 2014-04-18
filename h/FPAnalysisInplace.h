@@ -238,9 +238,6 @@ class FPAnalysisInplace : public FPAnalysis
         FPSemantics *currInst;
         FPOperandValue *currFlag;
 
-        bool detectCancellations;
-        FPAnalysisDCancel *cancelAnalysis;
-
         bool reportAllGlobals;
         vector<FPShadowEntry*> shadowEntries;
 
