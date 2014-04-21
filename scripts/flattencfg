@@ -1,0 +1,179 @@
+#!/usr/bin/env ruby
+#
+# flattencfg
+#
+# Flatten a config to the instruction level
+#
+
+$TYPE_APPLICATION = "APPLICATION"                   # control point levels
+$TYPE_MODULE      = "MODULE"
+$TYPE_FUNCTION    = "FUNC"
+$TYPE_BASICBLOCK  = "BBLK"
+$TYPE_INSTRUCTION = "INSN"
+
+$TYPE_SPACES = Hash.new("")
+$TYPE_SPACES[$TYPE_APPLICATION] = ""                # for pretty output
+$TYPE_SPACES[$TYPE_MODULE]      = "  "
+$TYPE_SPACES[$TYPE_FUNCTION]    = "    "
+$TYPE_SPACES[$TYPE_BASICBLOCK]  = "      "
+$TYPE_SPACES[$TYPE_INSTRUCTION] = "        "
+
+$STATUS_NONE      = " "
+$STATUS_SINGLE    = "s"
+$STATUS_DOUBLE    = "d"
+$STATUS_RPREC     = "r"
+
+
+class PPoint
+    attr_accessor :uid              # unique regex identifier; e.g. "INSN #34: 0x804d3f"
+    attr_accessor :id               # program component identifier; e.g. 34 in line above
+    attr_accessor :type             # module, function, instruction, etc.
+    attr_accessor :orig_status      # single, double, ignore, candidate, none
+    attr_accessor :precision        # precision level
+    attr_accessor :parent           # PPoint
+    attr_accessor :children         # array of PPoints
+    attr_accessor :attrs            # string => string
+    attr_accessor :byid             # id => PPoint          (for increased lookup speed)
+
+    def initialize (uid, type, orig_status)
+        @uid = uid
+        @id = 0
+        if @uid =~ /#(\d+)/ then
+            @id = $1.to_i
+        end
+        @type = type
+        @orig_status = orig_status
+        @precision = 52
+        @parent = nil
+        @children = Array.new
+        @attrs = Hash.new
+        @byid = Hash.new
+    end
+
+    def flatten_to_insns
+        flatten(nil, nil)
+    end
+
+    def flatten(overload, overload_prec)
+        #puts "flatten #{@uid} (#{@orig_status}): #{overload}"
+        if @type == $TYPE_INSTRUCTION then
+            if not overload.nil? then
+                if not @orig_status == $STATUS_RPREC then
+                    # final configs for rprec searches store the
+                    # precision results for higher-level nodes,
+                    # so ignore them if lower info is present
+                    @precision = overload_prec
+                end
+                #puts "OVERLOADED: #{@uid} #{overload}"
+                @orig_status = overload
+            end
+        else
+            if overload.nil? then
+                if not @orig_status == $STATUS_NONE then
+                    overload = @orig_status
+                    #puts "overloading: #{@uid} #{overload}"
+                    if @orig_status == $STATUS_RPREC then
+                        overload_prec = @precision
+                    end
+                end
+            end
+            # clear out statuses for all non-instruction nodes
+            @orig_status = $STATUS_NONE
+        end
+        @children.each do |pt|
+            #puts "child of #{@uid}: #{pt.uid} #{overload}"
+            pt.flatten(overload, overload_prec)
+        end
+    end
+
+    def to_s
+        prec_line = nil
+        str = "^#{@orig_status} #{$TYPE_SPACES[@type]} #{@uid}"
+        if @attrs.has_key?("desc") then
+            str += " \"#{@attrs["desc"]}\""
+        end
+        if not prec_line.nil? then
+            str += "\n#{prec_line}"
+        end
+        str += "\n"
+        @children.each do |pt|
+            str += pt.to_s
+        end
+        return str
+    end
+
+end
+
+
+def load_config(fn)
+    program = nil
+    mod = nil
+    func = nil
+    bblk = nil
+    prolog = ""
+    IO.foreach(fn) do |line|
+        if line =~ /(APPLICATION #\d+: [x0-9A-Fa-f]+) \"(.+)\"/ then
+            program = PPoint.new($1, $TYPE_APPLICATION, line[1,1])
+            program.attrs["desc"] = $2
+            program.byid["APPLICATION #{program.id}"] = program
+        elsif line =~ /(MODULE #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
+            mod = PPoint.new($1, $TYPE_MODULE, line[1,1])
+            mod.attrs["desc"] = $2
+            program.children << mod if program != nil
+            program.byid["MODULE #{mod.id}"] = mod
+        elsif line =~ /(FUNC #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
+            func = PPoint.new($1, $TYPE_FUNCTION, line[1,1])
+            func.attrs["desc"] = $2
+            mod.children << func if mod != nil
+            program.byid["FUNC #{func.id}"] = func
+        elsif line =~ /(BBLK #\d+: (0x[0-9A-Fa-f]+))/ then
+            bblk = PPoint.new($1, $TYPE_BASICBLOCK, line[1,1])
+            bblk.attrs["addr"] = $2
+            func.children << bblk if func != nil
+            program.byid["BBLK #{bblk.id}"] = bblk
+        elsif line =~ /(INSN #\d+: (0x[0-9A-Fa-f]+)) \"(.+)\"/ then
+            insn = PPoint.new($1, $TYPE_INSTRUCTION, line[1,1])
+            insn.attrs["addr"] = $2
+            insn.attrs["desc"] = $3
+            bblk.children << insn if bblk != nil
+            program.byid["INSN #{insn.id}"] = insn
+        elsif line =~ /(\w+)_(\d+)_precision=(\d+)/ then
+            tag = $1.to_i
+            id = $2.to_i
+            prec = $3.to_i
+            pt = program.byid["#{tag} #{id}"]
+            if pt.nil? then
+                puts "Cannot find point #{tag} \##{id}"
+            else
+                pt.precision = prec
+            end
+        else
+            prolog << line.chomp
+            prolog << "\n"
+        end
+    end
+    program.attrs["prolog"] = prolog
+    if program.nil? then
+        puts "Unable to load file: #{fn}"
+        exit
+    end
+    return program
+end
+
+
+fn = nil
+
+ARGV.each do |arg|
+    if arg == "-h" then
+        puts "Usage: flattencfg <file>"
+        exit
+    elsif fn.nil? then
+        fn = arg
+    end
+end
+
+cfg = load_config(fn)
+cfg.flatten_to_insns
+puts cfg.to_s
+
+
