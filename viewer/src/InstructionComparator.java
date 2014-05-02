@@ -46,16 +46,16 @@ public class InstructionComparator implements Comparator<LInstruction>, Serializ
                     order = i1.rstatus.compareTo(i2.rstatus);
                     break;
                 case 6:     // count
-                    order = i1.count - i2.count;
+                    order = (int)(i1.count - i2.count);
                     break;
                 case 7:     // cancellations
                     if (i1.totalCancels > 0 && i2.totalCancels > 0)
-                        order = i1.totalCancels - i2.totalCancels;
+                        order = (int)(i1.totalCancels - i2.totalCancels);
                     else
-                        order = i1.cancellations - i2.cancellations;
+                        order = (int)(i1.cancellations - i2.cancellations);
                     break;
                 case 8:     // samples
-                    order = i1.cancellations - i2.cancellations;
+                    order = (int)(i1.cancellations - i2.cancellations);
                     break;
                 case 9:     // ratio
                     order = (i1.ratio == i2.ratio) ? 0 : (i1.ratio < i2.ratio ? -1: 1);

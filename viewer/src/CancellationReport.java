@@ -14,7 +14,7 @@ public class CancellationReport implements Report {
 
     public void runReport(LLogFile log) {
         StringBuffer report = new StringBuffer();
-        int cancels, totalCancellations = 0, totalOperations = 0;
+        long cancels, totalCancellations = 0, totalOperations = 0;
         double avgDigits = 0.0;
         resultText = "";
         if (log == null || log.instructions == null) return;
