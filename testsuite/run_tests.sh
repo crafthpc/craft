@@ -139,6 +139,9 @@ do
     done
 done
 
+# run search-based tests (handled by a different script)
+./search_tests.sh
+
 END=$(date +%s)
 DIFF=$(( $END - $START ))
 

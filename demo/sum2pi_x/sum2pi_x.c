@@ -42,8 +42,8 @@ int sum2pi_x() {
     real final = (real)OUTER * PI;  /* correct answer */
 
     printf("===  Sum2PI_X  ===\n");
-    printf("sizeof(real)=%d\n",     sizeof(real));
-    printf("sizeof(sum_type)=%d\n", sizeof(sum_type));
+    printf("sizeof(real)=%lu\n",     sizeof(real));
+    printf("sizeof(sum_type)=%lu\n", sizeof(sum_type));
 
     sum = 0.0;
     for (i=0; i<OUTER; i++) {
