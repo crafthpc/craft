@@ -27,6 +27,9 @@ using namespace Dyninst::PatchAPI;
 
 #define BUFFER_STRING_LEN 1024
 
+#define COUNTER_TYPE_STR "int"
+typedef int counter_t;
+
 // main Dyninst driver structure
 BPatch *bpatch = NULL;
 
@@ -38,6 +41,7 @@ PatchMgr::Ptr        mainMgr;
 BPatch_function                *printfFunc;
 BPatch_Vector<BPatch_snippet*>  initCode;
 BPatch_Vector<BPatch_snippet*>  finiCode;
+BPatch_type                    *counterType;
 
 // analysis shared library
 BPatch_object *libObj  = NULL;
@@ -45,13 +49,6 @@ BPatch_object *libObj  = NULL;
 // global parameters
 char *binary = NULL;
 bool instShared = false;
-
-// instructions to instrument
-const bool FILTER_ENABLED = false;
-const bool FILTER_INVERSE = false;  // false = keep ONLY instructions in filter
-                                    // true  = keep all EXCEPT named instructions
-const unsigned long FILTER_INSNS[] = { };
-const unsigned long FILTER_INSNS_SIZE = 0;
 
 BPatch_module* getInitFiniModule() {
 
@@ -99,7 +96,7 @@ BPatch_function* getMutateeFunction(const char *name) {
 }
 
 BPatch_snippet* buildInitSnippet(BPatch_variableExpr *var) {
-    return new BPatch_arithExpr(BPatch_assign, *var, BPatch_constExpr((unsigned long)0));
+    return new BPatch_arithExpr(BPatch_assign, *var, BPatch_constExpr((counter_t)0));
 }
 
 
@@ -111,7 +108,7 @@ BPatch_snippet* buildIncrementer(BPatch_variableExpr *var) {
 
     // instruction count instrumentation
     BPatch_snippet *valExpr = new BPatch_arithExpr(BPatch_plus,
-            *var, BPatch_constExpr((unsigned long)1));
+            *var, BPatch_constExpr((counter_t)1));
     BPatch_snippet *incExpr = new BPatch_arithExpr(BPatch_assign,
             *var, *valExpr);
     return incExpr;
@@ -158,10 +155,10 @@ void handleLibFunc(string name)
     BPatch_function *func = getMutateeFunction(name.c_str());
 
     // allocate counter
-    BPatch_variableExpr *counter = mainApp->malloc(*(mainImg->findType("unsigned long")));
+    BPatch_variableExpr *counter = mainApp->malloc(*counterType);
 
     // build and insert initialization
-    finiCode.push_back(buildInitSnippet(counter));
+    initCode.push_back(buildInitSnippet(counter));
 
     // insert instrumentation
     BPatch_Vector<BPatch_point*> *entryPoints = func->findPoint(BPatch_entry);
@@ -171,43 +168,41 @@ void handleLibFunc(string name)
     finiCode.push_back(buildFiniSnippet(name, counter));
 }
 
-
-void handleInstruction(void *addr, Instruction::Ptr iptr, PatchBlock *block, PatchFunction *func)
+void handleInstruction(void *addr, Instruction::Ptr iptr, BPatch_basicBlock *block, BPatch_function *func)
 {
-
-    bool handle = true;
+    // DEBUGGING CODE
+    //if ((unsigned long)addr < (unsigned long)0x400564 ||
+        //(unsigned long)addr > (unsigned long)0x4005db) return;
 
     // print instruction info
-    printf("  instruction at %lx: %s\n",
-            (unsigned long)addr, iptr->format((Address)addr).c_str());
+    //printf("  instruction at %lx: %s\n",
+            //(unsigned long)addr, iptr->format((Address)addr).c_str());
 
     // allocate counter
-    BPatch_variableExpr *counter = mainApp->malloc(*(mainImg->findType("unsigned long")));
-    printf("    counter at %lx\n", (unsigned long)counter->getBaseAddr());
-
-    // grab instrumentation point
-    Point *prePoint  = mainMgr->findPoint(
-                        Location::InstructionInstance(func, block, (Address)addr),
-                        Point::PreInsn, true);
+    BPatch_variableExpr *counter = mainApp->malloc(*counterType);
+    //printf("    counter at %lx\n", (unsigned long)counter->getBaseAddr());
 
     // build and insert initialization
-    finiCode.push_back(buildInitSnippet(counter));
+    initCode.push_back(buildInitSnippet(counter));
 
-    // build and insert instrumentation
-    prePoint->pushBack(PatchAPI::convert(buildIncrementer(counter)));
+    // build and insert instrumentation (DyninstAPI version)
+    BPatch_point *blockEntry = block->findExitPoint();
+    mainApp->insertSnippet(*buildIncrementer(counter), *blockEntry, BPatch_lastSnippet);
+
+    // build and insert instrumentation (PatchAPI version)
+    //Point *prePoint  = mainMgr->findPoint(
+                        //Location::InstructionInstance(func, block, (Address)addr),
+                        //Point::PreInsn, true);
+    //prePoint->pushBack(PatchAPI::convert(buildIncrementer(counter)));
 
     // build and insert reporting
-    finiCode.push_back(buildFiniSnippet(addr, iptr, func->name(), counter));
+    finiCode.push_back(buildFiniSnippet(addr, iptr, func->getName(), counter));
 }
 
-void handleBasicBlock(BPatch_basicBlock *block, PatchFunction *func)
+void handleBasicBlock(BPatch_basicBlock *block, BPatch_function *func)
 {
-    static size_t MAX_RAW_INSN_SIZE = 16;
-
     Instruction::Ptr iptr;
     void *addr;
-    unsigned char bytes[MAX_RAW_INSN_SIZE];
-    size_t nbytes, i;
 
     // get all floating-point instructions
     PatchBlock::Insns insns;
@@ -217,17 +212,9 @@ void handleBasicBlock(BPatch_basicBlock *block, PatchFunction *func)
     PatchBlock::Insns::iterator j;
     for (j = insns.begin(); j != insns.end(); j++) {
 
-        // get instruction bytes
         addr = (void*)((*j).first);
         iptr = (*j).second;
-        nbytes = iptr->size();
-        assert(nbytes <= MAX_RAW_INSN_SIZE);
-        for (i=0; i<nbytes; i++) {
-            bytes[i] = iptr->rawByte(i);
-        }
-        bytes[nbytes] = '\0';
-
-        handleInstruction(addr, iptr, PatchAPI::convert(block), func);
+        handleInstruction(addr, iptr, block, func);
     }
 }
 
@@ -241,7 +228,7 @@ void handleFunction(BPatch_function *function, const char *name)
     BPatch_flowGraph *cfg = function->getCFG();
     cfg->getAllBasicBlocks(blocks);
     for (b = blocks.begin(); b != blocks.end(); b++) {
-        handleBasicBlock(*b, PatchAPI::convert(function));
+        handleBasicBlock(*b, function);
     }
 
     //printf("\n");
@@ -289,7 +276,9 @@ void handleApplication(BPatch_addressSpace *app)
     std::vector<BPatch_module *>::iterator m;
     modules = mainImg->getModules();
 
-    printfFunc = getMutateeFunction("printf");
+    // cache some objects for speed
+    printfFunc  = getMutateeFunction("printf");
+    counterType = mainImg->findType(COUNTER_TYPE_STR);
 
     mainApp->beginInsertionSet();
 
@@ -315,11 +304,13 @@ void handleApplication(BPatch_addressSpace *app)
         handleModule(*m, modname);
     }
 
-    handleLibFunc("sin");
-    handleLibFunc("cos");
-    handleLibFunc("sqrt");
-    handleLibFunc("f_approx_equal");
-    handleLibFunc("d_approx_equal");
+    /*
+     *handleLibFunc("sin");
+     *handleLibFunc("cos");
+     *handleLibFunc("sqrt");
+     *handleLibFunc("f_approx_equal");
+     *handleLibFunc("d_approx_equal");
+     */
 
     finiCode.push_back(buildDebugPrint("== Done with fpinfo analysis ==\n"));
 
