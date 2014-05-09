@@ -29,6 +29,8 @@ using namespace Dyninst::PatchAPI;
 
 #define COUNTER_TYPE_STR "int"
 typedef int counter_t;
+//#define COUNTER_TYPE_STR "unsigned long"
+//typedef unsigned long counter_t;
 
 // main Dyninst driver structure
 BPatch *bpatch = NULL;
@@ -118,7 +120,32 @@ BPatch_snippet* buildFiniSnippet(void *addr, Instruction::Ptr iptr, string func,
 
     // create printf call
     stringstream disas("");
-    disas << iptr->format((Address)addr);
+    disas << "\"" << iptr->format((Address)addr) << "\"";
+    disas << " {";
+    bool comma = false;
+    if (iptr->readsMemory()) {
+        if (comma) disas << ","; else comma = true;
+        disas << "mr";
+    }
+    if (iptr->writesMemory()) {
+        if (comma) disas << ","; else comma = true;
+        disas << "mw";
+    }
+    /*
+     *std::set<RegisterAST::Ptr> rregs;
+     *iptr->getWriteSet(rregs);
+     *if (rregs.size() > 0) {
+     *    if (comma) disas << ","; else comma = true;
+     *    disas << "rr";
+     *}
+     *std::set<RegisterAST::Ptr> wregs;
+     *iptr->getWriteSet(wregs);
+     *if (wregs.size() > 0) {
+     *    if (comma) disas << ","; else comma = true;
+     *    disas << "rw";
+     *}
+     */
+    disas << "}";
     BPatch_Vector<BPatch_snippet*> printfArgs;
     printfArgs.push_back(new BPatch_constExpr("%16lx: %-15lu %-20s %s\n"));
     printfArgs.push_back(new BPatch_constExpr((unsigned long)addr));
