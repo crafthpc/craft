@@ -207,6 +207,10 @@ $top_view = InsnView.new("all", "All Instructions",
 $all_views << $top_view
 $all_views << InsnView.new("fp", "FPInst Instructions",
                            lambda { |i| i.tags.include?("fp") })
+$all_views << InsnView.new("mov", "All Movement",
+                           lambda { |i| i.opcode =~ /^mov/ or i.opcode =~ /^cmov/ or i.opcode =~ /^lea/ })
+$all_views << InsnView.new("fpmov", "FPInst Movement",
+                           lambda { |i| i.tags.include?("fp") and i.opcode =~ /^mov/ })
 
 
 
