@@ -7,6 +7,11 @@
 #include <string>
 #include <vector>
 
+// XED
+extern "C" {
+#include "xed-interface.h"
+}
+
 // DyninstAPI
 #include "BPatch.h"
 #include "BPatch_basicBlock.h"
@@ -34,6 +39,9 @@ typedef int counter_t;
 
 // main Dyninst driver structure
 BPatch *bpatch = NULL;
+
+// main XED decoder state
+xed_state_t dstate;
 
 // top-level Dyninst mutatee structures
 BPatch_addressSpace *mainApp = NULL;
@@ -116,6 +124,43 @@ BPatch_snippet* buildIncrementer(BPatch_variableExpr *var) {
     return incExpr;
 }
 
+bool fpinstFilterFunc(Instruction::Ptr iptr) {
+    unsigned char bytes[64];
+    size_t nbytes = iptr->size();
+    memcpy(bytes, iptr->ptr(), nbytes);
+    char buffer[1048];
+    bool add = false;
+    xed_decoded_inst_t xedd;
+    xed_error_enum_t xed_error;
+    xed_iclass_enum_t iclass;
+    xed_category_enum_t icategory;
+    xed_extension_enum_t iextension;
+    //xed_isa_set_enum_t iisaset;
+    xed_decoded_inst_zero_set_mode(&xedd, &dstate);
+    xed_decoded_inst_set_input_chip(&xedd, XED_CHIP_INVALID);
+    xed_error = xed_decode(&xedd, (const xed_uint8_t*) bytes, nbytes);
+    if (xed_error == XED_ERROR_NONE) { 
+        xed_format_intel(&xedd, buffer, 1048, (xed_uint64_t)(long)bytes);
+        iclass = xed_decoded_inst_get_iclass(&xedd);
+        icategory = xed_decoded_inst_get_category(&xedd);
+        iextension = xed_decoded_inst_get_extension(&xedd);
+        //iisaset = xed_decoded_inst_get_isa_set(&xedd);
+        if (icategory == XED_CATEGORY_SSE ||
+            icategory == XED_CATEGORY_X87_ALU ||
+            iextension == XED_EXTENSION_MMX ||
+            iextension == XED_EXTENSION_SSE ||
+            iextension == XED_EXTENSION_SSE2 ||
+            iextension == XED_EXTENSION_SSE3 ||
+            iextension == XED_EXTENSION_SSE4 ||
+            iextension == XED_EXTENSION_SSE4A ||
+            iextension == XED_EXTENSION_X87 ||
+            iclass == XED_ICLASS_BTC) {
+            add = true;
+        }
+    }
+    return add;
+}
+
 BPatch_snippet* buildFiniSnippet(void *addr, Instruction::Ptr iptr, string func, BPatch_variableExpr *var) {
 
     // create printf call
@@ -123,6 +168,10 @@ BPatch_snippet* buildFiniSnippet(void *addr, Instruction::Ptr iptr, string func,
     disas << "\"" << iptr->format((Address)addr) << "\"";
     disas << " {";
     bool comma = false;
+    if (fpinstFilterFunc(iptr)) {
+        if (comma) disas << ","; else comma = true;
+        disas << "fp";
+    }
     if (iptr->readsMemory()) {
         if (comma) disas << ","; else comma = true;
         disas << "mr";
@@ -195,9 +244,13 @@ void handleLibFunc(string name)
     finiCode.push_back(buildFiniSnippet(name, counter));
 }
 
+
 void handleInstruction(void *addr, Instruction::Ptr iptr, BPatch_basicBlock *block, BPatch_function *func)
 {
     // DEBUGGING CODE
+    //static bool halt = false;
+    //if (halt) return;
+    //else halt = true;
     //if ((unsigned long)addr < (unsigned long)0x400564 ||
         //(unsigned long)addr > (unsigned long)0x4005db) return;
 
@@ -360,6 +413,11 @@ int main(int argc, char *argv[])
 
 	// initalize DynInst library
 	bpatch = new BPatch;
+
+    // initialize XED library
+    xed_tables_init();
+    xed_state_zero(&dstate);
+    dstate.mmode=XED_MACHINE_MODE_LONG_64;
 
     printf("Testing %s\n", binary);
 
