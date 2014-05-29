@@ -57,6 +57,8 @@ BPatch_object *libObj  = NULL;
 // global parameters
 char *binary = NULL;
 bool instShared = false;
+bool libmCounts = false;
+bool libcCounts = false;
 
 BPatch_module* getInitFiniModule() {
 
@@ -340,6 +342,70 @@ void handleModule(BPatch_module *mod, const char *name)
 
 }
 
+void handleLibCounts()
+{
+    // libc functions
+    //
+
+    if (libcCounts) {
+        handleLibFunc("modf");
+        handleLibFunc("frexp");  handleLibFunc("ldexp");
+        handleLibFunc("scalbn"); handleLibFunc("scalbln");
+        handleLibFunc("abs");
+        handleLibFunc("copysign");
+        handleLibFunc("isinf");  handleLibFunc("isnan");
+    }
+
+    // libm functions
+    //
+
+    if (libmCounts) {
+
+        handleLibFunc("sin");  handleLibFunc("asin");
+        handleLibFunc("cos");  handleLibFunc("acos");
+        handleLibFunc("tan");  handleLibFunc("atan");  handleLibFunc("atan2");
+        handleLibFunc("sinh"); handleLibFunc("asinh");
+        handleLibFunc("cosh"); handleLibFunc("acosh");
+        handleLibFunc("tanh"); handleLibFunc("atanh");
+
+        handleLibFunc("exp");    handleLibFunc("log");
+        handleLibFunc("exp2");   handleLibFunc("log2");
+        handleLibFunc("expm1");  handleLibFunc("log10");
+        handleLibFunc("ilogb");  handleLibFunc("logb");
+        handleLibFunc("log1p");
+
+        handleLibFunc("sqrt"); handleLibFunc("cbrt");
+        handleLibFunc("pow");  handleLibFunc("hypot");
+
+        handleLibFunc("erf");  handleLibFunc("tgamma");
+        handleLibFunc("erfc"); handleLibFunc("lgamma");
+
+        handleLibFunc("ceil");   handleLibFunc("floor");
+        handleLibFunc("fmod");   handleLibFunc("trunc");
+        handleLibFunc("rint");   handleLibFunc("round");
+        handleLibFunc("lrint");  handleLibFunc("lround");
+        handleLibFunc("llrint"); handleLibFunc("llround");
+        handleLibFunc("nearbyint");
+        handleLibFunc("remainder");
+        handleLibFunc("remquo");
+
+        handleLibFunc("fmax"); handleLibFunc("fmin");
+        handleLibFunc("fabs");
+        handleLibFunc("fdim"); handleLibFunc("fma");
+        handleLibFunc("nextafter");
+        handleLibFunc("nexttoward");
+        handleLibFunc("NAN");
+
+        handleLibFunc("fpclassify"); handleLibFunc("isfinite");
+        handleLibFunc("isnormal");   handleLibFunc("signbit");
+        handleLibFunc("isgreater");  handleLibFunc("isgreaterequal");
+        handleLibFunc("isless");     handleLibFunc("islessequal");
+        handleLibFunc("islessgreater");
+        handleLibFunc("isunordered");
+
+    }
+}
+
 void handleApplication(BPatch_addressSpace *app)
 {
 	char modname[BUFFER_STRING_LEN];
@@ -382,13 +448,7 @@ void handleApplication(BPatch_addressSpace *app)
         handleModule(*m, modname);
     }
 
-    /*
-     *handleLibFunc("sin");
-     *handleLibFunc("cos");
-     *handleLibFunc("sqrt");
-     *handleLibFunc("f_approx_equal");
-     *handleLibFunc("d_approx_equal");
-     */
+    handleLibCounts();
 
     finiCode.push_back(buildDebugPrint("== Done with fpinfo analysis ==\n"));
 
@@ -405,8 +465,16 @@ void handleApplication(BPatch_addressSpace *app)
 
 int main(int argc, char *argv[])
 {
-    // ABBREVIATED: parse command-line parameters
-    binary = argv[1];
+    // parse command-line parameters
+    for (int i=0; i<argc; i++) {
+        if (strcmp(argv[i], "-libm") == 0) {
+            libmCounts = true;
+        } else if (strcmp(argv[i], "-libc") == 0) {
+            libcCounts = true;
+        } else {
+            binary = argv[i];
+        }
+    }
     instShared = false;
 
 	// initalize DynInst library
@@ -432,6 +500,9 @@ int main(int argc, char *argv[])
     }
 
     app->loadLibrary("libc.so.6");
+    if (libmCounts) {
+        app->loadLibrary("libm.so.6");
+    }
 
     // perform instrumentation
     handleApplication(app);
