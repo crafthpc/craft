@@ -32,10 +32,8 @@ using namespace Dyninst::PatchAPI;
 
 #define BUFFER_STRING_LEN 1024
 
-#define COUNTER_TYPE_STR "int"
-typedef int counter_t;
-//#define COUNTER_TYPE_STR "unsigned long"
-//typedef unsigned long counter_t;
+#define COUNTER_TYPE_STR "unsigned long"
+typedef unsigned long counter_t;
 
 // main Dyninst driver structure
 BPatch *bpatch = NULL;
