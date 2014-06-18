@@ -1,0 +1,15 @@
+#!/bin/bash
+
+
+#EXEPATH=$DYNINST_ROOT/craft/utils/iprof
+
+# find path of this script
+pushd `dirname $0` >/dev/null
+EXEPATH=`pwd`
+popd >/dev/null
+
+$EXEPATH/mutator $@ &>fpinst.txt
+./mutant &>output.txt
+rm -f libc.so.6 libm.so.6
+$EXEPATH/analysis.rb output.txt
+

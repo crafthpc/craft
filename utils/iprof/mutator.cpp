@@ -426,7 +426,7 @@ void handleApplication(BPatch_addressSpace *app)
 
     mainApp->beginInsertionSet();
 
-    initCode.push_back(buildDebugPrint("== Initializing fpinfo analysis ==\n"));
+    initCode.push_back(buildDebugPrint("== Initializing iprof analysis ==\n"));
 
     // for each module ...
     for (m = modules->begin(); m != modules->end(); m++) {
@@ -450,7 +450,7 @@ void handleApplication(BPatch_addressSpace *app)
 
     handleLibCounts();
 
-    finiCode.push_back(buildDebugPrint("== Done with fpinfo analysis ==\n"));
+    finiCode.push_back(buildDebugPrint("== Done with iprof analysis ==\n"));
 
     // add initialization/cleanup at init/fini
     BPatch_module *initFiniModule = getInitFiniModule();

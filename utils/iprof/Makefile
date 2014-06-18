@@ -1,4 +1,4 @@
-# Makefile for fpinfo
+# Makefile for iprof
 #
 # Mike Lam, UMD
 #
@@ -12,11 +12,11 @@ XED_KIT=/fs/dyninst/lam/opt/pin-2.12-58423-gcc.4.4.7-linux/extras/xed2-intel64
 CFLAGS=-g -Wall $(BOOST_INCLUDE) -I$(XED_KIT)/include -I$(DYNINST_PREFIX)/include
 LDFLAGS=$(XED_KIT)/lib/libxed.a -L$(DYNINST_PREFIX)/lib $(DYNINST_LIBS)
 
-TARGETS=fpinfo
+TARGETS=mutator
 
 all: $(TARGETS)
 
-fpinfo: fpinfo.cpp
+mutator: mutator.cpp
 	g++ -o $@ $(CFLAGS) $< $(LDFLAGS)
 
 clean:
