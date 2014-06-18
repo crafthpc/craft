@@ -101,7 +101,7 @@ BPatch_function* getMutateeFunction(const char *name) {
     // with the given name; finds and returns it
     BPatch_Vector<BPatch_function *> funcs;
     mainImg->findFunction(name, funcs, true, true, true);
-    assert(funcs.size() == 1);
+    assert(funcs.size() >= 1);
     return funcs.at(0);
 }
 
@@ -467,9 +467,9 @@ int main(int argc, char *argv[])
 {
     // parse command-line parameters
     for (int i=0; i<argc; i++) {
-        if (strcmp(argv[i], "-libm") == 0) {
+        if (strcmp(argv[i], "--libm") == 0) {
             libmCounts = true;
-        } else if (strcmp(argv[i], "-libc") == 0) {
+        } else if (strcmp(argv[i], "--libc") == 0) {
             libcCounts = true;
         } else {
             binary = argv[i];

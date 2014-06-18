@@ -11,5 +11,8 @@ popd >/dev/null
 $EXEPATH/mutator $@ &>fpinst.txt
 ./mutant &>output.txt
 rm -f libc.so.6 libm.so.6
-$EXEPATH/analysis.rb output.txt
+$EXEPATH/analysis.rb output.txt &>analysis.txt
+
+montage -geometry +4+4 -tile 1x2 all-itype.png fp-itype.png composite-itype.png
+montage -geometry +4+4 -tile 1x4 all-memacc.png fp-memacc.png fp-dtype.png fpmov-dtype.png composite-memacc_dtype.png
 

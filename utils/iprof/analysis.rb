@@ -175,10 +175,10 @@ end
 
 # hard-coded instruction type prefixes
 $itype_prefixes = Hash.new
-$itype_prefixes["arith"] = "add,sub,mul,div,imul,idiv,min,max"
+$itype_prefixes["arith"] = "add,sub,mul,div,imul,idiv,min,max,neg"
 $itype_prefixes["transcend"] = "sqrt,sin,cos,tan"
-$itype_prefixes["bitwise"] = "and,or,xor,sal,sar,shl,shr,test"
-$itype_prefixes["move"] = "mov,cmov,lea"
+$itype_prefixes["bitwise"] = "and,or,xor,not,sal,sar,shl,shr,test"
+$itype_prefixes["move"] = "mov,cmov,lea,unpck"
 $itype_prefixes["compare"] = "cmp,com,ucom"
 $itype_prefixes["convert"] = "cvt,cbw,cwde,cdqe,cwd,cdq,cqo,set"
 $itype_prefixes["stack"] = "push,pop"
@@ -207,6 +207,8 @@ $top_view = InsnView.new("all", "All Instructions",
 $all_views << $top_view
 $all_views << InsnView.new("fp", "FPInst Instructions",
                            lambda { |i| i.tags.include?("fp") })
+$all_views << InsnView.new("nfp", "Non-FPInst Instructions",
+                           lambda { |i| not i.tags.include?("fp") })
 $all_views << InsnView.new("mov", "All Movement",
                            lambda { |i| i.opcode =~ /^mov/ or i.opcode =~ /^cmov/ or i.opcode =~ /^lea/ })
 $all_views << InsnView.new("fpmov", "FPInst Movement",
