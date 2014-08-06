@@ -4,7 +4,7 @@
 #define INT32_MAX  (2147483647)
 #define UINT32_MAX (4294967295U)
 #define INT32_MIN  (-2147483647-1)
-#include "common/h/arch-x86.h"
+#include "common/src/arch-x86.h"
 using namespace NS_x86;
 
 namespace FPInst {
