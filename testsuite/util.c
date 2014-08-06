@@ -17,8 +17,8 @@ int d_approx_equal(double x, double y) {
     /*printf("d_approx_equal (%g, %g) [0x%lx, 0x%lx]  err=%g\n", */
             /*x, y, *(uint64_t*)(&x), *(uint64_t*)(&y), err);*/
     int eq = /*finite(err) &&*/ ((x == y) || (err < 0.0001));
-    printf("d_approx_equal (%g, %g) [0x%lx, 0x%lx]  err=%g eq=%d\n",
-            x, y, *(uint64_t*)(&x), *(uint64_t*)(&y), err, eq);
+    /*printf("d_approx_equal (%g, %g) [0x%lx, 0x%lx]  err=%g eq=%d\n",
+            x, y, *(uint64_t*)(&x), *(uint64_t*)(&y), err, eq);*/
     return eq;
 }
 
