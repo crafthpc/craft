@@ -2057,9 +2057,9 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
         case XED_IFORM_PEXTRD_MEMd_XMMdq_IMMb:
         case XED_IFORM_PEXTRQ_GPR64q_XMMdq_IMMb:
         case XED_IFORM_PEXTRQ_MEMq_XMMdq_IMMb:
-        case XED_IFORM_PEXTRW_GPRy_MMXq_IMMb:
-        case XED_IFORM_PEXTRW_GPRy_XMMdq_IMMb:
-        case XED_IFORM_PEXTRW_SSE4_GPRy_XMMdq_IMMb:
+        case XED_IFORM_PEXTRW_GPR32_MMXq_IMMb:
+        case XED_IFORM_PEXTRW_GPR32_XMMdq_IMMb:
+        case XED_IFORM_PEXTRW_SSE4_GPR32_XMMdq_IMMb:
         case XED_IFORM_PEXTRW_SSE4_MEMw_XMMdq_IMMb:
         case XED_IFORM_PINSRB_XMMdq_GPR32d_IMMb:
         case XED_IFORM_PINSRB_XMMdq_MEMb_IMMb:
@@ -2067,9 +2067,9 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
         case XED_IFORM_PINSRD_XMMdq_MEMd_IMMb:
         case XED_IFORM_PINSRQ_XMMdq_GPR64q_IMMb:
         case XED_IFORM_PINSRQ_XMMdq_MEMq_IMMb:
-        case XED_IFORM_PINSRW_MMXq_GPRy_IMMb:
+        case XED_IFORM_PINSRW_MMXq_GPR32_IMMb:
         case XED_IFORM_PINSRW_MMXq_MEMw_IMMb:
-        case XED_IFORM_PINSRW_XMMdq_GPRy_IMMb:
+        case XED_IFORM_PINSRW_XMMdq_GPR32_IMMb:
         case XED_IFORM_PINSRW_XMMdq_MEMw_IMMb:
         case XED_IFORM_PMOVMSKB_GPR32_MMXq:             // integer movement with masking
         case XED_IFORM_PMOVMSKB_GPR32_XMMdq:
