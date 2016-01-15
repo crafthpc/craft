@@ -23,13 +23,13 @@ Dependencies:
 
 * DyninstAPI
   Tested version: commit 11ace21195050e4e7f92be5c1265e6a2d1be1299 (v8.1x branch)
-  To obtain: "git clone git.dyninst.org:/pub/dyninst"
+  To obtain: "git clone git.dyninst.org/dyninst.git"
 
 Dyninst must be compiled and accessible to the linker. The environment variable
 DYNINST_ROOT should point to the location it is installed.
 
 * XED2 Library
-  Tested version: from Pin 2.12
+  Tested version: from Pin 2.13-65163
   URL: http://software.intel.com/en-us/articles/pintool-downloads
 
 Set the XED_KIT variable in the Makefile appropriately after you have downloaded
@@ -37,8 +37,8 @@ Pin. There is no need to compile Pin or XED from source. Note that CRAFT does
 not use Pin directly, only XED.
 
 * Boost headers
-  Tested version: 1.50.0
-  URL: http://sourceforge.net/projects/boost/files/boost/1.50.0/
+  Tested version: 1.53.0
+  URL: http://sourceforge.net/projects/boost/files/boost/1.53.0/
 
 The default Boost headers on your system may work. If you get Boost-related
 compile errors, download the headers from the URL above and use the
