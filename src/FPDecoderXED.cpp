@@ -146,7 +146,6 @@ void FPDecoderXED::expandInstCache(size_t newSize) {
 
 bool FPDecoderXED::filter(unsigned char *bytes, size_t nbytes)
 {
-    char buffer[1048];
     bool add = false;
     xed_decoded_inst_t xedd;
     xed_error_enum_t xed_error;
@@ -158,7 +157,6 @@ bool FPDecoderXED::filter(unsigned char *bytes, size_t nbytes)
     xed_decoded_inst_set_input_chip(&xedd, XED_CHIP_INVALID);
     xed_error = xed_decode(&xedd, (const xed_uint8_t*) bytes, nbytes);
     if (xed_error == XED_ERROR_NONE) { 
-        xed_format_intel(&xedd, buffer, 1048, (xed_uint64_t)(long)bytes);
         iclass = xed_decoded_inst_get_iclass(&xedd);
         icategory = xed_decoded_inst_get_category(&xedd);
         iextension = xed_decoded_inst_get_extension(&xedd);
@@ -178,7 +176,7 @@ bool FPDecoderXED::filter(unsigned char *bytes, size_t nbytes)
         // TODO: decode and check instruction type & ISA extension
         /*
          *cout << "      XED2 " << (add ? "FP instruction: " : "ignored: ");
-         *cout << "\"" << buffer << "\" ";
+         *cout << "\"" << disassemble(&xedd) << "\" ";
          *cout << "iclass="
          *    << xed_iclass_enum_t2str(iclass) << " ";
          *cout << "category="
@@ -249,7 +247,6 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
     FPOperation *operation, *temp_op;
     FPOperand *temp_opr;
     //unsigned long flags;
-    char buffer[1048];
 
     // counters
     unsigned i;
@@ -279,9 +276,8 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
     }
     
     // save disassembly
-    xed_format_intel(&xedd, buffer, 1048, (xed_uint64_t)(long)bytes);
-    //printf("decoded assembly: %s\n", buffer);
-    semantics->setDisassembly(string(buffer));
+    //printf("decoded assembly: %s\n", &xedd);
+    semantics->setDisassembly(disassemble(&xedd));
 
     debugData << "XED2 iclass "
         << xed_iclass_enum_t2str(xed_decoded_inst_get_iclass(&xedd))  << "\t";
@@ -2081,7 +2077,7 @@ FPSemantics* FPDecoderXED::build(unsigned long index, void *addr, unsigned char 
     }
     if (operation->getType() == OP_INVALID) {
         fprintf(stderr, "WARNING: invalid operation from XED: \"%s\" iform=%s addr=%p\n",
-               buffer, xed_iform_enum_t2str(iform), addr);
+               disassemble(&xedd).c_str(), xed_iform_enum_t2str(iform), addr);
         semantics->add(operation);
         return semantics;
     }
@@ -2228,10 +2224,20 @@ bool FPDecoderXED::writesFlags(FPSemantics *inst)
     return false;
 }
 
-string FPDecoderXED::disassemble(unsigned char *bytes, size_t nbytes)
+string FPDecoderXED::disassemble(xed_decoded_inst_t *xedd)
 {
     char buffer[1048];
+    xed_print_info_t pi;
+    xed_init_print_info(&pi);
+    pi.blen = 1048;
+    pi.buf = buffer;
+    pi.p = xedd;
+    xed_format_generic(&pi);
+    return string(buffer);
+}
 
+string FPDecoderXED::disassemble(unsigned char *bytes, size_t nbytes)
+{
     xed_decoded_inst_t xedd;
     xed_error_enum_t xed_error;
     xed_decoded_inst_zero_set_mode(&xedd, &dstate);
@@ -2242,9 +2248,7 @@ string FPDecoderXED::disassemble(unsigned char *bytes, size_t nbytes)
         return string("(invalid)");
     }
 
-    xed_format_intel(&xedd, buffer, 1048, (xed_uint64_t)(long)bytes);
-
-    return string(buffer);
+    return disassemble(&xedd);
 }
 
 }

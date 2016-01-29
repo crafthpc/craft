@@ -48,6 +48,8 @@ class FPDecoderXED : public FPDecoder {
 
         std::map<void *,unsigned long> iidxByAddr;
 
+        static string disassemble(xed_decoded_inst_t *xedd);
+
 };
 
 }
