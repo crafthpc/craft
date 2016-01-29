@@ -5,7 +5,7 @@
 #
 
 NPROCS=4            # number of worker threads to use for searches
-RUN_MIXED=true      # run standard mixed-precision search
+RUN_MIXED=false     # run standard mixed-precision search
 RUN_RPREC=true      # run standard reduced-precision search
 
 RUN_SEARCH=true     # set to "false" to only do the checks; use for debugging this script

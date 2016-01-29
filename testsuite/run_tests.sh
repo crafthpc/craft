@@ -1,4 +1,10 @@
 #!/bin/bash
+#
+#SBATCH --job-name=craft_tests
+#SBATCH --output=craft_tests.out
+#SBATCH --error=craft_tests.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
 
 # change this to set any global mutator flags
 FPINST=fpinst
@@ -8,7 +14,8 @@ opts="-O0 -O1 -O2 -O3"
 #opts="-O0"
 
 # change this to set which instrumentation modes are tested
-modes="cinst dcancel dnan trange svinp_single svinp_double svinp_mem_single svinp_mem_double rprec51"
+#modes="cinst dcancel dnan trange svinp_single svinp_double svinp_mem_single svinp_mem_double rprec51"
+modes="cinst dcancel dnan trange rprec51"
 
 # change this to set which tests are run
 #tests="pushpop"    # old x87-based test
