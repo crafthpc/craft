@@ -22,7 +22,7 @@ PLATFORM needs to be set to "x86_64-unknown-linux2.4".
 Dependencies:
 
 * DyninstAPI
-  Tested version: commit 11ace21195050e4e7f92be5c1265e6a2d1be1299 (v8.1x branch)
+  Tested version: 9.1.0
   To obtain: "git clone git.dyninst.org/dyninst.git"
 
 Dyninst must be compiled and accessible to the linker. The environment variable

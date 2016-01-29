@@ -118,9 +118,9 @@ string FPLog::getStackTrace(unsigned skipFrames)
                     Function *func;
                     debug_symtab->getContainingFunction((Offset)stwalk_offset, func);
                     if (func) {
-                        vector<string> names = func->getAllPrettyNames();
-                        if (names.size() > 0) {
-                            ss << " function=\"" << sanitize(names[0]) << "\"";
+                        Aggregate::name_iter it = func->pretty_names_begin();
+                        if (it != func->pretty_names_end()) {
+                            ss << " function=\"" << sanitize(*it) << "\"";
                         }
                     }
                 } else {
@@ -155,30 +155,8 @@ string FPLog::getFakeStackTrace(void *addr)
     if (debug_symtab) {
         stwalk_lines.clear();
         debug_symtab->getSourceLines(stwalk_lines, (Offset)addr);
-        /* 
-         * NOTE: this causes Symtab to re-sort all functions; do not call often
-         * while instrumenting!
-         *
-         *Function *func;
-         *debug_symtab->getContainingFunction((Offset)addr, func);
-         *if (func) {
-         *    vector<string> names = func->getAllPrettyNames();
-         *    if (names.size() > 0) {
-         *       ss << " function=\"" << sanitize(names[0]) << "\"";
-         *    }
-         *}
-         */
         if (stwalk_lines.size() > 0) {
             ss << " file=\"" << stwalk_lines[0]->getFile() << "\" lineno=\"" << stwalk_lines[0]->getLine() << "\"";
-            /*
-             * NOTE: more Symtab overhead...
-             *
-             *Module *mod;
-             *debug_symtab->findModuleByOffset(mod, (Offset)addr);
-             *if (mod) {
-             *    ss << " module=\"" << mod->fileName() << "\"";
-             *}
-             */
         }
     }
     ss << " />" << endl;
@@ -210,9 +188,9 @@ string FPLog::getSourceFunction(void *addr)
         Function *func;
         debug_symtab->getContainingFunction((Offset)addr, func);
         if (func) {
-            vector<string> names = func->getAllPrettyNames();
-            if (names.size() > 0) {
-                ss << sanitize(names[0]);
+            Aggregate::name_iter it = func->pretty_names_begin();
+            if (it != func->pretty_names_end()) {
+                ss << sanitize(*it);
             }
         }
     }
@@ -264,35 +242,20 @@ FPOperandAddress FPLog::getGlobalVarAddr(string name)
 
 string FPLog::getGlobalVarName(FPOperandAddress addr)
 {
-vector<Variable *> vars;
-vector<Variable *>::iterator i;
-string ret("");
-if (debug_symtab) {
-	debug_symtab->getAllVariables(vars);
-	for (i=vars.begin(); i!=vars.end(); i++) {
-		if ((*i)->getOffset() == (Offset)addr) {
-			vector<string> names = (*i)->getAllPrettyNames();
-			if (names.size() > 0) {
-				ret = names[0];
-			}
-		}
-	}
-}
-
-/*
-    Variable *var;
-    bool foundVar = false;
+    vector<Variable *> vars;
+    vector<Variable *>::iterator i;
     string ret("");
     if (debug_symtab) {
-        foundVar = debug_symtab->findVariableByOffset(var, (Offset)addr);
-        if (foundVar && var) {
-            vector<string> names = var->getAllPrettyNames();
-            if (names.size() > 0) {
-                ret = names[0];
+        debug_symtab->getAllVariables(vars);
+        for (i=vars.begin(); i!=vars.end(); i++) {
+            if ((*i)->getOffset() == (Offset)addr) {
+                Aggregate::name_iter it = (*i)->pretty_names_begin();
+                if (it != (*i)->pretty_names_end()) {
+                    ret = *it;
+                }
             }
         }
     }
-*/
     return ret;
 }
 
@@ -495,9 +458,9 @@ void FPLog::writeInstructions()
             Function *func;
             debug_symtab->getContainingFunction((Offset)i->first->getAddress(), func);
             if (func) {
-                vector<string> names = func->getAllPrettyNames();
-                if (names.size() > 0) {
-                    logfile << " function=\"" << sanitize(names[0]) << "\"";
+                Aggregate::name_iter it = func->pretty_names_begin();
+                if (it != func->pretty_names_end()) {
+                    logfile << " function=\"" << sanitize(*it) << "\"";
                 }
             }
             if (stwalk_lines.size() > 0) {

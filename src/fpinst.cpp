@@ -1840,15 +1840,16 @@ void instrumentApplication()
 
     // look for module with init/fini
     BPatch_module *initFiniModule = findInitFiniModule();
+    BPatch_object *initFiniObject = initFiniModule->getObject();
     if (initFiniModule) {
 
         // add initialization/cleanup at init/fini
         char nameBuffer[1024];
         initFiniModule->getName(nameBuffer, 1024);
         printf("Instrumenting init in module %s.\n", nameBuffer);
-        initFiniModule->insertInitCallback(*initCode);
+        initFiniObject->insertInitCallback(*initCode);
         printf("Instrumenting fini in module %s.\n", nameBuffer);
-        initFiniModule->insertFiniCallback(*finiCode);
+        initFiniObject->insertFiniCallback(*finiCode);
 
         // add enable/disable around main
         printf("Instrumenting entry of main.\n");
