@@ -66,6 +66,10 @@ To sanity-check a non-testsuite executable, try one of the following commands:
     fpinst --dcancel <binary>
     fpinst --svinp double <binary>
 
+To use the automatic search script, you will need Ruby 2.0 or later.
+
+To build and use the GUI, you will need Java 1.6 or later.
+
 
 CRAFT is free software: you can redistribute it and/or modify it under the terms
 of the GNU Lesser General Public License as published by the Free Software

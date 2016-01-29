@@ -116,7 +116,7 @@ class PPoint
         # output() to recursively print the other levels
         fout = File.new(fn, "w")
         if @attrs.has_key?("prolog") then
-            @attrs["prolog"].each do |line|
+            @attrs["prolog"].each_line do |line|
                 if $mixed_use_rprec and only_insns then
                     if line =~ /^sv_inp/ then
                         if line.chomp == "sv_inp=yes" then
@@ -2190,7 +2190,7 @@ def read_cfg_array(io)
             configs = Marshal.load(io)
         else
             io.rewind
-            YAML.each_document(io) do |doc|
+            YAML.load_stream(io).each do |doc|
                 configs << doc
             end
         end
@@ -2338,7 +2338,7 @@ def get_tested_configs
     tested = Array.new
     f = File.new("#{$tested_fn}", "r")
     f.flock File::LOCK_SH
-    YAML.each_document(f) do |doc|
+    YAML.load_stream(f).each do |doc|
         tested << doc
     end
     f.close
@@ -2348,7 +2348,7 @@ def get_tested_config_count
     len = 0
     f = File.new("#{$tested_fn}", "r")
     f.flock File::LOCK_SH
-    YAML.each_document(f) do |doc|
+    YAML.load_stream(f).each do |doc|
         len += 1
     end
     f.close
