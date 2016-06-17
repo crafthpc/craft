@@ -1,0 +1,8 @@
+*.plot
+*.png
+analysis.sql
+analysis.txt
+fpinst.txt
+mutant
+mutator
+output.txt
