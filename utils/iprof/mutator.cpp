@@ -255,8 +255,7 @@ void handleInstruction(void *addr, Instruction::Ptr iptr, BPatch_basicBlock *blo
         //(unsigned long)addr > (unsigned long)0x4005db) return;
 
     // print instruction info
-    //printf("  instruction at %lx: %s\n",
-            //(unsigned long)addr, iptr->format((Address)addr).c_str());
+    printf("  %lx: %s\n", (unsigned long)addr, iptr->format((Address)addr).c_str());
 
     // allocate counter
     BPatch_variableExpr *counter = mainApp->malloc(*counterType);
@@ -284,6 +283,17 @@ void handleBasicBlock(BPatch_basicBlock *block, BPatch_function *func)
     Instruction::Ptr iptr;
     void *addr;
 
+    // print instruction info
+    printf("BLOCK %lx\n", (unsigned long)block->getStartAddress());
+
+    // print source info
+    BPatch_Vector<BPatch_basicBlock*> sources;
+    block->getSources(sources);
+    for (unsigned i=0; i<sources.size(); i++) {
+        BPatch_basicBlock *source = sources[i];
+        printf(" <-- %lx\n", (unsigned long)source->getStartAddress());
+    }
+
     // get all floating-point instructions
     PatchBlock::Insns insns;
     PatchAPI::convert(block)->getInsns(insns);
@@ -295,6 +305,14 @@ void handleBasicBlock(BPatch_basicBlock *block, BPatch_function *func)
         addr = (void*)((*j).first);
         iptr = (*j).second;
         handleInstruction(addr, iptr, block, func);
+    }
+
+    // print target info
+    BPatch_Vector<BPatch_basicBlock*> targets;
+    block->getTargets(targets);
+    for (unsigned i=0; i<targets.size(); i++) {
+        BPatch_basicBlock *target = targets[i];
+        printf(" --> %lx\n", (unsigned long)target->getStartAddress());
     }
 }
 
@@ -311,6 +329,18 @@ void handleFunction(BPatch_function *function, const char *name)
         handleBasicBlock(*b, function);
     }
 
+    std::vector<BPatch_basicBlockLoop*> loops;
+    std::vector<BPatch_basicBlockLoop*>::iterator l;
+    std::vector<BPatch_basicBlock*> loopBlocks;
+    std::vector<BPatch_basicBlock*>::iterator lb;
+    cfg->getLoops(loops);
+    for (l = loops.begin(); l != loops.end(); l++) {
+        printf("LOOP:\n");
+        (*l)->getLoopBasicBlocks(loopBlocks);
+        for (lb = loopBlocks.begin(); lb != loopBlocks.end(); lb++) {
+            handleBasicBlock(*lb, function);
+        }
+    }
     //printf("\n");
 }
 
