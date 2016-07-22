@@ -19,14 +19,14 @@ Dependencies:
 * DyninstAPI (Tested version: [9.1.0](https://github.com/dyninst/dyninst))
 
   Dyninst must be compiled and accessible to the linker. The environment variable
-  DYNINST_ROOT should point to the location it is installed.
+  `DYNINST_ROOT` should point to the location it is installed.
 
 * XED2 Library (Tested version: from
   [Pin 2.14-71313](http://software.intel.com/en-us/articles/pintool-downloads))
 
-  Set the XED_KIT variable in the Makefile appropriately after you have downloaded
-  Pin. There is no need to compile Pin or XED from source. Note that CRAFT does
-  not use Pin directly, only XED.
+  Set the `XED_KIT` variable in the Makefile appropriately after you have
+  downloaded Pin. There is no need to compile Pin or XED from source. Note that
+  CRAFT does not use Pin directly, only XED.
 
 * Boost headers (Tested version:
   [1.53.0](http://sourceforge.net/projects/boost/files/boost/1.53.0/))
@@ -46,7 +46,7 @@ folder created by the build process to `PATH` and `LD_LIBRARY_PATH`. I recommend
 writing a shell script to set `PLATFORM`, `DYNINST_ROOT`, `PATH`, and `LD_LIBRARY_PATH`.
 
 For replacement analysis to work, the current directory ("`.`") also needs to be
-in LD_LIBRARY_PATH so that the runtime linker can find the rewritten shared
+in `LD_LIBRARY_PATH` so that the runtime linker can find the rewritten shared
 libraries.
 
 To test the build, execute the `./run_tests` command in the testsuite folder.
