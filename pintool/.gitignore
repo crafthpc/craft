@@ -1,0 +1,3 @@
+obj-intel64/*
+tmp/*
+*.log
