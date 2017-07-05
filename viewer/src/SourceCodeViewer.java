@@ -318,6 +318,11 @@ public class SourceCodeViewer extends JFrame
 
     public static String getFullPath(String filename) {
         
+        // is this filename already a full path?
+        if ((new File(filename)).exists()) {
+            return filename;
+        }
+
         // look through the search dirs stored in Util
         String fullPath = null;
         for (File path : Util.getSearchDirs()) {
