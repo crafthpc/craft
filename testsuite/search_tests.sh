@@ -13,7 +13,7 @@ RUN_SEARCH=true     # set to "false" to only do the checks; use for debugging th
 
 # directories
 TESTDIR=`pwd`
-MUTDIR=$DYNINST_ROOT/craft/demo/sum2pi_x
+MUTDIR=$TESTDIR/../demo/sum2pi_x
 MUTATEE=$MUTDIR/sum2pi_x
 
 

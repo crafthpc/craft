@@ -1,6 +1,6 @@
 # Makefile for CRAFT
 #
-# Mike Lam, UMD
+# Mike Lam, JMU
 #
 
 

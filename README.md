@@ -34,9 +34,8 @@ Dependencies:
   `-I`).
 
 
-To build CRAFT, use the `make` command in the root directory. You will need a
-reasonably recent (4.x) version of gcc. The build has been tested with gcc
-version 4.6.2 and 4.9.3.
+You will also need a reasonably recent (4.x) version of gcc. The build has been
+tested with gcc version 4.6.2 and 4.9.3.
 
 I have provided a rudimentary Bash build/installation script (`build.sh`) that
 will acquire dependencies and build everything; it should work as long as the
@@ -45,9 +44,11 @@ This script will also create a Bash environment script (`env-setup.sh`) that you
 should source every time you want to run CRAFT (or you could put it in your Bash
 profile).
 
-If you build manually, you will need to add the `$PLATFORM` folder created by
-the build process to `PATH` and `LD_LIBRARY_PATH`. I recommend writing a shell
-script to set `PLATFORM`, `DYNINST_ROOT`, `PATH`, and `LD_LIBRARY_PATH`.
+To build CRAFT manually (or to re-build later), use the `make` command in the
+root directory. If you build manually, you will need to add the `$PLATFORM`
+folder created by the build process to `PATH` and `LD_LIBRARY_PATH`. I recommend
+writing a shell script to set `PLATFORM`, `DYNINST_ROOT`, `PATH`, and
+`LD_LIBRARY_PATH`.
 
 For replacement analysis to work, the current directory ("`.`") also needs to be
 in `LD_LIBRARY_PATH` so that the runtime linker can find the rewritten shared
@@ -55,15 +56,17 @@ libraries.
 
 To test the build, execute the `./run_tests` command in the testsuite folder.
 
-To sanity-check a non-testsuite executable, try one of the following commands:
+To sanity-check a non-testsuite executable, try the following commands:
 
     fpinst --cinst <binary>
     fpinst --dcancel <binary>
     fpinst --svinp double <binary>
 
-To use the automatic search script, you will need Ruby 2.0 or later.
+To use the automatic search script (`craft` in the `scripts` folder), you will
+need Ruby 2.0 or later.
 
-To build and use the GUI, you will need Java 1.6 or later.
+To build and use the GUI tools in the `viewer` folder, you will need Java 1.6 or
+later.
 
 
 CRAFT is free software: you can redistribute it and/or modify it under the terms

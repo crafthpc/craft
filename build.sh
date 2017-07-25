@@ -25,13 +25,13 @@ mkdir -p "$EXTERN_ROOT"
     cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=$DYNINST_ROOT/$PLATFORM . && \
     make install -j16 )
 
-# download and extract Pin
+# download and extract Pin (for XED)
 ( cd "$EXTERN_ROOT" && \
     curl -O https://software.intel.com/sites/landingpage/pintool/downloads/$PIN_FILE && \
     tar -xf "$PIN_FILE" && \
     rm "$PIN_FILE" )
 
-# set up CRAFT makefile so it knows where XED is
+# add XED location to CRAFT makefile
 XED_PATH="$(sed -e "s:\/:\\\/:g" <<< "$PIN_ROOT")\/extras\/xed-intel64"
 sed -i -e "s/^XED_KIT=.*$/XED_KIT=$XED_PATH/" Makefile
 
@@ -51,4 +51,6 @@ echo "export PATH=\"$CRAFT_ROOT/$PLATFORM:$CRAFT_ROOT/scripts:\$PATH\"" >>"$SETU
 echo "export LD_LIBRARY_PATH=\"$CRAFT_ROOT/$PLATFORM/:$DYNINST_ROOT/$PLATFORM/lib:.:\$LD_LIBRARY_PATH\"" >>"$SETUP_SH"
 echo "export DYNINSTAPI_RT_LIB=\"$DYNINST_ROOT/$PLATFORM/lib/libdyninstAPI_RT.so\"" >>"$SETUP_SH"
 chmod +x "$SETUP_SH"
+
+echo "Build complete. Don't forget to 'source $SETUP_SH' before you run anything."
 
