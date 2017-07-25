@@ -28,3 +28,4 @@ i386-unknown-linux2.4/
 x86_64-unknown-linux2.4/
 processed_*.cpp
 tags
+env-setup.sh

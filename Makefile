@@ -4,7 +4,7 @@
 #
 
 
-# pointer to the "extras/xed2-intel64" folder (for lib/libxed.a)
+# pointer to the "extras/xed-intel64" folder (for lib/libxed.a)
 XED_KIT=
 
 # modify these lines if you need the compiler/linker to find things in
@@ -23,7 +23,7 @@ DEBUG_FLAGS = -g -DINCLUDE_DEBUG=1
 WARN_FLAGS = -Wall -W -Wcast-align -Wno-deprecated-declarations
 
 # Dyninst flags
-DYNINST_CFLAGS  = -I$(DYNINST_ROOT)/$(PLATFORM)/include -I$(DYNINST_ROOT)/dyninst $(LOCAL_INC_DIRS)
+DYNINST_CFLAGS  = -I$(DYNINST_ROOT)/$(PLATFORM)/include -I$(DYNINST_ROOT) $(LOCAL_INC_DIRS)
 DYNINST_LDFLAGS = -L$(DYNINST_ROOT)/$(PLATFORM)/lib $(LOCAL_LIB_DIRS) -ldwarf \
                   -ldyninstAPI -lstackwalk -lpcontrol -lpatchAPI -lparseAPI -linstructionAPI \
 				  -lsymtabAPI -lsymLite -ldynDwarf -ldynElf -lcommon -pthread -ldl

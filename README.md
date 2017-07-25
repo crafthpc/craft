@@ -2,16 +2,13 @@
 
 Mike Lam, James Madison University
 
-
-**WARNING: THIS IS RESEARCH SOFTWARE!**
-
 Building and using this project currently requires some experience in systems
 development and tool infrastructure. This file includes some basic installation
 and compilation instructions, but they may require some manual modification on
 your specific platform.  Contact the author if you encounter issues.
 
 Currently this project only works on x86\_64 Linux. The environment variable
-PLATFORM needs to be set to "`x86_64-unknown-linux2.4`".
+`PLATFORM` needs to be set to "`x86_64-unknown-linux2.4`".
 
 
 Dependencies:
@@ -39,11 +36,18 @@ Dependencies:
 
 To build CRAFT, use the `make` command in the root directory. You will need a
 reasonably recent (4.x) version of gcc. The build has been tested with gcc
-version 4.6.2.
+version 4.6.2 and 4.9.3.
 
-There is currently no installation routine. You will need to add the `$PLATFORM`
-folder created by the build process to `PATH` and `LD_LIBRARY_PATH`. I recommend
-writing a shell script to set `PLATFORM`, `DYNINST_ROOT`, `PATH`, and `LD_LIBRARY_PATH`.
+I have provided a rudimentary Bash build/installation script (`build.sh`) that
+will acquire dependencies and build everything; it should work as long as the
+system Boost headers are compatible (this is to save space in the common case).
+This script will also create a Bash environment script (`env-setup.sh`) that you
+should source every time you want to run CRAFT (or you could put it in your Bash
+profile).
+
+If you build manually, you will need to add the `$PLATFORM` folder created by
+the build process to `PATH` and `LD_LIBRARY_PATH`. I recommend writing a shell
+script to set `PLATFORM`, `DYNINST_ROOT`, `PATH`, and `LD_LIBRARY_PATH`.
 
 For replacement analysis to work, the current directory ("`.`") also needs to be
 in `LD_LIBRARY_PATH` so that the runtime linker can find the rewritten shared

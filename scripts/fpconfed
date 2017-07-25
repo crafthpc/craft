@@ -9,9 +9,11 @@ if [ "$PROFILER" = "y" ]; then
     VMOPTS="$VMOPTS -Xrunhprof:cpu=samples,interval=20,depth=5"
 fi
 
+SCRIPT_PATH=$(cd $(dirname $0); pwd -P)
+
 if [ "$BACKGROUND" = "y" ]; then
-    java $VMOPTS -jar $DYNINST_ROOT/craft/viewer/fpconfed.jar $@ &
+    java $VMOPTS -jar $SCRIPT_PATH/../viewer/fpconfed.jar $@ &
 else
-    java $VMOPTS -jar $DYNINST_ROOT/craft/viewer/fpconfed.jar $@
+    java $VMOPTS -jar $SCRIPT_PATH/../viewer/fpconfed.jar $@
 fi
 

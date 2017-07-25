@@ -14,9 +14,11 @@ for p in $@; do
     fi
 done
 
+SCRIPT_PATH=$(cd $(dirname $0); pwd -P)
+
 if [ "$BACKGROUND" = "y" ]; then
-    java -Xmx1024M -jar $DYNINST_ROOT/craft/viewer/fpview.jar $@ &
+    java -Xmx1024M -jar $SCRIPT_PATH/../viewer/fpview.jar $@ &
 else
-    java -Xmx1024M -jar $DYNINST_ROOT/craft/viewer/fpview.jar $@
+    java -Xmx1024M -jar $SCRIPT_PATH/../viewer/fpview.jar $@
 fi
 
