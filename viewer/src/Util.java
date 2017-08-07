@@ -112,7 +112,7 @@ public class Util {
     }
 
     public static Color getPrecisionScaledColor(long precision) {
-        Color c = Color.RED;
+        Color c = Color.WHITE;
         if (precision > 64) {
             c = getOverDoubleColor();
         }
