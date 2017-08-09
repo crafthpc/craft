@@ -10,8 +10,15 @@ your specific platform.  Contact the author if you encounter issues.
 Currently this project only works on x86\_64 Linux. The environment variable
 `PLATFORM` needs to be set to "`x86_64-unknown-linux2.4`".
 
+I have provided a rudimentary Bash build/installation script (`build.sh`) that
+will acquire dependencies and build everything; it should work as long as the
+system Boost headers are compatible (this is to save space in the common case).
+This script will also create a Bash environment script (`env-setup.sh`) that you
+should source every time you want to run CRAFT (or you could put it in your Bash
+profile).
 
-Dependencies:
+If you need to set up a build environment manually, here is a list of the
+dependencies:
 
 * DyninstAPI (Tested version: [9.1.0](https://github.com/dyninst/dyninst))
 
@@ -33,19 +40,11 @@ Dependencies:
   `LOCAL_INC_DIRS` variable in the Makefile to point the compiler to it (using
   `-I`).
 
-
 You will also need a reasonably recent (4.x) version of gcc. The build has been
 tested with gcc version 4.6.2 and 4.9.3.
 
-I have provided a rudimentary Bash build/installation script (`build.sh`) that
-will acquire dependencies and build everything; it should work as long as the
-system Boost headers are compatible (this is to save space in the common case).
-This script will also create a Bash environment script (`env-setup.sh`) that you
-should source every time you want to run CRAFT (or you could put it in your Bash
-profile).
-
-To build CRAFT manually (or to re-build later), use the `make` command in the
-root directory. If you build manually, you will need to add the `$PLATFORM`
+To build CRAFT manually once the dependencies are in place, use the `make`
+command in the root directory. You will also need to add the `$PLATFORM`
 folder created by the build process to `PATH` and `LD_LIBRARY_PATH`. I recommend
 writing a shell script to set `PLATFORM`, `DYNINST_ROOT`, `PATH`, and
 `LD_LIBRARY_PATH`.
