@@ -917,9 +917,12 @@ class RPrecStrategy < Strategy
 
     def build_final_config(results)
         reload_bounds_from_results(results)
-        # simple union of all passing configs
+        # simple union of all passing configs (or the default upper bound if we
+        # were unable to reduce precision at all)
         cfg = AppConfig.new($FINALCFG_CUID, "Final Configuration", @alternate)
-        @upper_bound.each_pair do |uid, prec|
+        uids = (@lower_bound.keys + @upper_bound.keys).uniq
+        uids.each do |uid|
+            prec = @upper_bound[uid]
             cfg.exceptions[uid] = $STATUS_RPREC
             cfg.precisions[uid] = prec
         end
