@@ -75,7 +75,8 @@ void _INST_alarm_handler(int /*sig*/, siginfo_t* /*info*/, void* /*context*/)
 {
     /*
      *if (_INST_Main_PointerAnalysis != NULL) {
-     *    printf("%10ld total FPSV allocation(s)  %10ld GC FPSV allocation(s)  %10ld kbytes  %10ld value writebacks  %10ld ptr writebacks\n", 
+     *    fprintf(stderr,
+     *            "%10ld total FPSV allocation(s)  %10ld GC FPSV allocation(s)  %10ld kbytes  %10ld value writebacks  %10ld ptr writebacks\n", 
      *            _INST_Main_PointerAnalysis->getNumAllocations(),
      *            _INST_Main_PointerAnalysis->getNumGCAllocations(),
      *            (_INST_Main_PointerAnalysis->getNumAllocations() + _INST_Main_PointerAnalysis->getNumGCAllocations())*sizeof(FPSVDouble)/1024,
@@ -88,7 +89,7 @@ void _INST_alarm_handler(int /*sig*/, siginfo_t* /*info*/, void* /*context*/)
     /*
     ucontext_t *ucontext = (ucontext_t*)context;
     void *rip = (void *)ucontext->uc_mcontext.gregs[REG_RIP];
-    printf("SIGPROF RIP=%p\n", rip);
+    fprintf(stderr, "SIGPROF RIP=%p\n", rip);
     */
 
     /*
@@ -100,9 +101,9 @@ void _INST_alarm_handler(int /*sig*/, siginfo_t* /*info*/, void* /*context*/)
     messages = backtrace_symbols(trace, trace_size);
     for (i=1; i<trace_size; i++) {
         for (j=0; j<i-1; j++) {
-            printf("  ");
+            fprintf(stderr, "  ");
         }
-        printf("%s\n", messages[i]);
+        fprintf(stderr, "%s\n", messages[i]);
     }
     */
 
@@ -115,9 +116,9 @@ void _INST_null() {
 
 void _INST_sigsegv_handler(int)
 {
-    printf("handling SIGSEGV\n");
+    fprintf(stderr, "handling SIGSEGV\n");
     if (mainLog) {
-        printf("%s\n", mainLog->getStackTrace().c_str());
+        fprintf(stderr, "%s\n", mainLog->getStackTrace().c_str());
     }
     exit(-1);
 }
@@ -135,7 +136,6 @@ void _INST_set_config_replace_entry (size_t idx, void* address, int type, int ta
     FPReplaceEntry *entry = new FPReplaceEntry((FPReplaceEntryType)type, idx);
     entry->address = address;
     entry->tag = (FPReplaceEntryTag)tag;
-    //printf("adding replace entry: %s\n", entry->toString().c_str());
     FPConfig::getMainConfig()->addReplaceEntry(entry);
     _INST_status = _INST_INACTIVE;
 }
@@ -157,7 +157,7 @@ void _INST_begin_profiling ()
     //t.it_value.tv_usec = 1000000;
     //t.it_interval.tv_usec = 1000000;
     setitimer(ITIMER_PROF, &t, 0);
-    printf("FPAnalysis: Registered SIGPROF handler\n");
+    cerr << "FPAnalysis: Registered SIGPROF handler\n";
 }
 
 string sanitize_filename(const char *input)
@@ -186,7 +186,7 @@ void _INST_init_analysis ()
     _INST_status = _INST_ACTIVE;
     status << "Initializing analysis using default context." << endl;
 
-    cout << "FPAnalysis: Initializing..." << endl;
+    cerr << "FPAnalysis: Initializing..." << endl;
 
     // set up register pointers
     _INST_reg_eip = &mainContext->reg_eip;
@@ -290,8 +290,8 @@ void _INST_init_analysis ()
     }
 
     mainLog->addMessage(STATUS, 0, "Profiler initialized.", status.str(), "");
-    cout << "FPAnalysis: Profiler initialized w/ configuration:" << endl;
-    cout << mainConfig->getSummary().c_str();
+    cerr << "FPAnalysis: Profiler initialized w/ configuration:" << endl;
+    cerr << mainConfig->getSummary().c_str();
 
     _INST_status = _INST_DISABLED;
     mainContext->restoreAllFPR();
@@ -300,18 +300,18 @@ void _INST_init_analysis ()
 void _INST_enable_analysis ()
 {
     _INST_status = _INST_ACTIVE;
-    printf("FPAnalysis: Profiler enabled.\n");
+    cerr << "FPAnalysis: Profiler enabled.\n";
     _INST_status = _INST_INACTIVE;
 }
 
 void _INST_register_inst (long iidx, void* addr, char* bytes, long nbytes)
 {
-    //printf("registering instruction #%ld:  %p @ %p  (%ld bytes)  ",
+    //fprintf(stderr, "registering instruction #%ld:  %p @ %p  (%ld bytes)  ",
             //iidx, addr, bytes, nbytes);
     //FPDecoderXED::printInstBytes(stdout, (unsigned char*)bytes, nbytes);
     _INST_status = _INST_ACTIVE;
     FPSemantics *inst = mainDecoder->decode(iidx, addr, (unsigned char*)bytes, nbytes);
-    //printf("  %s\n", inst->getDisassembly().c_str());
+    //fprintf(stderr, "  %s\n", inst->getDisassembly().c_str());
     size_t i;
     for (i=0; i<analysisCount; i++) {
         allAnalyses[i]->registerInstruction(inst);
@@ -374,7 +374,7 @@ void _INST_handle_replacement(long analysisID, long iidx)
 void _INST_disable_analysis ()
 {
     _INST_status = _INST_ACTIVE;
-    printf("FPAnalysis: Profiler disabled.\n");
+    cerr << "FPAnalysis: Profiler disabled.\n";
     _INST_status = _INST_DISABLED;
 }
 
@@ -395,14 +395,14 @@ void _INST_cleanup_analysis ()
         setitimer(ITIMER_VIRTUAL, &t, 0);
     }
 
-    cout << "FPAnalysis: Cleanup in process ..." << endl;
+    cerr << "FPAnalysis: Cleanup in process ..." << endl;
 
-    //printf("finalizing %d analyses...\n", analysisCount);
+    //fprintf(stderr, "finalizing %d analyses...\n", analysisCount);
     // final analysis output
     for (i=0; i<analysisCount; i++) {
         allAnalyses[i]->finalOutput();
     }
-    //printf("done finalizing analyses\n");
+    //fprintf(stderr, "done finalizing analyses\n");
     //fflush(stdout);
 
     // finalize the logfile
@@ -412,11 +412,11 @@ void _INST_cleanup_analysis ()
     msg << "Optimized analysis: " << _INST_fast_count << " instruction(s) handled";
     mainLog->addMessage(STATUS, 0, "Profiling finished.", msg.str(), "");
     mainLog->close();
-    printf("%s\n", msg.str().c_str());
+    cerr << msg.str() << endl;
 
-    cout << "FPAnalysis: Full analysis: " << _INST_count << " instruction(s) handled" << endl;
-    cout << "FPAnalysis: Optimized analysis: " << _INST_fast_count << " instruction(s) handled" << endl;
-    cout << "FPAnalysis: Log written to " << _INST_log_file << endl;
+    cerr << "FPAnalysis: Full analysis: " << _INST_count << " instruction(s) handled" << endl;
+    cerr << "FPAnalysis: Optimized analysis: " << _INST_fast_count << " instruction(s) handled" << endl;
+    cerr << "FPAnalysis: Log written to " << _INST_log_file << endl;
 
     _INST_status = _INST_DISABLED;
     mainContext->restoreAllFPR();
