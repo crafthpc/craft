@@ -2564,7 +2564,7 @@ def print_status
         end
         status_text << "#{indent}Application: #{"%27s" % $binary_name}"
         #status_text << "#{indent}Fortran mode:  #{"%24s" % ($fortran_mode ? "Y" : "N")}"
-        status_text << "#{indent}Typeforge mode:  #{"%24s" % ($typeforge_mode ? "Y" : "N")}"
+        status_text << "#{indent}Typeforge mode: #{"%24s" % ($typeforge_mode ? "Y" : "N")}"
         status_text << "#{indent}Base type:  #{"%28s" % $base_type}"
         status_text << "#{indent}Worker threads:            #{"%13d" % nworkers}"
         status_text << "#{indent}Total candidates:          #{"%13d" % $total_candidates}"
@@ -2695,6 +2695,8 @@ end
 def build_best_report(num,copy_files=false)
     if $strategy_name == "rprec" then
         return Array.new
+    elsif $typeforge_mode then
+        return build_best_runtime_report(num,copy_files)
     else
         return build_best_regular_report(num,copy_files)
     end
@@ -2791,6 +2793,38 @@ def build_best_regular_report(num,copy_files=false)
     report << "      %35s  %5.1f  "%["TOTAL PASSED",exec_passed] +
               "      %35s  %5.1f  "%["TOTAL FAILED",exec_failed]
     report << "%50s      %35s  %5.1f"%[" ","TOTAL",exec_passed+exec_failed]
+    report << " "
+    return report
+end
+
+def build_best_runtime_report(num,copy_files=false)
+    # find best individual configs
+    results = get_tested_configs
+    passed_cfgs = Array.new
+    results.each do |cfg|
+        if not (cfg.cuid == $FINALCFG_CUID) then
+            if cfg.attrs["result"] == $RESULT_PASS then
+                passed_cfgs << [cfg, cfg.attrs["runtime"]]
+            end
+        end
+    end
+    report = Array.new
+    report << " "
+    report << "  Top instrumented (passed):                Runtime (s)"
+    passed_cfgs = passed_cfgs.sort_by { |cfg,rtime| [rtime, -cfg.cuid.size] }
+    0.upto(num-1).each do |i|
+        line = ""
+        if i < passed_cfgs.size then
+            pcfg,prtime = passed_cfgs[i]
+            if copy_files and File.exists?($passed_path + pcfg.filename) then
+                FileUtils.cp($passed_path + pcfg.filename, $best_path)
+            end
+            line += "    - %-35s  %5.1f  "%[format_text(pcfg.label,35),prtime]
+        else
+            line += "%50s"%" "
+        end
+        report << line if line.strip != ""
+    end
     report << " "
     return report
 end
