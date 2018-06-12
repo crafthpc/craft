@@ -139,6 +139,12 @@ class PPoint
         fout.close
     end
 
+    def build_typeforge_file (config, fn)
+        fout = File.new(fn, "w")
+        output_typeforge(config, fout)
+        fout.close
+    end
+
     def build_lookup_hash(pt=nil)
         if pt.nil? then
             @byuid[@uid] = self
@@ -294,6 +300,32 @@ class PPoint
         end
         @children.each do |pt|
             pt.output(config, fout, overload, overload_prec)
+        end
+    end
+
+    def output_typeforge (config, fout, overload=nil, func_name="")
+        if @type == $TYPE_INSTRUCTION then
+            flag = @orig_status
+            if flag == $STATUS_CANDIDATE then
+                if not overload.nil? then
+                    flag = overload
+                elsif config.exceptions.has_key?(@uid) then
+                    flag = config.exceptions[@uid]
+                end
+                if flag == $STATUS_SINGLE then
+                    fout.puts "replace_vartype;#{func_name};#{@attrs["desc"]};float"
+                end
+            end
+        else
+            if config.exceptions.has_key?(@uid) then
+                overload = config.exceptions[@uid]
+            end
+            if @type == $TYPE_FUNCTION then
+                func_name = @attrs["desc"]
+            end
+            @children.each do |c|
+                c.output_typeforge(config, fout, overload, func_name)
+            end
         end
     end
 end # }}}
@@ -946,6 +978,7 @@ def main
     $status_alternate = $STATUS_DOUBLE      # replacement status if cannot be preferred
     $status_blank = " "                     # "no result" replacement status
     $fortran_mode = false                   # pass "-N" to mutator
+    $typeforge_mode = false                 # use TypeForge to generate program variants
     $base_type = $TYPE_INSTRUCTION          # stop splitting configs at this level
     $skip_nonexecuted = true                # don't bother running configs with non-executed instructions
     $mixed_use_rprec = false                # use rprec 23-bit truncation to simulate mixed svinp analysis
@@ -1178,10 +1211,17 @@ def initialize_search
             orig_cfg.puts line
         end
     else
-        # run fpconf to generate config
-        IO.popen("#{$fpconf_invoke} #{$fpconf_options} #{$binary_path}") do |io|
-            io.each_line do |line|
-                orig_cfg.puts line
+        if $typeforge_mode then
+            # TODO: implement this
+            puts "Cannot auto-generate initial configuration for TypeForge mode yet!"
+            puts "Aborting search."
+            exit
+        else
+            # run fpconf to generate config
+            IO.popen("#{$fpconf_invoke} #{$fpconf_options} #{$binary_path}") do |io|
+                io.each_line do |line|
+                    orig_cfg.puts line
+                end
             end
         end
     end
@@ -1642,6 +1682,9 @@ def parse_command_line
             elsif opt == '-N' then
                 # fortran mode
                 $fortran_mode = true
+            elsif opt == '-T' then
+                # typeforge mode
+                $typeforge_mode = true
             elsif opt == '-b' then
                 # stop splitting at basic blocks
                 $base_type = $TYPE_BASICBLOCK
@@ -1814,6 +1857,8 @@ end
 
 
 def run_profiler
+    # TODO: do something more useful in TypeForge mode?
+
     passed = false
     if not File.exist?($prof_path) then
         Dir.mkdir($prof_path)
@@ -1922,7 +1967,11 @@ def run_config (cfg)
 
     # write actual configuration file
     cfg_path = $search_path + cfg.filename
-    $program.build_config_file(cfg, cfg_path)
+    if $typeforge_mode then
+      $program.build_typeforge_file(cfg, cfg_path)
+    else
+      $program.build_config_file(cfg, cfg_path)
+    end
 
     # pass off to filename version
     result,error,runtime = run_config_file(cfg_path, false, cfg.label)
@@ -1949,17 +1998,25 @@ def run_config_file (fn, keep, label)
     $status_buffer = "    Finished testing #{label}:\n"
 
     # build rewritten mutatee
-    cmd = "#{$fpinst_invoke} -i #{$fortran_mode ? "-N" : ""}"
-    cmd += " -c #{fn}"
-    cmd += " #{$binary_path}"
-    #add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
+    if $typeforge_mode then
+      cmd = "typeforge --spec-file=#{fn} #{$binary_path}.cpp && "
+      cmd += "g++ -g -o #{Dir.getwd}/mutant #{Dir.getwd}/rose_*.cpp"
+    else
+      cmd = "#{$fpinst_invoke} -i #{$fortran_mode ? "-N" : ""}"
+      cmd += " -c #{fn}"
+      cmd += " #{$binary_path}"
+    end
+    puts cmd
+    add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
     Open3.popen3(cmd) do |io_in, io_out, io_err|
-        io_out.each_line do |line|
-            if line =~ /Inplace: (.*)$/ then
-                $status_buffer += "        #{$1}\n"
-            end
-        end
-     end
+      io_out.each_line do |line|
+          puts line
+          if line =~ /Inplace: (.*)$/ then
+              $status_buffer += "        #{$1}\n"
+          end
+      end
+    end
+    cmd = "#{$search_path}#{$craft_driver} #{Dir.getwd}/mutant"
 
     # execute rewritten mutatee and check for success
     result = $RESULT_ERROR
@@ -2064,6 +2121,7 @@ def save_settings
     f.puts "status_alternate=#{$status_alternate}"
     f.puts "baseline_runtime=#{$baseline_runtime}"
     f.puts "lang=#{($fortran_mode ? "fortran" : "other")}"
+    f.puts "typeforge_mode=#{($typeforge_mode ? "yes" : "no")}"
     f.puts "base_type=#{$base_type}"
     f.puts "skip_nonexecuted=#{$skip_nonexecuted}"
     f.puts "initial_cfg_fn=#{$initial_cfg_fn}"
@@ -2126,6 +2184,10 @@ def load_settings
             when "lang"
                 if value == "fortran" then $fortran_mode = true
                 else                       $fortran_mode = false
+                end
+            when "typeforge_mode"
+                if value == "yes" then $typeforge_mode = true
+                else                   $typeforge_mode = false
                 end
             when "base_type"
                 $base_type = value
@@ -2502,6 +2564,7 @@ def print_status
         end
         status_text << "#{indent}Application: #{"%27s" % $binary_name}"
         #status_text << "#{indent}Fortran mode:  #{"%24s" % ($fortran_mode ? "Y" : "N")}"
+        status_text << "#{indent}Typeforge mode:  #{"%24s" % ($typeforge_mode ? "Y" : "N")}"
         status_text << "#{indent}Base type:  #{"%28s" % $base_type}"
         status_text << "#{indent}Worker threads:            #{"%13d" % nworkers}"
         status_text << "#{indent}Total candidates:          #{"%13d" % $total_candidates}"
@@ -2608,7 +2671,11 @@ end
 
 def rebuild_final_config
     $final_config = $strategy.build_final_config(get_tested_configs)
-    $program.build_config_file($final_config, $final_config_fn, false)
+    if $typeforge_mode then
+        $program.build_typeforge_file($final_config, $final_config_fn)
+    else
+        $program.build_config_file($final_config, $final_config_fn, false)
+    end
     calculate_pct_stats($final_config)
 end
 
