@@ -818,6 +818,58 @@ class ExhaustiveStrategy < Strategy
 
 end # }}}
 
+# ExhaustiveCombinationalStrategy
+#
+# Naive search algorithm that searches all combinations of all instructions
+# immediately. Highly parallelizable but enormously ineffecient. Useful as a
+# baseline for comparing more intelligent strategies.
+#
+# {{{ ExhaustiveCombinationalStrategy
+class ExhaustiveCombinationalStrategy < Strategy
+
+    def build_initial_configs
+        # find all base_type-level points
+        all_points = []
+        find_points(@program, all_points)
+
+        # build all configurations
+        all_configs = []
+        1.upto(all_points.size) do |n|
+            all_points.combination(n).each do |cmb|
+                name = ""
+                cmb.each do |pt|
+                    name += "_" if name.size > 0
+                    name += pt.attrs["desc"]
+                end
+                cfg = AppConfig.new(name, name, @alternate)
+                cmb.each do |pt|
+                    cfg.add_pt_info(pt)
+                    cfg.exceptions[pt.uid] = @preferred
+                    cfg.attrs["level"] = pt.type
+                end
+                all_configs << cfg
+            end
+        end
+        return all_configs
+    end
+
+    def find_points(pt, all_points)
+        all_pts = []
+        if pt.type == @base_type then
+            all_points << pt
+        else
+            pt.children.each do |child|
+                find_points(child, all_points)
+            end
+        end
+    end
+
+    def split_config(config)
+        # don't split
+        return Array.new
+    end
+
+end # }}}
 
 # RPrecStrategy
 #
@@ -1806,6 +1858,8 @@ def initialize_strategy
         $strategy = BinaryStrategy.new($program, $status_preferred, $status_alternate)
     elsif $strategy_name == "exhaustive" then
         $strategy = ExhaustiveStrategy.new($program, $status_preferred, $status_alternate)
+    elsif $strategy_name == "combinational" then
+        $strategy = ExhaustiveCombinationalStrategy.new($program, $status_preferred, $status_alternate)
     elsif $strategy_name == "rprec" then
         $strategy = RPrecStrategy.new($program, $status_preferred, $status_alternate)
         $strategy.split_threshold = $rprec_split_threshold
