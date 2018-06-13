@@ -2074,7 +2074,7 @@ def run_config_file (fn, keep, label)
 
     # execute rewritten mutatee and check for success
     result = $RESULT_ERROR
-    runtime = 0
+    runtime = 0.0
     error = 0.0
     cmd = "#{$search_path}#{$craft_driver} #{Dir.getwd}/mutant"
     #add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
@@ -2090,7 +2090,7 @@ def run_config_file (fn, keep, label)
             elsif line =~ /error:\s*(.+)/i then
                 error = $1.to_f
             elsif line =~ /time:\s*(.+)/i then
-                runtime = $1.to_i
+                runtime = $1.to_f
             end
         end
     end
@@ -2873,7 +2873,7 @@ def build_best_runtime_report(num,copy_files=false)
             if copy_files and File.exists?($passed_path + pcfg.filename) then
                 FileUtils.cp($passed_path + pcfg.filename, $best_path)
             end
-            line += "    - %-35s  %5.1f  "%[format_text(pcfg.label,35),prtime]
+            line += "    - %-35s  %5.2f  "%[format_text(pcfg.label,35),prtime]
         else
             line += "%50s"%" "
         end
