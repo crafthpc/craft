@@ -530,6 +530,23 @@ class Strategy
         end
         return cfg
     end
+
+    def build_fastest_config(results)
+        # fastest passing config
+        passed_cfgs = Array.new
+        results.each do |r|
+            if r.attrs.has_key?("result") and r.attrs["result"] == $RESULT_PASS then
+                passed_cfgs << [r, r.attrs["runtime"]]
+            end
+        end
+        passed_cfgs = passed_cfgs.sort_by { |cfg,rtime| [rtime, -cfg.cuid.size] }
+        if passed_cfgs.size > 0 then
+            return passed_cfgs[0][0]
+        else
+            return nil
+        end
+    end
+
 end # }}}
 
 
@@ -2725,13 +2742,14 @@ end
 
 
 def rebuild_final_config
-    $final_config = $strategy.build_final_config(get_tested_configs)
     if $typeforge_mode then
+        $final_config = $strategy.build_fastest_config(get_tested_configs)
         $program.build_typeforge_file($final_config, $final_config_fn)
     else
+        $final_config = $strategy.build_final_config(get_tested_configs)
         $program.build_config_file($final_config, $final_config_fn, false)
+        calculate_pct_stats($final_config)
     end
-    calculate_pct_stats($final_config)
 end
 
 
