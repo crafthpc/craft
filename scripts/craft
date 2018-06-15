@@ -533,6 +533,7 @@ class Strategy
 
     def build_fastest_config(results)
         # fastest passing config
+        cfg = AppConfig.new($FINALCFG_CUID, "Final Configuration", @alternate)
         passed_cfgs = Array.new
         results.each do |r|
             if r.attrs.has_key?("result") and r.attrs["result"] == $RESULT_PASS then
@@ -541,10 +542,11 @@ class Strategy
         end
         passed_cfgs = passed_cfgs.sort_by { |cfg,rtime| [rtime, -cfg.cuid.size] }
         if passed_cfgs.size > 0 then
-            return passed_cfgs[0][0]
-        else
-            return nil
+            passed_cfgs[0][0].exceptions.each_pair do |k,v|
+                cfg.exceptions[k] = v
+            end
         end
+        return cfg
     end
 
 end # }}}
@@ -2071,7 +2073,7 @@ def run_config_file (fn, keep, label)
     # build rewritten mutatee
     if $typeforge_mode then
       cmd = "typeforge --spec-file=#{fn} #{$binary_path}.cpp && "
-      cmd += "g++ -g -o #{Dir.getwd}/mutant #{Dir.getwd}/rose_*.cpp"
+      cmd += "g++ -g -o #{Dir.getwd}/mutant #{Dir.getwd}/rose_#{$binary_name}.cpp"
     else
       cmd = "#{$fpinst_invoke} -i #{$fortran_mode ? "-N" : ""}"
       cmd += " -c #{fn}"
