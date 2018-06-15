@@ -1911,7 +1911,8 @@ end
 
 
 def run_profiler
-    # TODO: do something more useful in TypeForge mode?
+    # there's no need for profile info in TypeForge mode
+    return true if $typeforge_mode
 
     passed = false
     if not File.exist?($prof_path) then
