@@ -2139,13 +2139,19 @@ def run_config_file (fn, keep, label)
     end
     $status_buffer = ""
 
-    # copy config to appropriate folder
+    # copy config (and in Typeforge mode the modified source) to appropriate folder
     if result == $RESULT_PASS then
         FileUtils.cp(fn, $passed_path)
+        FileUtils.cp("#{Dir.getwd}/rose_#{$binary_name}.cpp",
+                     "#{$passed_path}/craft_#{label}.cpp") if $typeforge_mode
     elsif result == $RESULT_FAIL then
         FileUtils.cp(fn, $failed_path)
+        FileUtils.cp("#{Dir.getwd}/rose_#{$binary_name}.cpp",
+                     "#{$failed_path}/craft_#{label}.cpp") if $typeforge_mode
     elsif result == $RESULT_ERROR then
         FileUtils.cp(fn, $aborted_path)
+        FileUtils.cp("#{Dir.getwd}/rose_#{$binary_name}.cpp",
+                     "#{$aborted_path}/craft_#{label}.cpp") if $typeforge_mode
     end
 
     # clean out mutant, logs, and rewritten library files
