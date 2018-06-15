@@ -868,7 +868,6 @@ class ExhaustiveCombinationalStrategy < Strategy
         # don't split
         return Array.new
     end
-
 end # }}}
 
 # RPrecStrategy
@@ -2549,6 +2548,7 @@ def print_usage
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
     puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"rprec\""
     puts "   -S             disable queue sorting (improves overall performance but may converge slower"
+    puts "   -T             enable TypeForge mode for variable-level tuning and performance testing"
     puts " "
     puts "Mixed-precision-specific options:"
     puts "   --mixed-use_rprec <X>                  use reduced-precision to simulate <X> bits for single precision"
