@@ -517,7 +517,7 @@ class Strategy
 
     def build_final_config(results)
         # simple union of all passing configs
-        cfg = AppConfig.new($FINALCFG_CUID, "Final Configuration", @alternate)
+        cfg = AppConfig.new($FINALCFG_CUID, "final", @alternate)
         results.each do |r|
             if r.attrs.has_key?("result") and r.attrs["result"] == $RESULT_PASS then
                 r.exceptions.each_pair do |k,v|
@@ -533,7 +533,7 @@ class Strategy
 
     def build_fastest_config(results)
         # fastest passing config
-        cfg = AppConfig.new($FINALCFG_CUID, "Final Configuration", @alternate)
+        cfg = AppConfig.new($FINALCFG_CUID, "final", @alternate)
         passed_cfgs = Array.new
         results.each do |r|
             if r.attrs.has_key?("result") and r.attrs["result"] == $RESULT_PASS then
@@ -1021,7 +1021,7 @@ class RPrecStrategy < Strategy
         reload_bounds_from_results(results)
         # simple union of all passing configs (or the default upper bound if we
         # were unable to reduce precision at all)
-        cfg = AppConfig.new($FINALCFG_CUID, "Final Configuration", @alternate)
+        cfg = AppConfig.new($FINALCFG_CUID, "final", @alternate)
         uids = (@lower_bound.keys + @upper_bound.keys).uniq
         uids.each do |uid|
             prec = @upper_bound[uid]
