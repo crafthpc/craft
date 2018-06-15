@@ -2079,11 +2079,9 @@ def run_config_file (fn, keep, label)
       cmd += " -c #{fn}"
       cmd += " #{$binary_path}"
     end
-    puts cmd
     add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
     Open3.popen3(cmd) do |io_in, io_out, io_err|
       io_out.each_line do |line|
-          puts line
           if line =~ /Inplace: (.*)$/ then
               $status_buffer += "        #{$1}\n"
           end
