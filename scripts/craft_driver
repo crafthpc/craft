@@ -8,7 +8,7 @@ binary=$1
 tmp_file=stdout.tmp
 
 # start timing
-t_start=$(date +%s.$3N)
+t_start=$(date +%s.%3N)
 
 # MODIFY THIS: run binary
 $binary >$tmp_file
