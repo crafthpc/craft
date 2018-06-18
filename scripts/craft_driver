@@ -8,24 +8,24 @@ binary=$1
 tmp_file=stdout.tmp
 
 # start timing
-t_start=`date +%s`
+t_start=$(date +%s.$3N)
 
 # MODIFY THIS: run binary
 $binary >$tmp_file
 exit_code=$?
 
 # stop timing
-t_stop=`date +%s`
+t_stop=$(date +%s.%3N)
 
 # calculate runtime
-runtime=$(expr $t_stop - $t_start)
+runtime=$(echo "$t_stop - $t_start" | bc)
 
 # MODIFY THIS: check verification
 status="pass"
 if [ $exit_code -ne 0 ]; then
     status="error"
 else
-    check=`grep "[^N]SUCCESSFUL" $tmp_file`
+    check=$(grep "[^N]SUCCESSFUL" $tmp_file)
     if [ -z "$check" ]; then
         status="fail"
     fi
