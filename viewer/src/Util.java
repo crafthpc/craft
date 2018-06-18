@@ -101,9 +101,24 @@ public class Util {
         return Color.getHSBColor((180.0f / 360.0f), sat, 1.0f);
     }
 
+    public static Color getRedPurpleScaledColor(float value) {
+        value = Math.min(Math.max(value, 0.0f), 1.0f);
+        float hue = ((1.0f-value) * (110.0f/360.0f)) + (250.0f/360.0f);
+        return Color.getHSBColor(hue, 0.35f, 1.0f);
+    }
+
+    public static Color getOverDoubleColor() {
+        return Color.getHSBColor(250.0f/360.0f, 0.35f, 1.0f);
+    }
+
     public static Color getPrecisionScaledColor(long precision) {
-        Color c = Color.WHITE;
-        if (precision > 23 && precision <= 52) {
+        Color c = Color.RED;
+        if (precision > 64) {
+            c = getOverDoubleColor();
+        } else if (precision > 52 && precision <= 64) {
+            float prec = ((float)precision-52.0f)/(64.0f-52.0f);
+            c = getRedPurpleScaledColor(prec);
+        } else if (precision > 23 && precision <= 52) {
             float prec = ((float)precision-23.0f)/(52.0f-23.0f);
             c = getGreenRedScaledColor(prec);
         } else if (precision <= 23) {
