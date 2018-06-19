@@ -141,7 +141,7 @@ class PPoint
 
     def build_typeforge_file (config, fn)
         fout = File.new(fn, "w")
-        output_typeforge(config, fout)
+        output_typeforge(config, fout, nil, "$global")
         fout.close
     end
 
@@ -2072,8 +2072,7 @@ def run_config_file (fn, keep, label)
 
     # build rewritten mutatee
     if $typeforge_mode then
-      cmd = "typeforge --spec-file=#{fn} #{$binary_path}.cpp && "
-      cmd += "g++ -g -o #{Dir.getwd}/mutant #{Dir.getwd}/rose_#{$binary_name}.cpp"
+      cmd = "#{$search_path}/craft_builder #{fn}"
     else
       cmd = "#{$fpinst_invoke} -i #{$fortran_mode ? "-N" : ""}"
       cmd += " -c #{fn}"
@@ -2087,7 +2086,6 @@ def run_config_file (fn, keep, label)
           end
       end
     end
-    cmd = "#{$search_path}#{$craft_driver} #{Dir.getwd}/mutant"
 
     # execute rewritten mutatee and check for success
     result = $RESULT_ERROR
@@ -2140,16 +2138,10 @@ def run_config_file (fn, keep, label)
     # copy config (and in Typeforge mode the modified source) to appropriate folder
     if result == $RESULT_PASS then
         FileUtils.cp(fn, $passed_path)
-        FileUtils.cp("#{Dir.getwd}/rose_#{$binary_name}.cpp",
-                     "#{$passed_path}/craft_#{label}.cpp") if $typeforge_mode
     elsif result == $RESULT_FAIL then
         FileUtils.cp(fn, $failed_path)
-        FileUtils.cp("#{Dir.getwd}/rose_#{$binary_name}.cpp",
-                     "#{$failed_path}/craft_#{label}.cpp") if $typeforge_mode
     elsif result == $RESULT_ERROR then
         FileUtils.cp(fn, $aborted_path)
-        FileUtils.cp("#{Dir.getwd}/rose_#{$binary_name}.cpp",
-                     "#{$aborted_path}/craft_#{label}.cpp") if $typeforge_mode
     end
 
     # clean out mutant, logs, and rewritten library files
