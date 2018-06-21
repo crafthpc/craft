@@ -34,18 +34,21 @@ $TYPE_MODULE      = "MODULE"
 $TYPE_FUNCTION    = "FUNC"
 $TYPE_BASICBLOCK  = "BBLK"
 $TYPE_INSTRUCTION = "INSN"
+$TYPE_VARIABLE    = "VAR"
 $TYPE_SPACES = Hash.new("")
 $TYPE_SPACES[$TYPE_APPLICATION] = ""                # for pretty output
 $TYPE_SPACES[$TYPE_MODULE]      = "  "
 $TYPE_SPACES[$TYPE_FUNCTION]    = "    "
 $TYPE_SPACES[$TYPE_BASICBLOCK]  = "      "
 $TYPE_SPACES[$TYPE_INSTRUCTION] = "        "
+$TYPE_SPACES[$TYPE_VARIABLE]    = "        "
 $TYPE_RANK = Hash.new(0)
 $TYPE_RANK[$TYPE_APPLICATION] = 1
 $TYPE_RANK[$TYPE_MODULE]      = 2
 $TYPE_RANK[$TYPE_FUNCTION]    = 3
 $TYPE_RANK[$TYPE_BASICBLOCK]  = 4
 $TYPE_RANK[$TYPE_INSTRUCTION] = 5
+$TYPE_RANK[$TYPE_VARIABLE]    = 5
 $TYPE_RRANK = $TYPE_RANK.invert
 
 $STATUS_NONE      = " "                             # replacement status posibilities
@@ -196,6 +199,8 @@ class PPoint
             label = "BBLK #{@attrs["addr"]} #{tag}"
         elsif @uid.include?($TYPE_INSTRUCTION) then
             label = "INSN #{@attrs["addr"]} #{tag}\"#{@attrs["desc"]}\""
+        elsif @uid.include?($TYPE_VARIABLE) then
+            label = "VAR #{@attrs["addr"]} #{tag}\"#{@attrs["desc"]}\""
         end
         return label.strip
     end
@@ -304,7 +309,7 @@ class PPoint
     end
 
     def output_typeforge (config, fout, overload=nil, func_name="")
-        if @type == $TYPE_INSTRUCTION then
+        if @type == $TYPE_VARIABLE then
             flag = @orig_status
             if flag == $STATUS_CANDIDATE then
                 if not overload.nil? then
@@ -456,25 +461,27 @@ class Strategy
         @preferred = pref
         @alternate = alt
         @program = program
-        update_icount(@program)
+        update_ivcount(@program)
     end
 
     def has_custom_supervisor?
         return false
     end
 
-    def update_icount(point)
+    def update_ivcount(point)
         # allow us to ignore branches of the program that don't actually contain
-        # any FP instructions
+        # any FP instructions or variables
         total = 0
         point.children.each do |child|
-            update_icount(child)
-            total += child.attrs["icount"].to_i
+            update_ivcount(child)
+            total += child.attrs["ivcount"].to_i
         end
-        if point.type == $TYPE_INSTRUCTION and point.orig_status == $STATUS_CANDIDATE then
+        if point.orig_status == $STATUS_CANDIDATE and
+                 (point.type == $TYPE_INSTRUCTION or
+                  point.type == $TYPE_VARIABLE) then
             total += 1
         end
-        point.attrs["icount"] = total.to_s
+        point.attrs["ivcount"] = total.to_s
     end
 
     def build_initial_configs
@@ -496,7 +503,7 @@ class Strategy
             pt.children.each do |child|
 
                 # skip nodes with no FP instructions
-                if child.attrs["icount"].to_i > 0 then
+                if child.attrs["ivcount"].to_i > 0 then
                     child_pt = child
 
                     # skip single-child nodes
@@ -586,7 +593,7 @@ class BinaryStrategy < Strategy
 
                     # skip nodes with no FP instructions
                     # stop at basic blocks if that's desired
-                    if child.attrs["icount"].to_i > 0 then
+                    if child.attrs["ivcount"].to_i > 0 then
                         child_pt = child
 
                         # skip single-child nodes
@@ -956,7 +963,7 @@ class RPrecStrategy < Strategy
     def add_midpoint_cfg(pt, configs)
         mid = (@upper_bound[pt.uid] - @lower_bound[pt.uid])/2 + @lower_bound[pt.uid]
         #puts "  new mid to test at pt #{pt.uid}: #{mid} in (#{@lower_bound[pt.uid]}, #{@upper_bound[pt.uid]}] cinst=#{pt.attrs["cinst"]}"
-        if (pt.attrs["icount"].to_i > 0 and 
+        if (pt.attrs["ivcount"].to_i > 0 and
                 @upper_bound[pt.uid] > @lower_bound[pt.uid]+1) and
                 (mid != @upper_bound[pt.uid]) and (mid != @lower_bound[pt.uid]) then
             tag = ("%02d-bit" % mid)
@@ -999,7 +1006,7 @@ class RPrecStrategy < Strategy
                 pt.children.each do |child|
 
                     # skip nodes with no FP instructions
-                    if child.attrs["icount"].to_i > 0 then
+                    if child.attrs["ivcount"].to_i > 0 then
 
                         child_pt = child
 
@@ -1677,6 +1684,8 @@ def read_craft_driver
             type = $1.chomp.downcase
             if type =~ /ins/ then
                 $base_type = $TYPE_INSTRUCTION
+            elsif type =~ /var/ then
+                $base_type = $TYPE_VARIABLE
             elsif type =~ /block/ then
                 $base_type = $TYPE_BASICBLOCK
             elsif type =~ /func/ then
@@ -1755,6 +1764,7 @@ def parse_command_line
             elsif opt == '-T' then
                 # typeforge mode
                 $typeforge_mode = true
+                $base_type = $TYPE_VARIABLE
             elsif opt == '-b' then
                 # stop splitting at basic blocks
                 $base_type = $TYPE_BASICBLOCK
@@ -1838,14 +1848,20 @@ def initialize_program
         if line =~ /(APPLICATION #\d+: [x0-9A-Fa-f]+) \"(.+)\"/ then
             $program = PPoint.new($1, $TYPE_APPLICATION, line[1,1])
             $program.attrs["desc"] = $2
+            mod = nil
+            func = nil
+            bblk = nil
         elsif line =~ /(MODULE #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
             mod = PPoint.new($1, $TYPE_MODULE, line[1,1])
             mod.attrs["desc"] = $2
             $program.children << mod if $program != nil
+            func = nil
+            bblk = nil
         elsif line =~ /(FUNC #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
             func = PPoint.new($1, $TYPE_FUNCTION, line[1,1])
             func.attrs["desc"] = $2
             mod.children << func if mod != nil
+            bblk = nil
         elsif line =~ /(BBLK #\d+: (0x[0-9A-Fa-f]+))/ then
             bblk = PPoint.new($1, $TYPE_BASICBLOCK, line[1,1])
             bblk.attrs["addr"] = $2
@@ -1855,6 +1871,12 @@ def initialize_program
             insn.attrs["addr"] = $2
             insn.attrs["desc"] = $3
             bblk.children << insn if bblk != nil
+        elsif line =~ /(VAR #\d+: (0x[0-9A-Fa-f]+)) \"(.+)\"/ then
+            var = PPoint.new($1, $TYPE_VARIABLE, line[1,1])
+            var.attrs["addr"] = $2
+            var.attrs["desc"] = $3
+            bblk.children << var if bblk != nil
+            mod.children  << var if bblk == nil
         else
             prolog << line.chomp
             prolog << "\n"
@@ -1891,8 +1913,8 @@ def initialize_strategy
         exit
     end
     $strategy.base_type = $base_type
-    if $program.attrs.has_key?("icount") then
-        $total_candidates = $program.attrs["icount"]
+    if $program.attrs.has_key?("ivcount") then
+        $total_candidates = $program.attrs["ivcount"]
     else
         $total_candidates = 0
     end
@@ -2023,14 +2045,14 @@ def calculate_pct_stats (cfg)
     cfg.exceptions.keys.each do |k|
         pt = $program.lookup_by_uid(k)
         if !pt.nil? then
-            pct_icount += pt.attrs["icount"].to_i
+            pct_icount += pt.attrs["ivcount"].to_i
             pct_cinst += pt.attrs["cinst"].to_i
             if cfg.exceptions.keys.size == 1 then
                 cfg.attrs["single_type"] = pt.type
             end
         end
     end
-    pct_icount = (pct_icount.to_f / $program.attrs["icount"].to_f * 100.0).to_s
+    pct_icount = (pct_icount.to_f / $program.attrs["ivcount"].to_f * 100.0).to_s
     pct_cinst = (pct_cinst.to_f / $program.attrs["cinst"].to_f * 100.0).to_s
     cfg.attrs["pct_icount"] = pct_icount.to_s
     cfg.attrs["pct_cinst"] = pct_cinst.to_s
@@ -2650,6 +2672,7 @@ def print_status
         status_text << "#{indent}   Function-level:         #{"%13d" % summary[$TYPE_FUNCTION]}"
         status_text << "#{indent}   Block-level:            #{"%13d" % summary[$TYPE_BASICBLOCK]}"
         status_text << "#{indent}   Instruction-level:      #{"%13d" % summary[$TYPE_INSTRUCTION]}"
+        status_text << "#{indent}   Variable-level:         #{"%13d" % summary[$TYPE_VARIABLE]}"
         status_text << "#{indent}Current in-proc length:    #{"%13d" % get_inproc_length}"
         status_text << "#{indent}Current workqueue length:  #{"%13d" % get_workqueue_length}"
         status_text << "#{indent}Total elapsed walltime: #{"%16s" % format_time(elapsed)}"
