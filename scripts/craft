@@ -1932,7 +1932,7 @@ def run_baseline_performance
     end
     Dir.chdir($perf_path)
     $baseline_error = 0.0
-    $baseline_runtime = 1
+    $baseline_runtime = 0.0
     cmd = "#{$search_path}#{$craft_driver} #{$binary_path}"
     Open3.popen3(cmd) do |io_in, io_out, io_err|
         io_out.each_line do |line|
@@ -1945,7 +1945,7 @@ def run_baseline_performance
                 $baseline_error = $1.to_f
             end
             if line =~ /time:\s*(.+)/i then
-                $baseline_runtime = [1, $1.to_i].max
+                $baseline_runtime = $1.to_f
             end
         end
     end
@@ -2275,7 +2275,7 @@ def load_settings
             when "status_alternate"
                 $status_alternate = value
             when "baseline_runtime"
-                $baseline_runtime = value.to_i
+                $baseline_runtime = value.to_f
             when "lang"
                 if value == "fortran" then $fortran_mode = true
                 else                       $fortran_mode = false
