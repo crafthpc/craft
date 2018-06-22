@@ -2908,20 +2908,28 @@ def build_best_runtime_report(num,copy_files=false)
     end
     report = Array.new
     report << " "
-    report << "  Top instrumented (passed):                Runtime (s)"
+    report << "          Top instrumented (passed):                Runtime (s)          Speedup (X)"
     passed_cfgs = passed_cfgs.sort_by { |cfg,rtime| [rtime, -cfg.cuid.size] }
+    max_speedup = 0.0
     0.upto(num-1).each do |i|
         line = ""
         if i < passed_cfgs.size then
             pcfg,prtime = passed_cfgs[i]
+            speedup = $baseline_runtime / prtime
+            max_speedup = [max_speedup, speedup].max
             if copy_files and File.exists?($passed_path + pcfg.filename) then
                 FileUtils.cp($passed_path + pcfg.filename, $best_path)
             end
-            line += "    - %-35s  %5.2f  "%[format_text(pcfg.label,35),prtime]
-        else
-            line += "%50s"%" "
+            line += "            - %-35s   %-5.2f                %-5.1f"%
+                [format_text(pcfg.label,35),prtime,speedup]
         end
         report << line if line.strip != ""
+    end
+    report << " "
+    if max_speedup > 1.0 then
+        report << "          Speedup achieved! (max: %.1fx, baseline: %.2fs)"%[max_speedup,$baseline_runtime]
+    else
+        report << "          No speedup found."
     end
     report << " "
     return report
