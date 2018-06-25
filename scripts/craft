@@ -20,6 +20,9 @@ require 'yaml.rb'
 # needed for file manipulation and directory removal
 require 'fileutils.rb'
 
+# needed for inter-tool JSON parsing and generating
+require 'json'
+
 
 # {{{ top-level: global constants
 
@@ -1843,22 +1846,91 @@ end
 
 
 def initialize_program
-    $program = nil
+    config = IO.read($orig_config_fn)
+    begin
+        $program = read_json_config(JSON.parse(config))
+    rescue => e
+        puts e
+        $program = read_craft_config(config)
+    end
+    if $program.nil? then
+        puts "Unable to initialize program control structure."
+        puts "Aborting search."
+        exit
+    end
+    $program.build_lookup_hash
+end
+
+def read_json_config(cfg)
+    global_variables = []
+    functions = Hash.new()
+    if cfg.has_key?("actions") then
+        cfg["actions"]. each do |a|
+            if a.has_key?("action") and a["action"] == "replace_var_type" and
+                    a.has_key?("from_type") and a["from_type"] == "double" and
+                    a.has_key?("to_type") and a["to_type"] == "float" and
+                    a.has_key?("scope") then
+                if a["scope"] == "global" and a.has_key?("variable_name") then
+                    global_variables << a["variable_name"]
+                elsif a["scope"] == "function_local" and
+                        a.has_key?("functions") and
+                        a["functions"].size == 1 and
+                        a.has_key?("variable_name") then
+                    func = a["functions"][0]
+                    functions[func] = [] if not functions.has_key?(func)
+                    functions[func] << a["variable_name"]
+                end
+            end
+        end
+    end
+    program = PPoint.new(1, $TYPE_APPLICATION, $STATUS_NONE)
+    mod     = PPoint.new(1, $TYPE_MODULE,      $STATUS_NONE)
+    program.children << mod
+    vidx = 0
+    fidx = 0
+    global_variables.each do |v|
+        vidx += 1
+        var = PPoint.new(vidx, $TYPE_VARIABLE, $STATUS_CANDIDATE)
+        var.attrs["addr"] = "0x0"
+        var.attrs["desc"] = v
+        mod.children << var
+    end
+    functions.each_key do |f|
+        fidx += 1
+        func = PPoint.new(fidx, $TYPE_FUNCTION, $STATUS_NONE)
+        func.attrs["desc"] = f
+        mod.children << func
+        bblk = PPoint.new(fidx, $TYPE_BASICBLOCK, $STATUS_NONE)
+        bblk.attrs["addr"] = "0x0"
+        func.children << bblk
+        functions[f].each do |v|
+            vidx += 1
+            var = PPoint.new(vidx, $TYPE_VARIABLE, $STATUS_CANDIDATE)
+            var.attrs["addr"] = "0x0"
+            var.attrs["desc"] = v
+            func.children << var
+        end
+    end
+    return program
+end
+
+def read_craft_config(cfg)
+    program =  nil
     mod = nil
     func = nil
     bblk = nil
     prolog = ""
-    IO.foreach($orig_config_fn) do |line|
+    cfg.each_line do |line|
         if line =~ /(APPLICATION #\d+: [x0-9A-Fa-f]+) \"(.+)\"/ then
-            $program = PPoint.new($1, $TYPE_APPLICATION, line[1,1])
-            $program.attrs["desc"] = $2
+            program = PPoint.new($1, $TYPE_APPLICATION, line[1,1])
+            program.attrs["desc"] = $2
             mod = nil
             func = nil
             bblk = nil
         elsif line =~ /(MODULE #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
             mod = PPoint.new($1, $TYPE_MODULE, line[1,1])
             mod.attrs["desc"] = $2
-            $program.children << mod if $program != nil
+            program.children << mod if program != nil
             func = nil
             bblk = nil
         elsif line =~ /(FUNC #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
@@ -1886,13 +1958,8 @@ def initialize_program
             prolog << "\n"
         end
     end
-    $program.build_lookup_hash if $program != nil
-    $program.attrs["prolog"] = prolog
-    if $program.nil? then
-        puts "Unable to initialize program control structure."
-        puts "Aborting search."
-        exit
-    end
+    program.attrs["prolog"] = prolog
+    return program
 end
 
 def initialize_strategy
