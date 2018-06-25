@@ -1949,6 +1949,9 @@ def run_baseline_performance
             end
         end
     end
+    if $baseline_runtime == 0.0 then
+        $baseline_runtime = 0.0001      # avoid divide-by-zero errors later
+    end
     Dir.chdir($search_path)
     return passed
 end
