@@ -487,9 +487,9 @@ def run_config (cfg)
     # write actual configuration file
     cfg_path = $search_path + cfg.filename
     if $typeforge_mode then
-      $program.build_typeforge_file(cfg, cfg_path)
+        $program.build_typeforge_file(cfg, cfg_path)
     else
-      $program.build_config_file(cfg, cfg_path)
+        $program.build_config_file(cfg, cfg_path)
     end
 
     # pass off to filename version
@@ -584,7 +584,7 @@ def run_config_file (fn, keep, label)
     end
     $status_buffer = ""
 
-    # copy config (and in Typeforge mode the modified source) to appropriate folder
+    # copy config to appropriate folder
     if result == $RESULT_PASS then
         FileUtils.cp(fn, $passed_path)
     elsif result == $RESULT_FAIL then
