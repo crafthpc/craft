@@ -629,7 +629,7 @@ def main
         end
 
         # main loop
-        puts "Initialization complete. Starting main search routine."
+        puts "Initialization complete. Starting main search routine with #{get_workqueue_length} configuration(s) in the queue."
         puts ""
         if $strategy.has_custom_supervisor? then
             $strategy.run_custom_supervisor
