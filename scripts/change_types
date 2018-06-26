@@ -1,0 +1,43 @@
+#!/usr/bin/env ruby
+#
+# Changes the types of variables according to a TypeForge specification. This is
+# a purely text-based replacement and is very limited in what it can handle. All
+# declarations must be one-variable-per-line and the original type must be
+# "craft_t".
+#
+
+if ARGV.size != 2 then
+    puts "Usage: change_types <spec-file> <source-file>"
+end
+
+
+# look for replacements in specification file
+actions = IO.readlines(ARGV[0])
+replacements = Hash.new
+actions.each do |a|
+    if a =~/replace_vartype;[^;]*;(\w+);(\w+)/ then
+        replacements[$1] = $2
+    end
+end
+
+# scan for definitions and replace types where requested
+source = IO.readlines(ARGV[1])
+idx=0
+while idx < source.size do
+    line = source[idx]
+    if line =~ /craft_t\s*(\w+)/ then
+        rvname = $1
+        if replacements.has_key?(rvname) then
+            puts "replacing \"#{rvname}\" in \"#{line.chomp}\""
+            source[idx] = line.sub(/craft_t/, replacements[rvname])
+        end
+    end
+    idx += 1
+end
+
+# re-write source file
+out = File.open(ARGV[1], "w")
+source.each do |line|
+    out.puts line
+end
+

@@ -48,10 +48,11 @@ def initialize_search
         end
     else
         if $typeforge_mode then
-            # TODO: implement this
-            puts "Cannot auto-generate initial configuration for TypeForge mode yet!"
-            puts "Aborting search."
-            exit
+            # look for "craft_t" declarations to generate initial config
+            orig_cfg.puts "{\n  \"version\": 1,\n  \"tool_id\": \"CRAFT\","
+            orig_cfg.puts "  \"actions\": ["
+            Dir.glob("*.cpp") do |fn| add_variables_to_config_file(fn, orig_cfg) end
+            orig_cfg.puts "  ]\n}"
         else
             # run fpconf to generate config
             IO.popen("#{$fpconf_invoke} #{$fpconf_options} #{$binary_path}") do |io|
