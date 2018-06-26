@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 #include "pin.H"
-#include "pin_isa.H"
+//#include "pin_isa.H"
 
 extern "C" {
 #include "xed-interface.h"
