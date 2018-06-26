@@ -187,7 +187,6 @@ def initialize_program
     begin
         $program = read_json_config(JSON.parse(config))
     rescue => e
-        puts e
         $program = read_craft_config(config)
     end
     if $program.nil? then
@@ -301,8 +300,8 @@ end
 def add_variables_to_config_file(fn, cfg)
     vcount = 0
     IO.foreach(fn) do |line|
-        if line =~ /craft_t\s*(\w+)/ then
-            vname = $1
+        if line =~ /craft_t\s*(\*)?\s*(\w+)/ then
+            vname = $2
             cfg.print "    "
             cfg.print "," if vcount > 0
             cfg.puts "{ \"action\": \"replace_var_type\", \"scope\": \"global\","
@@ -519,17 +518,20 @@ def run_config_file (fn, keep, label)
 
     # build rewritten mutatee
     if $typeforge_mode then
-      cmd = "#{$search_path}/craft_builder #{fn}"
+        #$status_buffer += "     Replaced vars: "
+        cmd = "#{$search_path}/craft_builder #{fn}"
     else
-      cmd = "#{$fpinst_invoke} -i #{$fortran_mode ? "-N" : ""}"
-      cmd += " -c #{fn}"
-      cmd += " #{$binary_path}"
+        cmd = "#{$fpinst_invoke} -i #{$fortran_mode ? "-N" : ""}"
+        cmd += " -c #{fn}"
+        cmd += " #{$binary_path}"
     end
     add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
     Open3.popen3(cmd) do |io_in, io_out, io_err|
       io_out.each_line do |line|
           if line =~ /Inplace: (.*)$/ then
               $status_buffer += "        #{$1}\n"
+          #elsif line =~ /replacing "(\w+)"/ then
+              #$status_buffer += " #{$1}"
           end
       end
     end

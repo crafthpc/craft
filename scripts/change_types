@@ -25,10 +25,10 @@ source = IO.readlines(ARGV[1])
 idx=0
 while idx < source.size do
     line = source[idx]
-    if line =~ /craft_t\s*(\w+)/ then
-        rvname = $1
+    if line =~ /craft_t\s*(\*)?\s*(\w+)/ then
+        rvname = $2
         if replacements.has_key?(rvname) then
-            puts "replacing \"#{rvname}\" in \"#{line.chomp}\""
+            #puts "replacing \"#{rvname}\" in \"#{line.chomp}\""
             source[idx] = line.sub(/craft_t/, replacements[rvname])
         end
     end
