@@ -6,6 +6,8 @@
 
 #include <fstream>
 #include <iostream>
+#include <string>
+#include <map>
 using namespace std;
 
 #include <assert.h>
@@ -38,6 +40,9 @@ typedef struct {
     UINT64  out;
     UINT64  data;
 } FP_EVENT;
+
+// TODO: change to unordered_map
+map<ADDRINT, string> disas;
 
 
 // CODES //
@@ -109,6 +114,8 @@ void prettyPrintOp(std::ostream& os, UINT64 op)
 std::ostream& operator<<(std::ostream& os, const FP_EVENT &evt)
 {
     os << "0x" << std::hex << evt.ins;
+    os << " " << disas[evt.ins];
+    /*
     switch (evt.code) {
         case FP_MOV:    os << " mov ";    break;
         case FP_ADD:    os << " add ";    break;
@@ -124,6 +131,7 @@ std::ostream& operator<<(std::ostream& os, const FP_EVENT &evt)
     }
     os << " -> ";
     prettyPrintOp(os, evt.out);
+    */
     if (evt.in > OP_LAST || evt.in2 > OP_LAST) {
         os << " [data sgl=" << *(float*)(&evt.data)
            << " dbl=" << *(double*)(&evt.data) << "]";
@@ -186,6 +194,10 @@ UINT32 encodeOpcode(INS ins)
         case XED_ICLASS_SUBSD:  return FP_SUB;
         case XED_ICLASS_MULSD:  return FP_MUL;
         case XED_ICLASS_DIVSD:  return FP_DIV;
+        case XED_ICLASS_ADDPD:  return FP_ADD;
+        case XED_ICLASS_SUBPD:  return FP_SUB;
+        case XED_ICLASS_MULPD:  return FP_MUL;
+        case XED_ICLASS_DIVPD:  return FP_DIV;
         default:                return FP_NOP;
     }
 }
@@ -431,6 +443,12 @@ void handleBinOp(INS ins)
                 encodeXMMRegR(ins,0),   // in
                 IARG_MEMORYREAD_EA,     // in2
                 encodeXMMRegW(ins,0));  // out
+    } else if (INS_IsMemoryWrite(ins)) {
+        insertBufferCall(ins,
+                encodeOpcode(ins),      // code
+                encodeXMMRegR(ins,0),   // in
+                encodeXMMRegR(ins,1),   // in2
+                IARG_MEMORYWRITE_EA);   // out
     } else {
         insertBufferCall(ins,
                 encodeOpcode(ins),      // code
@@ -459,6 +477,8 @@ VOID handleInstruction(INS ins, VOID *)
         return;
     }
 
+    disas[INS_Address(ins)] = INS_Disassemble(ins);
+
     //LOG("Handling 0x" + hexstr(INS_Address(ins)) + ": " + INS_Disassemble(ins));
 
     // check non-floating-point instructions for movement to/from a
@@ -484,6 +504,7 @@ VOID handleInstruction(INS ins, VOID *)
     case XED_ICLASS_MOVQ:
     case XED_ICLASS_MOVSD_XMM:
     case XED_ICLASS_MOVDQA:
+    case XED_ICLASS_MOVAPS:
     case XED_ICLASS_MOVAPD:
         handleMove(ins); break;
 
