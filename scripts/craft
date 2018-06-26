@@ -2,12 +2,11 @@
 #
 # craft
 #
-# Generate floating-point precision configurations for a target binary, and test
-# them. Assemble a final recommended configuration. Based on "fpautoconf" and
-# improved to be far more generic and robust.
+# Generate floating-point precision configurations for a target application and
+# test them. Assemble a final recommended configuration.
 #
-# Mike Lam, UMD
-# October 2012
+# Copyright (C) 2018 Mike Lam, UMD/JMU/LLNL
+# Original version written October 2012
 #
 
 # needed for opening stderr as well as stdin/stdout
@@ -25,7 +24,7 @@ require 'json'
 
 # {{{ top-level: global constants
 
-$CRAFT_VERSION = "0.1 (beta)"                            # release version
+$CRAFT_VERSION = "0.1 (beta)"                       # release version
 
 $RESULT_PASS  = "Success!"                          # test result possibilities
 $RESULT_FAIL  = "FAILED!"
