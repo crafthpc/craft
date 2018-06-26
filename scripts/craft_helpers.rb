@@ -218,29 +218,29 @@ def read_json_config(cfg)
             end
         end
     end
-    program = PPoint.new(1, $TYPE_APPLICATION, $STATUS_NONE)
-    mod     = PPoint.new(1, $TYPE_MODULE,      $STATUS_NONE)
+    program = PPoint.new("APP #1", $TYPE_APPLICATION, $STATUS_NONE)
+    mod     = PPoint.new("MOD #1", $TYPE_MODULE,      $STATUS_NONE)
     program.children << mod
     vidx = 0
     fidx = 0
     global_variables.each do |v|
         vidx += 1
-        var = PPoint.new(vidx, $TYPE_VARIABLE, $STATUS_CANDIDATE)
+        var = PPoint.new("VAR ##{vidx}", $TYPE_VARIABLE, $STATUS_CANDIDATE)
         var.attrs["addr"] = "0x0"
         var.attrs["desc"] = v
         mod.children << var
     end
     functions.each_key do |f|
         fidx += 1
-        func = PPoint.new(fidx, $TYPE_FUNCTION, $STATUS_NONE)
+        func = PPoint.new("FUNC ##{fidx}", $TYPE_FUNCTION, $STATUS_NONE)
         func.attrs["desc"] = f
         mod.children << func
-        bblk = PPoint.new(fidx, $TYPE_BASICBLOCK, $STATUS_NONE)
+        bblk = PPoint.new("BBLK ##{fidx}", $TYPE_BASICBLOCK, $STATUS_NONE)
         bblk.attrs["addr"] = "0x0"
         func.children << bblk
         functions[f].each do |v|
             vidx += 1
-            var = PPoint.new(vidx, $TYPE_VARIABLE, $STATUS_CANDIDATE)
+            var = PPoint.new("VAR ##{vidx}", $TYPE_VARIABLE, $STATUS_CANDIDATE)
             var.attrs["addr"] = "0x0"
             var.attrs["desc"] = v
             func.children << var
