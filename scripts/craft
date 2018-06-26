@@ -657,6 +657,7 @@ end # }}}
 # Implements a lower-cost delta-debugging strategy as described in
 # Rubio-Gonzalez et al. [SC'13].
 #
+# {{{ DeltaDebugStrategy
 class DeltaDebugStrategy < Strategy
 
     def has_custom_supervisor?
@@ -809,6 +810,7 @@ class DeltaDebugStrategy < Strategy
         return []
     end
 end
+# }}}
 
 # ExhaustiveStrategy
 #
