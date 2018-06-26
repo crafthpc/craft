@@ -204,7 +204,6 @@ def read_json_config(cfg)
     if cfg.has_key?("actions") then
         cfg["actions"]. each do |a|
             if a.has_key?("action") and a["action"] == "replace_var_type" and
-                    a.has_key?("from_type") and a["from_type"] == "double" and
                     a.has_key?("to_type") and a["to_type"] == "float" and
                     a.has_key?("scope") then
                 if a["scope"] == "global" and a.has_key?("variable_name") then
