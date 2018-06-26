@@ -443,6 +443,9 @@ require_relative 'craft_strategies'
 # Search management routines
 require_relative 'craft_manage'
 
+# File I/O routines
+require_relative 'craft_filemanip'
+
 # Helper routines
 require_relative 'craft_helpers'
 
