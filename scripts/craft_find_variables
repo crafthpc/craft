@@ -44,9 +44,15 @@ ARGV.each do |arg|
         while lineno < source.size do
             line = source[lineno]
             if not line =~ /extern/ and line =~ /double\s*(\*)?\s*(\w+)/ then
+                vname = $2
+
+                # ignore error variables
+                # TODO: change this to a command-line option
+                break if vname == "error"
+
                 a = Hash.new
                 a["action"] = "replace_var_type"
-                a["variable_name"] = $2
+                a["variable_name"] = vname
                 a["source_info"] = "#{arg}:#{lineno}"
                 a["from_type"] = "double"
                 a["to_type"] = "float"
