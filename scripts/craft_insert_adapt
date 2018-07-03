@@ -40,6 +40,11 @@ while aidx < ARGV.size do
         while lineno < source.size do
             line = source[lineno]
 
+            # replace any variable types that TypeForge missed
+            if line =~ /double\s*(\*)?\s*(\w+)/ then
+                source[lineno] = line.sub(/double/, "AD_real")
+            end
+
             # replace any AD_real=>double casts
             if line =~ /\(\(double \)(\w+)\)/ then
                 source[lineno] = line.gsub(/\(\(double \)(\w+)\)/,"(AD_value(\\1))")
