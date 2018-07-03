@@ -20,7 +20,7 @@ def save_settings
     f.puts "status_alternate=#{$status_alternate}"
     f.puts "baseline_runtime=#{$baseline_runtime}"
     f.puts "lang=#{($fortran_mode ? "fortran" : "other")}"
-    f.puts "typeforge_mode=#{($typeforge_mode ? "yes" : "no")}"
+    f.puts "variable_mode=#{($variable_mode ? "yes" : "no")}"
     f.puts "base_type=#{$base_type}"
     f.puts "skip_nonexecuted=#{$skip_nonexecuted}"
     f.puts "initial_cfg_fn=#{$initial_cfg_fn}"
@@ -84,9 +84,9 @@ def load_settings
                 if value == "fortran" then $fortran_mode = true
                 else                       $fortran_mode = false
                 end
-            when "typeforge_mode"
-                if value == "yes" then $typeforge_mode = true
-                else                   $typeforge_mode = false
+            when "variable_mode"
+                if value == "yes" then $variable_mode = true
+                else                   $variable_mode = false
                 end
             when "base_type"
                 $base_type = value

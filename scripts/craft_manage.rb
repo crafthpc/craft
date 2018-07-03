@@ -38,32 +38,34 @@ def initialize_search
     # and initialize global data structures
     print "Generating initial configuration ... "
     $stdout.flush
-    orig_cfg = File.open($orig_config_fn, "w")
-    if $initial_cfg_fn.length > 0 && File.exists?($initial_cfg_fn) then
-        # a base config was given; just read it
-        print "(using base: #{$initial_cfg_fn}) "
-        $stdout.flush
-        IO.foreach($initial_cfg_fn) do |line|
-            orig_cfg.puts line
-        end
-    else
-        if $typeforge_mode then
-            # look for "craft_t" declarations to generate initial config
-            orig_cfg.puts "{\n  \"version\": 1,\n  \"tool_id\": \"CRAFT\","
-            orig_cfg.puts "  \"actions\": ["
-            Dir.glob("*.cpp") do |fn| add_variables_to_config_file(fn, orig_cfg) end
-            orig_cfg.puts "  ]\n}"
+    if not File.exists?($orig_config_fn) then
+        orig_cfg = File.open($orig_config_fn, "w")
+        if $initial_cfg_fn.length > 0 && File.exists?($initial_cfg_fn) then
+            # a base config was given; just read it
+            print "(using base: #{$initial_cfg_fn}) "
+            $stdout.flush
+            IO.foreach($initial_cfg_fn) do |line|
+                orig_cfg.puts line
+            end
         else
-            # run fpconf to generate config
-            IO.popen("#{$fpconf_invoke} #{$fpconf_options} #{$binary_path}") do |io|
-                io.each_line do |line|
-                    orig_cfg.puts line
+            if $variable_mode then
+                # look for "craft_t" declarations to generate initial config
+                orig_cfg.puts "{\n  \"version\": \"1\",\n  \"tool_id\": \"CRAFT\","
+                orig_cfg.puts "  \"actions\": ["
+                Dir.glob("*.cpp") do |fn| add_variables_to_config_file(fn, orig_cfg) end
+                orig_cfg.puts "  ]\n}"
+            else
+                # run fpconf to generate config
+                IO.popen("#{$fpconf_invoke} #{$fpconf_options} #{$binary_path}") do |io|
+                    io.each_line do |line|
+                        orig_cfg.puts line
+                    end
                 end
             end
         end
+        Dir.glob("fpconf.log").each do |f| File.delete(f) end
+        orig_cfg.close
     end
-    Dir.glob("fpconf.log").each do |f| File.delete(f) end
-    orig_cfg.close
     puts "Done."
 
     # read all program control points

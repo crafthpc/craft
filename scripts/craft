@@ -458,11 +458,12 @@ def main
     # initialize global variables
     $search_tag = "craft"                   # filename tag
     $craft_driver = "craft_driver"          # standard driver program name
+    $binary_name = ""                       # prevents crashes if there is no binary (e.g., in variable mode)
     $status_preferred = $STATUS_SINGLE      # preferred replacement status
     $status_alternate = $STATUS_DOUBLE      # replacement status if cannot be preferred
     $status_blank = " "                     # "no result" replacement status
     $fortran_mode = false                   # pass "-N" to mutator
-    $typeforge_mode = false                 # use TypeForge to generate program variants
+    $variable_mode = false                  # use source-to-source to generate program variants
     $base_type = $TYPE_INSTRUCTION          # stop splitting configs at this level
     $skip_nonexecuted = true                # don't bother running configs with non-executed instructions
     $mixed_use_rprec = false                # use rprec 23-bit truncation to simulate mixed svinp analysis

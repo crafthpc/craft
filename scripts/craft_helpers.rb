@@ -105,10 +105,11 @@ def parse_command_line
             elsif opt == '-N' then
                 # fortran mode
                 $fortran_mode = true
-            elsif opt == '-T' then
-                # typeforge mode
-                $typeforge_mode = true
+            elsif opt == '-V' then
+                # variable mode
+                $variable_mode = true
                 $base_type = $TYPE_VARIABLE
+                $strategy_name = "combinational"
             elsif opt == '-b' then
                 # stop splitting at basic blocks
                 $base_type = $TYPE_BASICBLOCK
@@ -175,7 +176,7 @@ def parse_command_line
             exit
         end
     end
-    if $main_mode == "start" and !parsed_binary then
+    if !$variable_mode and $main_mode == "start" and !parsed_binary then
         puts "No binary included on command-line."
         exit
     end
@@ -204,13 +205,12 @@ def read_json_config(cfg)
         cfg["actions"]. each do |a|
             if a.has_key?("action") and a["action"] == "replace_var_type" and
                     a.has_key?("to_type") and a["to_type"] == "float" and
-                    a.has_key?("scope") then
-                if a["scope"] == "global" and a.has_key?("variable_name") then
+                    a.has_key?("variable_name") then
+                if not a.has_key?("scope") or a["scope"] == "global" then
                     global_variables << a["variable_name"]
                 elsif a["scope"] == "function_local" and
                         a.has_key?("functions") and
-                        a["functions"].size == 1 and
-                        a.has_key?("variable_name") then
+                        a["functions"].size == 1 then
                     func = a["functions"][0]
                     functions[func] = [] if not functions.has_key?(func)
                     functions[func] << a["variable_name"]
@@ -350,7 +350,13 @@ def run_baseline_performance
     Dir.chdir($perf_path)
     $baseline_error = 0.0
     $baseline_runtime = 0.0
-    cmd = "#{$search_path}#{$craft_driver} #{$binary_path}"
+    if $variable_mode then
+        File.open("tmp.cfg","w") do |f| f.print("") end
+        cmd = "#{$search_path}#{$craft_driver} tmp.cfg"
+    else
+        cmd = "#{$search_path}#{$craft_driver} #{$binary_path}"
+    end
+    puts cmd
     Open3.popen3(cmd) do |io_in, io_out, io_err|
         io_out.each_line do |line|
             if line =~ /status:\s*(pass|fail)/i then
@@ -375,8 +381,8 @@ end
 
 
 def run_profiler
-    # there's no need for profile info in TypeForge mode
-    return true if $typeforge_mode
+    # there's no need for profile info in variable mode
+    return true if $variable_mode
 
     passed = false
     if not File.exist?($prof_path) then
@@ -486,9 +492,12 @@ def run_config (cfg)
 
     # write actual configuration file
     cfg_path = $search_path + cfg.filename
-    if $typeforge_mode then
+    if $variable_mode then
+        #puts "Writing JSON file for #{cfg.cuid}"
         $program.build_typeforge_file(cfg, cfg_path)
+        # TODO: add support for JSON output
     else
+        #puts "Writing CRAFT file for #{cfg.cuid}"
         $program.build_config_file(cfg, cfg_path)
     end
 
@@ -517,30 +526,32 @@ def run_config_file (fn, keep, label)
     $status_buffer = "    Finished testing #{label}:\n"
 
     # build rewritten mutatee
-    if $typeforge_mode then
-        #$status_buffer += "     Replaced vars: "
-        cmd = "#{$search_path}/craft_builder #{fn}"
-    else
+    if not $variable_mode then
         cmd = "#{$fpinst_invoke} -i #{$fortran_mode ? "-N" : ""}"
         cmd += " -c #{fn}"
         cmd += " #{$binary_path}"
-    end
-    add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
-    Open3.popen3(cmd) do |io_in, io_out, io_err|
-      io_out.each_line do |line|
-          if line =~ /Inplace: (.*)$/ then
-              $status_buffer += "        #{$1}\n"
-          #elsif line =~ /replacing "(\w+)"/ then
-              #$status_buffer += " #{$1}"
-          end
-      end
+        add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
+        Open3.popen3(cmd) do |io_in, io_out, io_err|
+            io_out.each_line do |line|
+                if line =~ /Inplace: (.*)$/ then
+                    $status_buffer += "        #{$1}\n"
+                #elsif line =~ /replacing "(\w+)"/ then
+                    #$status_buffer += " #{$1}"
+                end
+            end
+        end
     end
 
     # execute rewritten mutatee and check for success
     result = $RESULT_ERROR
     runtime = 0.0
     error = 0.0
-    cmd = "#{$search_path}#{$craft_driver} #{Dir.getwd}/mutant"
+    cmd = "#{$search_path}#{$craft_driver}"
+    if $variable_mode then
+        cmd += " #{fn}"
+    else
+        cmd += " #{Dir.getwd}/mutant"
+    end
     #add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
     Open3.popen3(cmd) do |io_in, io_out, io_err|
         io_out.each_line do |line|
@@ -657,9 +668,10 @@ def print_usage
     puts "   -j <np>        spawn <np> worker threads"
     puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
-    puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"rprec\""
+    puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"combinational\", \"rprec\""
     puts "   -S             disable queue sorting (improves overall performance but may converge slower"
-    puts "   -T             enable TypeForge mode for variable-level tuning and performance testing"
+    puts "   -V             enable variable mode for variable-level tuning and performance testing"
+    puts "                    (-V also sets the default strategy to \"combinational\")"
     puts " "
     puts "Mixed-precision-specific options:"
     puts "   --mixed-use_rprec <X>                  use reduced-precision to simulate <X> bits for single precision"
@@ -730,7 +742,7 @@ def print_status
         end
         status_text << "#{indent}Application: #{"%27s" % $binary_name}"
         #status_text << "#{indent}Fortran mode:  #{"%24s" % ($fortran_mode ? "Y" : "N")}"
-        status_text << "#{indent}Typeforge mode: #{"%24s" % ($typeforge_mode ? "Y" : "N")}"
+        status_text << "#{indent}Typeforge mode: #{"%24s" % ($variable_mode ? "Y" : "N")}"
         status_text << "#{indent}Base type:  #{"%28s" % $base_type}"
         status_text << "#{indent}Worker threads:            #{"%13d" % nworkers}"
         status_text << "#{indent}Total candidates:          #{"%13d" % $total_candidates}"
@@ -837,9 +849,10 @@ end
 
 
 def rebuild_final_config
-    if $typeforge_mode then
+    if $variable_mode then
         $final_config = $strategy.build_fastest_config(get_tested_configs)
         $program.build_typeforge_file($final_config, $final_config_fn)
+        # TODO: add support for JSON output
     else
         $final_config = $strategy.build_final_config(get_tested_configs)
         $program.build_config_file($final_config, $final_config_fn, false)
@@ -863,7 +876,7 @@ end
 def build_best_report(num,copy_files=false)
     if $strategy_name == "rprec" then
         return Array.new
-    elsif $typeforge_mode then
+    elsif $variable_mode then
         return build_best_runtime_report(num,copy_files)
     else
         return build_best_regular_report(num,copy_files)

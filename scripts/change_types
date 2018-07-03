@@ -5,6 +5,8 @@
 # declarations must be one-variable-per-line and the original type must be
 # "craft_t".
 #
+# WARNING: This version is deprecated! Use craft_change_types instead.
+#
 
 if ARGV.size != 2 then
     puts "Usage: change_types <spec-file> <source-file>"
