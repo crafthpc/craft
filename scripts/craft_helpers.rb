@@ -778,18 +778,30 @@ def print_status
             queue = get_workqueue_configs
             status_text << ""
             progress = "Current workqueue (" + (queue.size > inproc.size ? inproc.size : queue.size).to_s + "/" + queue.size.to_s + "):"
-            status_text << "  Currently testing:                  STA\%   DYN\%   #{"%-33s"%progress}   STA\%   DYN\%"
+            if $variable_mode then
+                status_text << "  Currently testing:                                #{"%-33s"%progress}"
+            else
+                status_text << "  Currently testing:                  STA\%   DYN\%   #{"%-33s"%progress}   STA\%   DYN\%"
+            end
             0.upto(inproc.size-1) do |i|
                 line = ""
                 if i < inproc.size then
                     icfg = inproc[i]
-                    line += "    - %-30s %5.1f  %5.1f "%[format_text(icfg.label,30),icfg.attrs["pct_icount"],icfg.attrs["pct_cinst"]]
+                    if $variable_mode then
+                        line += "    - %-30s              "%[format_text(icfg.label,30)]
+                    else
+                        line += "    - %-30s %5.1f  %5.1f "%[format_text(icfg.label,30),icfg.attrs["pct_icount"],icfg.attrs["pct_cinst"]]
+                    end
                 else
                     line += "%50s"%" "
                 end
                 if i < queue.size then
                     qcfg = queue[i]
-                    line += "    - %-30s %5.1f  %5.1f "%[format_text(qcfg.label,30),qcfg.attrs["pct_icount"],qcfg.attrs["pct_cinst"]]
+                    if $variable_mode then
+                        line += "    - %-30s              "%[format_text(icfg.label,30)]
+                    else
+                        line += "    - %-30s %5.1f  %5.1f "%[format_text(qcfg.label,30),qcfg.attrs["pct_icount"],qcfg.attrs["pct_cinst"]]
+                    end
                 end
                 status_text << line if line.strip != ""
             end
