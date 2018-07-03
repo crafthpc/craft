@@ -17,21 +17,21 @@ This script will also create a Bash environment script (`env-setup.sh`) that you
 should source every time you want to run CRAFT (or you could put it in your Bash
 profile).
 
-**Typeforge mode**: This branch adds support for doing source-level searches
+**Variable mode**: This branch adds support for doing source-level searches
 using the [TypeForge tool](https://github.com/rose-compiler/rose-develop/blob/master/projects/CodeThorn/src/typeforge.C)
-created using the [Rose compiler framework](https://github.com/rose-compiler/rose-develop).
+created using the [Rose compiler framework](https://github.com/rose-compiler/rose-develop),
+and some temporary work-arounds in this repository.
 This tool performs type conversions in source code, allowing CRAFT to search
 a variable space rather than an instruction space. To enable this mode, pass
-"`-T`" on the command line to the `craft` script. TypeForge (and therefore Rose)
-must be installed and accessible in your `PATH` and `LD_LIBRARY_PATH`. You will
-also need to specify a manually-created initial configuration using the "`-c`"
-option, and you will need to provide a `craft_builder` script in addition to the
-`craft_driver` script. There is a sample `craft_builder` script in the `scripts`
-folder. This support is still very brittle and experimental, but it is under
-active development as of Summer 2018. Please contact the author if you have
-questions or run into issues. Note that using TypeForge mode means that you no
+"`-V`" on the command line to the `craft` script. TypeForge (and therefore Rose)
+must be installed and accessible in your `PATH` and `LD_LIBRARY_PATH`.
+This support is still very brittle and experimental, but it is under
+active development as of Summer 2018. More documentation is on the way.
+Please contact the author if you have
+questions or run into issues. Note that using variable mode means that you no
 longer need to build the binary instrumentation part of CRAFT, which negates the
-instructions below; all you need is the `craft` script and Ruby 2.0 or later.
+instructions below; all you need is to make sure the `scripts` folder is in your
+`PATH` and that you have Ruby 2.0 or later installed.
 
 If you need to set up a build environment manually, here is a list of the
 dependencies:
