@@ -33,7 +33,7 @@ end
 
 # look for source code parameters
 ARGV.each do |arg|
-    if arg =~ /\.cpp$/ and not $cfg["source_files"].include?(arg) then
+    if arg =~ /\.(c|C|cpp|h|H|hpp)$/ and not $cfg["source_files"].include?(arg) then
 
         # add the source file
         $cfg["source_files"] << arg

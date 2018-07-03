@@ -24,7 +24,7 @@ end
 
 # scan for definitions and replace types where requested
 ARGV.each do |arg|
-    if arg =~ /\.cpp$/ then
+    if arg =~ /\.(c|C|cpp|h|H|hpp)$/ then
         source = IO.readlines(arg)
         idx=0
         while idx < source.size do

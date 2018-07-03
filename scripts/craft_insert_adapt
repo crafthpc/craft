@@ -26,7 +26,7 @@ end
 aidx = 0
 while aidx < ARGV.size do
     arg = ARGV[aidx]
-    if arg =~ /\.cpp$/ then
+    if arg =~ /\.(c|cpp)$/ then
 
         # perform TypeForge transformations
         system("typeforge --spec-file=adapt.tf #{arg}")
