@@ -1,0 +1,62 @@
+#!/bin/bash
+#
+# SAMPLE DRIVER SCRIPT
+#
+
+ORIG_DIR="/path/to/your/project"
+EXE_NAME="your_exe"
+TMP_FILE=stdout.tmp
+
+# copy source files to current folder
+#
+# CHANGE THIS if you need files or structure beyond what is provided here
+#
+for f in $(cd ${ORIG_DIR} && ls Makefile *.c *.cpp *.C *.h *.hpp *.H 2>/dev/null); do
+    cp "${ORIG_DIR}/$f" "$f"
+done
+
+# rebuild w/ compiler wrapper
+#
+# CHANGE THIS if your build is different from just running "make"
+#
+CXX="craft_change_types $1" make
+
+# run compiled program w/ timer and save output
+if [[ -e "./${EXE_NAME}" ]]; then
+    t_start=$(date +%s.%3N)
+
+    # CHANGE THIS if your program needs different parameters
+    #
+    ./${EXE_NAME} >"${TMP_FILE}"
+
+    exit_code=$?
+    t_stop=$(date +%s.%3N)
+    runtime=$(echo "$t_stop - $t_start" | bc)
+fi
+
+status="pass"
+
+# check for compilation failure or non-zero return code
+if [[ ! -e "./${EXE_NAME}" || $exit_code -ne 0 ]]; then
+    status="error"
+    error="0.0e0"
+else
+
+    # CHANGE THIS if your program doesn't print "SUCCESSFUL" upon verification
+    #
+    check=$(grep "[^N]SUCCESSFUL" "${TMP_FILE}")
+    if [[ -z "$check" ]]; then
+        status="fail"
+    fi
+
+    # CHANGE THIS if your program outputs an error or residual
+    #
+    error="0.0e0"
+fi
+
+# output
+echo "status:  $status"
+echo "time:    $runtime"
+echo "error:   $error"
+rm -f "${TMP_FILE}"
+
