@@ -1,0 +1,75 @@
+#!/usr/bin/env ruby
+#
+# Finds tunable variables and emits a JSON initial search configuration. This is
+# a purely text-based replacement and is very limited in what it can handle. All
+# declarations must be one-variable-per-line and of the form "<type> <var>;".
+#
+# This script is designed to be used as a wrapper for the compiler. All
+# parameters are passed through.
+#
+
+require 'json'
+
+$OUTPUT_FILENAME="craft_orig.cfg"
+$cfg = Hash.new
+
+if ARGV.size < 1 then
+    puts "Usage: craft_find_variables <c-flags> <source-file>"
+end
+
+# read existing configuration or generate a new one
+begin
+    infile = File.open($OUTPUT_FILENAME, File::RDONLY) do |f|
+        f.flock(File::LOCK_SH)
+        $cfg = JSON.parse(f.read)
+    end
+rescue
+    $cfg = Hash.new
+    $cfg["version"] = "1"
+    $cfg["tool_id"] = "CRAFT"
+    $cfg["source_files"] = []
+    $cfg["actions"] = []
+end
+
+# look for source code parameters
+ARGV.each do |arg|
+    if arg =~ /\.(c|C|cpp|h|H|hpp)$/ and not $cfg["source_files"].include?(arg) then
+
+        # add the source file
+        $cfg["source_files"] << arg
+
+        # scan for definitions and build a list of valid replacements
+        source = IO.readlines(arg)
+        lineno=0
+        while lineno < source.size do
+            line = source[lineno]
+            if not line =~ /extern/ and line =~ /double\s*(\*)?\s*(\w+)/ then
+                vname = $2
+
+                # ignore error variables
+                # TODO: change this to a command-line option
+                break if vname == "error"
+
+                a = Hash.new
+                a["action"] = "replace_var_type"
+                # TODO: add unique handle
+                a["variable_name"] = vname
+                a["source_info"] = "#{arg}:#{lineno}"
+                a["from_type"] = "double"
+                a["to_type"] = "float"
+                $cfg["actions"] << a
+            end
+            lineno += 1
+        end
+
+        # write JSON document
+        outfile = File.open($OUTPUT_FILENAME, File::RDWR|File::CREAT, 0644) do |f|
+            f.flock(File::LOCK_EX)
+            f.puts(JSON.pretty_generate($cfg))
+        end
+    end
+end
+
+# pass arguments through to compiler
+exec("g++", *ARGV)
+

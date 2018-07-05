@@ -4,8 +4,77 @@ Mike Lam, James Madison University
 
 Building and using this project currently requires some experience in systems
 development and tool infrastructure. This file includes some basic installation
-and compilation instructions, but they may require some manual modification on
-your specific platform.  Contact the author if you encounter issues.
+and suage instructions, but they may require some manual modification on your
+specific platform. Contact the author if you encounter issues.
+
+
+### Variable Mode (newer)
+
+
+CRAFT now has support for a source-level search mode, enabled using the `-V`
+command-line flag. In this mode, CRAFT performs type conversions in source code,
+allowing it to search a variable space rather than an instruction space (as in
+the binary mode described below).
+
+Note that using variable mode means that you do not need to build the binary
+instrumentation part of CRAFT, which negates the instructions in the section
+below; all you need is to make sure the `scripts` folder is in your `PATH` and
+that you have Ruby 2.0 or later installed.
+
+To use this mode, you should first clean and build your project using
+`craft_find_variables` instead of `CC` or `CXX`. This should produce a file
+named `craft_orig.cfg` that contains the base list of variables in your project
+that can be tuned.
+
+The next step is to perform a search to find a mixed-precision version of your
+program with speedup, subject to a verification procedure that you provide.
+
+To begin, create a new folder and copy the `craft_orig.cfg` into it. You will
+also need to write a new script called `craft_driver`
+([sample](scripts/craft_driver_source)), which will be run in a new, empty
+folder for every candidate configuration generated during the search process.
+This script is similar to the identically-named script used in the binary mode
+except it should also handle copying your original project files to the current
+directory, and it should build your project using the following instead of `CC`
+or `CXX` (the `$1` is a parameter that will be provided by CRAFT):
+
+    craft_replace_types $1
+
+In addition, the `craft_driver` script should handle running your project with a
+representative input, and it should write results to standard out using the
+following format:
+
+    status:  [pass|fail|error]
+    time:    <seconds>
+    error:   <error>
+
+The status must be either `pass`, `fail`, or `error` and the time must be in
+seconds (and may be fractional). The error is optional but if present should be
+given as a scalar double-precision number. Unlike the binary mode, you should
+run your program using your regular executable name.
+
+Finally, run the search using the following command from the search folder:
+
+    craft search -V
+
+If you have multiple cores, it is recommended that you use the `-j <N>` option
+to run up to N multiple configurations in parallel.
+
+The search will print various status information while it is running. When it is
+finished, you will find your final recommended configuration in the `final`
+subfolder. You may examine `craft_final.cfg` for a list of converted variables.
+
+This support is still very brittle and experimental, and it is under active
+development as of Summer 2018. More documentation is on the way. Please contact
+the author if you have questions or run into issues.
+
+Eventually these source file configurations will be generated using the
+[TypeForge tool](https://github.com/rose-compiler/rose-develop/blob/master/projects/CodeThorn/src/typeforge.C)
+created using the [Rose compiler framework](https://github.com/rose-compiler/rose-develop),
+but for now there are some temporary work-arounds provided in this repository.
+
+
+### Binary Mode (original)
 
 Currently this project only works on x86\_64 Linux. The environment variable
 `PLATFORM` needs to be set to "`x86_64-unknown-linux2.4`".
@@ -16,7 +85,6 @@ system Boost headers are compatible (this is to save space in the common case).
 This script will also create a Bash environment script (`env-setup.sh`) that you
 should source every time you want to run CRAFT (or you could put it in your Bash
 profile).
-
 If you need to set up a build environment manually, here is a list of the
 dependencies:
 
@@ -67,6 +135,11 @@ need Ruby 2.0 or later.
 To build and use the GUI tools in the `viewer` folder, you will need Java 1.6 or
 later.
 
+For further instructions and a short tutorial, see the
+[Sum2PI_X](demo/sum2pi_x/README) example/demo.
+
+
+### License Notice
 
 CRAFT is free software: you can redistribute it and/or modify it under the terms
 of the GNU Lesser General Public License as published by the Free Software
