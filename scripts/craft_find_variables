@@ -38,7 +38,7 @@ ARGV.each do |arg|
         # add the source file
         $cfg["source_files"] << arg
 
-        # scan for definitions and replace types where requested
+        # scan for definitions and build a list of valid replacements
         source = IO.readlines(arg)
         lineno=0
         while lineno < source.size do
@@ -52,6 +52,7 @@ ARGV.each do |arg|
 
                 a = Hash.new
                 a["action"] = "replace_var_type"
+                # TODO: add unique handle
                 a["variable_name"] = vname
                 a["source_info"] = "#{arg}:#{lineno}"
                 a["from_type"] = "double"
@@ -61,7 +62,7 @@ ARGV.each do |arg|
             lineno += 1
         end
 
-        # write new JSON document
+        # write JSON document
         outfile = File.open($OUTPUT_FILENAME, File::RDWR|File::CREAT, 0644) do |f|
             f.flock(File::LOCK_EX)
             f.puts(JSON.pretty_generate($cfg))
