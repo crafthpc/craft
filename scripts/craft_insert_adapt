@@ -10,8 +10,15 @@ if ARGV.size < 1 then
     puts "Usage: craft_insert_adapt <c-flags> <source-file>"
 end
 
+if not ENV.has_key?("CODIPACK_PATH") then
+    puts "CODIPACK_PATH environment variable must be defined"
+    exit
+end
+$CODI_PATH=ENV["CODIPACK_PATH"]
+
 if not ENV.has_key?("ADAPT_PATH") then
     puts "ADAPT_PATH environment variable must be defined"
+    exit
 end
 $AD_PATH=ENV["ADAPT_PATH"]
 
@@ -34,7 +41,7 @@ while aidx < ARGV.size do
         source = IO.readlines(new_file)
 
         # insert header file include
-        source.insert(0, "#include <codiwrap.h>")
+        source.insert(0, "#include <adapt.h>")
 
         lineno=0
         while lineno < source.size do
@@ -52,7 +59,7 @@ while aidx < ARGV.size do
 
             # insert AD implementation in file with main()
             if line =~ /main\s*\(/ then
-                source.insert(0, "#define AD_IMPLEMENTATION")
+                source << "#include <adapt-impl.cpp>"
                 lineno += 1
             end
 
@@ -60,9 +67,9 @@ while aidx < ARGV.size do
             if line =~ /#\s*pragma\s+adapt\s+begin/ then
                 source[lineno] = "AD_begin();"
             elsif line =~ /#\s*pragma\s+adapt\s+output\s+(\w+)\s+(.*)$/ then
-                source[lineno] = "AD_DEPENDENT(#{$1}, \"#{$1}\", #{$2});"
+                source[lineno] = "AD_dependent(#{$1}, \"#{$1}\", #{$2}, FILE_INFO, FUNC_INFO);"
             elsif line =~ /#\s*pragma\s+adapt\s+end/ then
-                source[lineno] = "AD_end(); AD_report(false, GREEDY);"
+                source[lineno] = "AD_end(); AD_report(false);"
             end
 
             lineno += 1
@@ -77,6 +84,7 @@ while aidx < ARGV.size do
 end
 
 # add compiler flags
+ARGV << "-I#{$CODI_PATH}/include"
 ARGV << "-I#{$AD_PATH}"
 ARGV << "-std=c++11"
 
