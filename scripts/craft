@@ -24,7 +24,7 @@ require 'json'
 
 # {{{ top-level: global constants
 
-$CRAFT_VERSION = "0.1 (beta)"                       # release version
+$CRAFT_VERSION = "1.1"                              # release version
 
 $RESULT_PASS  = "Success!"                          # test result possibilities
 $RESULT_FAIL  = "FAILED!"
