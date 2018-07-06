@@ -25,8 +25,12 @@ $AD_PATH=ENV["ADAPT_PATH"]
 # save TypeForge configuration file
 File.open("adapt.tf", "w") do |f|
     f.puts("transform;*;float;ad_intermediate_instrumentation")
+    f.puts("replace_type;*:ret,args,body;float=>AD_real")
     f.puts("replace_type;*:ret,args,body;double=>AD_real")
+    f.puts("replace_type;*:ret,args,body;long double=>AD_real")
+    f.puts("replace_type;\$global;float=>AD_real")
     f.puts("replace_type;\$global;double=>AD_real")
+    f.puts("replace_type;\$global;long double=>AD_real")
 end
 
 # look for source code parameters
