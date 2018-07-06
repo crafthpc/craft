@@ -143,9 +143,22 @@ class PPoint
     end
 
     def build_typeforge_file (config, fn)
-        fout = File.new(fn, "w")
-        output_typeforge(config, fout, nil, "$global")
-        fout.close
+        File.open(fn, "w") do |f|
+            output_typeforge(config, f, nil, "$global")
+        end
+    end
+
+    def build_json_file (config, fn)
+        fout = Hash.new
+        fout["version"] = "1"
+        fout["tool_id"] = "CRAFT"
+        fout["source_files"] = []
+        actions = []
+        output_json(config, actions, nil)
+        fout["actions"] = actions
+        File.open(fn, "w") do |f|
+            f.puts(JSON.pretty_generate(fout))
+        end
     end
 
     def build_lookup_hash(pt=nil)
@@ -330,6 +343,34 @@ class PPoint
             end
             @children.each do |c|
                 c.output_typeforge(config, fout, overload, func_name)
+            end
+        end
+    end
+
+    def output_json (config, actions, overload=nil)
+        if @type == $TYPE_VARIABLE then
+            flag = @orig_status
+            if flag == $STATUS_CANDIDATE then
+                if not overload.nil? then
+                    flag = overload
+                elsif config.exceptions.has_key?(@uid) then
+                    flag = config.exceptions[@uid]
+                end
+                if flag == $STATUS_SINGLE then
+                    a = Hash.new
+                    a["action"] = "replace_var_type"
+                    a["handle"] = @attrs["addr"]
+                    a["variable_name"] = @attrs["desc"]
+                    a["to_type"] = "float"
+                    actions << a
+                end
+            end
+        else
+            if config.exceptions.has_key?(@uid) then
+                overload = config.exceptions[@uid]
+            end
+            @children.each do |c|
+                c.output_json(config, actions, overload)
             end
         end
     end

@@ -8,17 +8,26 @@
 # parameters except the first (the specification filename) are passed through.
 #
 
+require 'json'
+
 if ARGV.size < 2 then
     puts "Usage: craft_change_types <spec-file> <c-flags> <source-file>"
 end
 
-# look for replacements in specification file
-# TODO: add JSON parsing
-actions = IO.readlines(ARGV[0])
+# open and parse specification file
+begin
+    cfg = JSON.parse(IO.read(ARGV[0]))
+rescue => e
+    puts "Invalid configuration file!"
+    puts e
+    exit
+end
+
+# look for type replacements in specification file
 replacements = Hash.new
-actions.each do |a|
-    if a =~/replace_vartype;[^;]*;(\w+);(\w+)/ then
-        replacements[$1] = $2
+cfg["actions"].each do |a|
+    if a["action"] == "replace_var_type" then
+        replacements[a["handle"]] = a["to_type"]
     end
 end
 
@@ -26,17 +35,16 @@ end
 ARGV.each do |arg|
     if arg =~ /\.(c|C|cpp|h|H|hpp)$/ then
         source = IO.readlines(arg)
-        idx=0
-        while idx < source.size do
-            line = source[idx]
+        lineno=0
+        while lineno < source.size do
+            line = source[lineno]
             if line =~ /double\s*(\*)?\s*(\w+)/ then
-                rvname = $2
-                if replacements.has_key?(rvname) then
-                    #puts "replacing \"#{rvname}\" in \"#{line.chomp}\""
-                    source[idx] = line.sub(/double/, replacements[rvname])
+                handle = "#{$2}:#{arg}:#{lineno}"
+                if replacements.has_key?(handle) then
+                    source[lineno] = line.sub(/double/, replacements[handle])
                 end
             end
-            idx += 1
+            lineno += 1
         end
         # re-write source file
         out = File.open(arg, "w")

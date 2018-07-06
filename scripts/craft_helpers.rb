@@ -202,18 +202,18 @@ def read_json_config(cfg)
     global_variables = []
     functions = Hash.new()
     if cfg.has_key?("actions") then
-        cfg["actions"]. each do |a|
+        cfg["actions"].each do |a|
             if a.has_key?("action") and a["action"] == "replace_var_type" and
                     a.has_key?("to_type") and a["to_type"] == "float" and
-                    a.has_key?("variable_name") then
+                    a.has_key?("handle") then
                 if not a.has_key?("scope") or a["scope"] == "global" then
-                    global_variables << a["variable_name"]
+                    global_variables << a
                 elsif a["scope"] == "function_local" and
                         a.has_key?("functions") and
                         a["functions"].size == 1 then
                     func = a["functions"][0]
                     functions[func] = [] if not functions.has_key?(func)
-                    functions[func] << a["variable_name"]
+                    functions[func] << a
                 end
             end
         end
@@ -226,8 +226,12 @@ def read_json_config(cfg)
     global_variables.each do |v|
         vidx += 1
         var = PPoint.new("VAR ##{vidx}", $TYPE_VARIABLE, $STATUS_CANDIDATE)
-        var.attrs["addr"] = "0x0"
-        var.attrs["desc"] = v
+        var.attrs["addr"] = v["handle"]
+        if v.has_key?("variable_name") then
+            var.attrs["desc"] = v["variable_name"]
+        else
+            var.attrs["desc"] = v["handle"]
+        end
         mod.children << var
     end
     functions.each_key do |f|
@@ -241,8 +245,12 @@ def read_json_config(cfg)
         functions[f].each do |v|
             vidx += 1
             var = PPoint.new("VAR ##{vidx}", $TYPE_VARIABLE, $STATUS_CANDIDATE)
-            var.attrs["addr"] = "0x0"
-            var.attrs["desc"] = v
+            var.attrs["addr"] = v["handle"]
+            if v.has_key?("variable_name") then
+                var.attrs["desc"] = v["variable_name"]
+            else
+                var.attrs["desc"] = v["handle"]
+            end
             func.children << var
         end
     end
@@ -351,7 +359,7 @@ def run_baseline_performance
     $baseline_error = 0.0
     $baseline_runtime = 0.0
     if $variable_mode then
-        File.open("tmp.cfg","w") do |f| f.print("") end
+        File.open("tmp.cfg","w") do |f| f.print("{\"actions\":[]}") end
         cmd = "#{$search_path}#{$craft_driver} tmp.cfg"
     else
         cmd = "#{$search_path}#{$craft_driver} #{$binary_path}"
@@ -494,8 +502,7 @@ def run_config (cfg)
     cfg_path = $search_path + cfg.filename
     if $variable_mode then
         #puts "Writing JSON file for #{cfg.cuid}"
-        $program.build_typeforge_file(cfg, cfg_path)
-        # TODO: add support for JSON output
+        $program.build_json_file(cfg, cfg_path)
     else
         #puts "Writing CRAFT file for #{cfg.cuid}"
         $program.build_config_file(cfg, cfg_path)
@@ -863,8 +870,7 @@ end
 def rebuild_final_config
     if $variable_mode then
         $final_config = $strategy.build_fastest_config(get_tested_configs)
-        $program.build_typeforge_file($final_config, $final_config_fn)
-        # TODO: add support for JSON output
+        $program.build_json_file($final_config, $final_config_fn)
     else
         $final_config = $strategy.build_final_config(get_tested_configs)
         $program.build_config_file($final_config, $final_config_fn, false)
