@@ -590,9 +590,13 @@ def run_config_file (fn, keep, label)
 
     # print output
     $status_buffer += "        #{result}"
-    $status_buffer += "  [Walltime: #{format_time(runtime.to_f)}"
-    $status_buffer += " %.1fX"%[runtime / $baseline_runtime.to_f]
-    $status_buffer += " Error: %g]"%[error]
+    #$status_buffer += "   Walltime: #{format_time(runtime.to_f)}"
+    if $variable_mode then
+      $status_buffer += "   Speedup: %.1fx"%[$baseline_runtime / runtime]
+    else
+      $status_buffer += "   Overhead: %.1fx"%[runtime / $baseline_runtime]
+    end
+    $status_buffer += "  Error: %g"%[error]
     puts $status_buffer
     add_to_mainlog($status_buffer)
     if keep then
