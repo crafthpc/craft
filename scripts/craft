@@ -623,6 +623,10 @@ def main
             initialize_search
         else
             # we're resuming an analysis
+            if not File.exists?($settings_fn) then
+                puts "Cannot resume; no search detected in current folder"
+                exit
+            end
             puts "Resuming in-process search ..."
             if File.exist?($final_path) then
                 # clear out any final configuration testing
