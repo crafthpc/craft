@@ -73,7 +73,7 @@ while aidx < ARGV.size do
             elsif line =~ /#\s*pragma\s+adapt\s+output\s+(\w+)\s+(.*)$/ then
                 source[lineno] = "AD_dependent(#{$1}, \"#{$1}\", #{$2}, FILE_INFO, FUNC_INFO);"
             elsif line =~ /#\s*pragma\s+adapt\s+end/ then
-                source[lineno] = "AD_end(); AD_report(false);"
+                source[lineno] = "AD_end(); AD_report();"
             end
 
             lineno += 1
