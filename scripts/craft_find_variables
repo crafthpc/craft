@@ -53,7 +53,7 @@ ARGV.each do |arg|
                 a = Hash.new
                 a["action"] = "replace_var_type"
                 a["handle"] = "#{vname}:#{arg}:#{lineno}"
-                a["variable_name"] = vname
+                a["name"] = vname
                 a["source_info"] = "#{arg}:#{lineno}"
                 a["from_type"] = "double"
                 a["to_type"] = "float"

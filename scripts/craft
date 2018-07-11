@@ -360,7 +360,7 @@ class PPoint
                     a = Hash.new
                     a["action"] = "replace_var_type"
                     a["handle"] = @attrs["addr"]
-                    a["variable_name"] = @attrs["desc"]
+                    a["name"] = @attrs["desc"]
                     a["to_type"] = "float"
                     actions << a
                 end

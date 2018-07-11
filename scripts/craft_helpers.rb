@@ -227,8 +227,8 @@ def read_json_config(cfg)
         vidx += 1
         var = PPoint.new("VAR ##{vidx}", $TYPE_VARIABLE, $STATUS_CANDIDATE)
         var.attrs["addr"] = v["handle"]
-        if v.has_key?("variable_name") then
-            var.attrs["desc"] = v["variable_name"]
+        if v.has_key?("name") then
+            var.attrs["desc"] = v["name"]
         else
             var.attrs["desc"] = v["handle"]
         end
@@ -246,8 +246,8 @@ def read_json_config(cfg)
             vidx += 1
             var = PPoint.new("VAR ##{vidx}", $TYPE_VARIABLE, $STATUS_CANDIDATE)
             var.attrs["addr"] = v["handle"]
-            if v.has_key?("variable_name") then
-                var.attrs["desc"] = v["variable_name"]
+            if v.has_key?("name") then
+                var.attrs["desc"] = v["name"]
             else
                 var.attrs["desc"] = v["handle"]
             end
@@ -313,7 +313,7 @@ def add_variables_to_config_file(fn, cfg)
             cfg.print "    "
             cfg.print "," if vcount > 0
             cfg.puts "{ \"action\": \"replace_var_type\", \"scope\": \"global\","
-            cfg.puts "      \"variable_name\": \"#{vname}\","
+            cfg.puts "      \"name\": \"#{vname}\","
             cfg.puts "      \"from_type\": \"craft_t\", \"to_type\":\"float\" }"
             vcount += 1
         end
