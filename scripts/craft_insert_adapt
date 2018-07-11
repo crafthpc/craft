@@ -56,6 +56,11 @@ while aidx < ARGV.size do
                 source[lineno] = line.sub(/double/, "AD_real")
             end
 
+            # replace any old ADaPT version instrumentation
+            if line =~ /FILE_INFO, FUNC_INFO/ then
+                source[lineno] = line.sub(/FILE_INFO, FUNC_INFO/, "SOURCE_INFO")
+            end
+
             # replace any AD_real=>double casts
             if line =~ /\(\(double \)(\w+)\)/ then
                 source[lineno] = line.gsub(/\(\(double \)(\w+)\)/,"(AD_value(\\1))")
@@ -71,7 +76,7 @@ while aidx < ARGV.size do
             if line =~ /#\s*pragma\s+adapt\s+begin/ then
                 source[lineno] = "AD_begin();"
             elsif line =~ /#\s*pragma\s+adapt\s+output\s+(\w+)\s+(.*)$/ then
-                source[lineno] = "AD_dependent(#{$1}, \"#{$1}\", #{$2}, FILE_INFO, FUNC_INFO);"
+                source[lineno] = "AD_dependent(#{$1}, \"#{$1}\", #{$2});"
             elsif line =~ /#\s*pragma\s+adapt\s+end/ then
                 source[lineno] = "AD_end(); AD_report();"
             end
