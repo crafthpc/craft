@@ -81,7 +81,7 @@ def parse_command_line
                 $status_preferred = ARGV.shift
                 $status_alternate = ARGV.shift
                 $fpconf_options = $FPCONF_OPTS[$status_preferred]
-            elsif opt == "-A" then
+            elsif opt == "-R" then
                 # archived/cached configuration results
                 $cached_fn = File.expand_path(ARGV.shift)
             elsif opt == "-c" then
@@ -90,6 +90,9 @@ def parse_command_line
             elsif opt == "-C" then
                 # initial fpconf options
                 $fpconf_options = ARGV.shift
+            elsif opt == "-A" then
+                # additional advisory configuration (e.g., ADaPT)
+                $addt_cfg_fns << ARGV.shift
             elsif opt == '-m' then
                 # memory-based analysis
                 $fpconf_options = "-c --svinp mem_double "
@@ -182,6 +185,34 @@ def parse_command_line
     end
 end
 
+def merge_additional_configs
+    return if $addt_cfg_fns.size == 0
+    main_cfg = JSON.parse(IO.read($orig_config_fn))
+    $addt_cfg_fns.each do |fn|
+        begin
+            cfg = JSON.parse(IO.read(fn))
+            if cfg.has_key?("tool_id") and cfg["tool_id"] == "ADaPT" then
+                puts "Merging ADaPT output #{fn}"
+                adapt_actions = Hash.new
+                cfg["actions"].select! { |a| a["action"] == "replace_var_type" }
+                cfg["actions"].each { |a| adapt_actions[a["name"]] = a }
+                main_cfg["actions"].select! { |a| adapt_actions.has_key?(a["name"]) }
+                main_cfg["actions"].each do |a|
+                    puts "  Merging variable #{a["name"]}"
+                    a["error"] = adapt_actions[a["name"]]["error"]
+                    a["dynamic_assignments"] = adapt_actions[a["name"]]["dynamic_assignments"]
+                end
+            end
+        rescue => e
+            puts "ERROR: Unable to read configuration #{fn}"
+            puts e
+            exit
+        end
+    end
+    File.open($orig_config_fn, "w") do |f|
+        f.puts(JSON.pretty_generate(main_cfg))
+    end
+end
 
 def initialize_program
     config = IO.read($orig_config_fn)
@@ -667,7 +698,7 @@ def print_usage
     puts " "
     puts "Initiation options:"
     puts "   -a             test all generated configs (don't skip non-executed instructions)"
-    puts "   -A <file>      use an archived craft.tested file to avoid re-running tests from a previous search"
+    puts "   -A <file>      use <file> as additional advisory configuration (e.g., ADaPT results)"
     puts "   -b             stop splitting configs at the basic block level"
     puts "   -c <file>      use <file> as initial base configuration"
     puts "   -C \"<opts>\"    pass the given options to fpconf to generate initial base configuration"
@@ -678,6 +709,7 @@ def print_usage
     puts "   -F             don't test final configuration"
     puts "   -j <np>        spawn <np> worker threads"
     puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
+    puts "   -R <file>      use an archived craft.tested file to avoid re-running tests from a previous search"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
     puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"combinational\", \"rprec\""
     puts "   -S             disable queue sorting (improves overall performance but may converge slower"

@@ -24,6 +24,7 @@ def save_settings
     f.puts "base_type=#{$base_type}"
     f.puts "skip_nonexecuted=#{$skip_nonexecuted}"
     f.puts "initial_cfg_fn=#{$initial_cfg_fn}"
+    f.puts "addt_cfg_fns=#{$addt_cfg_fns.join(',')}"
     f.puts "cached_fn=#{$cached_fn}"
     f.puts "prof_log_fn=#{$prof_log_fn}"
     f.puts "total_candidates=#{$total_candidates}"
@@ -96,6 +97,8 @@ def load_settings
                 $cached_fn = value
             when "initial_cfg_fn"
                 $initial_cfg_fn = value
+            when "addt_cfg_fns"
+                $addt_cfg_fns = value.split(',')
             when "prof_log_fn"
                 $prof_log_fn = value
             when "total_candidates"

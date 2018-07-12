@@ -512,6 +512,7 @@ def main
     $rprec_runtime_pct_threshold = 0.0      # config cutoff runtime percentage threshold
     $rprec_skip_app_level = false           # skip the app level for rprec search
     $initial_cfg_fn = ""                    # initial config filename (may be blank)
+    $addt_cfg_fns = []                      # additional configuration files (may be empty)
     $prof_log_fn = ""                       # initial profiling log (may be blank)
     $cached_fn = ""                         # cached results from previous run (may be blank)
     $max_queue_length = 0                   # track largest queue size (approximate)
