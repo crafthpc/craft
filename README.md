@@ -23,14 +23,13 @@ that you have Ruby 2.0 or later installed.
 
 To use this mode, you should first clean and build your project using
 `craft_find_variables` instead of `CC` or `CXX`. This should produce a file
-named `craft_orig.cfg` that contains the base list of variables in your project
+named `craft_initial.cfg` that contains the base list of variables in your project
 that can be tuned.
 
 The next step is to perform a search to find a mixed-precision version of your
 program with speedup, subject to a verification procedure that you provide.
 
-To begin, create a new folder and copy the `craft_orig.cfg` into it. You will
-also need to write a new script called `craft_driver`
+To begin, create a new folder and write a new script called `craft_driver`
 ([sample](scripts/craft_driver_source)), which will be run in a new, empty
 folder for every candidate configuration generated during the search process.
 This script is similar to the identically-named script used in the binary mode
@@ -55,7 +54,7 @@ run your program using your regular executable name.
 
 Finally, run the search using the following command from the search folder:
 
-    craft search -V
+    craft search -c ../path/to/craft_initial.cfg -V
 
 If you have multiple cores, it is recommended that you use the `-j <N>` option
 to run up to N multiple configurations in parallel.

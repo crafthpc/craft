@@ -10,7 +10,7 @@
 
 require 'json'
 
-$OUTPUT_FILENAME="craft_orig.cfg"
+$OUTPUT_FILENAME="craft_initial.cfg"
 $cfg = Hash.new
 
 if ARGV.size < 1 then
