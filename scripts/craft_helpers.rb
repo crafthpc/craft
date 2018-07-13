@@ -192,13 +192,12 @@ def merge_additional_configs
         begin
             cfg = JSON.parse(IO.read(fn))
             if cfg.has_key?("tool_id") and cfg["tool_id"] == "ADaPT" then
-                puts "Merging ADaPT output #{fn}"
+                print "merging ADaPT output #{fn} ... "
                 adapt_actions = Hash.new
                 cfg["actions"].select! { |a| a["action"] == "replace_var_type" }
                 cfg["actions"].each { |a| adapt_actions[a["name"]] = a }
                 main_cfg["actions"].select! { |a| adapt_actions.has_key?(a["name"]) }
                 main_cfg["actions"].each do |a|
-                    puts "  Merging variable #{a["name"]}"
                     a["error"] = adapt_actions[a["name"]]["error"]
                     a["dynamic_assignments"] = adapt_actions[a["name"]]["dynamic_assignments"]
                 end
