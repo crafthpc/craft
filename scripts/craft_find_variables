@@ -51,7 +51,7 @@ ARGV.each do |arg|
                 break if vname == "error"
 
                 a = Hash.new
-                a["action"] = "replace_var_type"
+                a["action"] = "replace_varbasetype"
                 a["handle"] = "#{vname}:#{arg}:#{lineno}"
                 a["name"] = vname
                 a["source_info"] = "#{arg}:#{lineno}"

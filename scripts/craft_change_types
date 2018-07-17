@@ -26,7 +26,7 @@ end
 # look for type replacements in specification file
 replacements = Hash.new
 cfg["actions"].each do |a|
-    if a["action"] == "replace_var_type" then
+    if a["action"] == "replace_varbasetype" then
         replacements[a["handle"]] = a["to_type"]
     end
 end

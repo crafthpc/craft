@@ -358,7 +358,7 @@ class PPoint
                 end
                 if flag == $STATUS_SINGLE then
                     a = Hash.new
-                    a["action"] = "replace_var_type"
+                    a["action"] = "replace_varbasetype"
                     a["handle"] = @attrs["addr"]
                     a["name"] = @attrs["desc"]
                     a["to_type"] = "float"
