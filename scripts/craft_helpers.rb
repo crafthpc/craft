@@ -142,6 +142,9 @@ def parse_command_line
             elsif opt == '-S' then
                 # disable workqueue sorting
                 $disable_queue_sort = true
+            elsif opt == '-t' then
+                # set trial count
+                $num_trials = ARGV.shift.to_i
             elsif !parsed_binary then
                 if not File.exists?(opt) then
                     puts "Cannot find target binary: #{opt}"
@@ -410,6 +413,23 @@ def run_baseline_performance
             end
         end
     end
+    # run additional trials if requested
+    2.upto($num_trials) do |t|
+        Open3.popen3(cmd) do |io_in, io_out, io_err|
+            io_out.each_line do |line|
+                if line =~ /status:\s*(pass|fail)/i then
+                    if not $1 =~ /pass/i then
+                        passed = false
+                    end
+                elsif line =~ /error:\s*(.+)/i then
+                    $baseline_error = [$baseline_error, $1.to_f].max
+                elsif line =~ /time:\s*(.+)/i then
+                    $baseline_runtime = [$baseline_runtime, $1.to_f].min
+                end
+            end
+        end
+    end
+
     if $baseline_runtime == 0.0 then
         $baseline_runtime = 0.0001      # avoid divide-by-zero errors later
     end
@@ -605,6 +625,27 @@ def run_config_file (fn, keep, label)
                 runtime = $1.to_f
             end
         end
+end
+
+    # run additional trials if requested
+    2.upto($num_trials) do |t|
+        Open3.popen3(cmd) do |io_in, io_out, io_err|
+            io_out.each_line do |line|
+                if line =~ /status:\s*(pass|fail)/i then
+                    tmp = $1
+                    if tmp =~ /pass/i and result != $RESULT_PASS then
+                        add_to_mainlog "    Inconsistent test result for #{basename}"
+                    elsif tmp =~ /fail/i and result != $RESULT_FAIL then
+                        add_to_mainlog "    Inconsistent test result for #{basename}"
+                        result = $RESULT_FAIL
+                    end
+                elsif line =~ /error:\s*(.+)/i then
+                    error = [error, $1.to_f].max
+                elsif line =~ /time:\s*(.+)/i then
+                    runtime = [runtime, $1.to_f].min
+                end
+            end
+        end
     end
 
     # scan log file(s) for info
@@ -712,6 +753,7 @@ def print_usage
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
     puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"combinational\", \"rprec\""
     puts "   -S             disable queue sorting (improves overall performance but may converge slower"
+    puts "   -t <n>         run <n> trials and use max error / min runtime for evaluation"
     puts "   -V             enable variable mode for variable-level tuning and performance testing"
     puts "                    (-V also sets the default strategy to \"combinational\")"
     puts " "

@@ -34,26 +34,7 @@ def save_settings
     f.puts "disable_queue_sort=#{$disable_queue_sort.to_s}"
     f.puts "run_final_config=#{$run_final_config.to_s}"
     f.puts "mixed_use_rprec=#{$mixed_use_rprec.to_s}"
-
-    #f.puts $start_time.to_i
-    #f.puts $binary_name
-    #f.puts $binary_path
-    #f.puts $strategy_name
-    #f.puts $status_preferred
-    #f.puts $status_alternate
-    #f.puts $baseline_runtime
-    #f.puts($fortran_mode ? "fortran" : "other")
-    #f.puts $base_type
-    #f.puts $skip_nonexecuted
-    #f.puts $initial_cfg_fn
-    #f.puts $prof_log_fn
-    #f.puts $total_candidates
-    #f.puts $rprec_split_threshold
-    #f.puts $rprec_runtime_pct_threshold
-    #f.puts $rprec_skip_app_level
-    #f.puts $disable_queue_sort
-    #f.puts $run_final_config
-    #f.puts $mixed_use_rprec
+    f.puts "num_trials=#{$num_trials.to_s}"
 
     f.close
 end
@@ -115,6 +96,8 @@ def load_settings
                 $run_final_config = (value == true.to_s)
             when "mixed_use_rprec"
                 $mixed_use_rprec = (value == true.to_s)
+            when "num_trials"
+                $num_trials = value.to_i
             end
             temp = f.gets
         end
