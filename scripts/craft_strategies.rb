@@ -219,15 +219,11 @@ class DeltaDebugStrategy < Strategy
     end
 
     def get_cost(cfg)
-        if cfg.attrs.has_key?("cinst") and cfg.attrs["cinst"].to_i != 0 then
-            return 1.0 / cfg.attrs["cinst"].to_f
-        else
-            return 1.0
-        end
+        return cfg.attrs["runtime"].to_f
     end
 
     def run_custom_supervisor
-        
+
         # get set of all possible basetype-level changes
         root = AppConfig.new("ALL", "ALL", @alternate)
         find_configs(@program, root)
@@ -237,15 +233,15 @@ class DeltaDebugStrategy < Strategy
 
         # lowest-cost (most replacements) config found so far
         @lc_cfg = root
-        @lc_cfg.attrs["cinst"] = 0
+        @lc_cfg.attrs["runtime"] = $baseline_runtime
 
         done = false
         while not done do
 
             puts "Current LC: #{@lc_cfg.exceptions.size} change(s), #{@lc_cfg.attrs["cinst"]} execution(s), cost=#{get_cost(@lc_cfg)}"
 
-            # partition current 
-            
+            # partition current
+
             lc_div = div
             divs = @lc_cfg.exceptions.each_slice([1,(@lc_cfg.exceptions.size.to_f/div.to_f).ceil.to_i].max).to_a
             set_cuids = []
