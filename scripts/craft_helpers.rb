@@ -826,9 +826,10 @@ def print_status
         end
         status_text << "#{indent}Application: #{"%27s" % $binary_name}"
         #status_text << "#{indent}Fortran mode:  #{"%24s" % ($fortran_mode ? "Y" : "N")}"
-        status_text << "#{indent}Typeforge mode: #{"%24s" % ($variable_mode ? "Y" : "N")}"
+        #status_text << "#{indent}Variable mode:  #{"%24s" % ($variable_mode ? "Y" : "N")}"
         status_text << "#{indent}Base type:  #{"%28s" % $base_type}"
         status_text << "#{indent}Worker threads:            #{"%13d" % nworkers}"
+        status_text << "#{indent}Trials per config:         #{"%13d" % $num_trials}"
         status_text << "#{indent}Total candidates:          #{"%13d" % $total_candidates}"
         summary = get_tested_configs_summary
         status_text << "#{indent}Total configs tested:      #{"%13d" % summary["total"]}"
