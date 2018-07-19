@@ -254,7 +254,6 @@ def run_main_search_loop
 
                 if add_child then
                     add_to_workqueue(child)
-                    puts "Added config #{child.label} to workqueue."
                 end
             end
         end

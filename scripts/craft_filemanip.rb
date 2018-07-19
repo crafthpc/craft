@@ -179,25 +179,29 @@ def add_to_workqueue_bulk(configs)
 end
 
 def add_to_workqueue(cfg)
-    f = File.new("#{$workqueue_fn}", "r+")
-    f.flock File::LOCK_EX
-    queue = read_cfg_array(f)
-    calculate_pct_stats(cfg)
-    queue << cfg
-    if not $disable_queue_sort then
-        queue.sort!
+    File.open("#{$workqueue_fn}", File::RDWR|File::CREAT) do |f|
+        f.flock File::LOCK_EX
+        queue = read_cfg_array(f)
+
+        # don't add a config if we've seen another one with an identical CUID
+        seen_cuids = []
+        queue.each              { |c| seen_cuids << c.cuid }
+        get_inproc_configs.each { |c| seen_cuids << c.cuid }
+        get_tested_configs.each { |c| seen_cuids << c.cuid }
+
+        if not seen_cuids.include?(cfg.cuid)
+            calculate_pct_stats(cfg)
+            queue << cfg
+            if not $disable_queue_sort then
+                queue.sort!
+            end
+            f.rewind
+            write_cfg_array(queue, f)
+            f.truncate(f.pos)
+            #puts "Added config #{cfg.label} to workqueue. Seen: #{seen_cuids.inspect}"
+            puts "Added config #{cfg.label} to workqueue."
+        end
     end
-    
-    # debug output
-    #puts "Current workqueue:"
-    #queue.each do |c|
-        #puts "  - #{c.label}"
-    #end
-    
-    f.truncate(0)
-    f.pos = 0
-    write_cfg_array(queue, f)
-    f.close
 end
 def get_next_workqueue_item
     next_cfg = nil
