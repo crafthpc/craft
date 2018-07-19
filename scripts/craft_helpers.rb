@@ -363,6 +363,8 @@ def initialize_strategy
         $strategy = ExhaustiveStrategy.new($program, $status_preferred, $status_alternate)
     elsif $strategy_name == "combinational" then
         $strategy = ExhaustiveCombinationalStrategy.new($program, $status_preferred, $status_alternate)
+    elsif $strategy_name == "compositional" then
+        $strategy = CompositionalStrategy.new($program, $status_preferred, $status_alternate)
     elsif $strategy_name == "rprec" then
         $strategy = RPrecStrategy.new($program, $status_preferred, $status_alternate)
         $strategy.split_threshold = $rprec_split_threshold
