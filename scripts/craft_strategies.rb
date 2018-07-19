@@ -54,6 +54,9 @@ class Strategy
         return configs
     end
 
+    def handle_completed_config(config)
+    end
+
     def split_config(config)
         # add a config for each child node of each exception
         configs = Array.new
