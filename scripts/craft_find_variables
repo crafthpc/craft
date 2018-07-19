@@ -14,7 +14,20 @@ $OUTPUT_FILENAME="craft_initial.cfg"
 $cfg = Hash.new
 
 if ARGV.size < 1 then
-    puts "Usage: craft_find_variables <c-flags> <source-file>"
+    puts "Usage: craft_find_variables <c-flags> <source-file> [--craft-initial <output-filename>]"
+end
+
+# look for and extract initial configuration filename switch if present
+idx = -1
+0.upto(ARGV.size-1).each do |i|
+    if ARGV[i] == "--craft-initial" then
+        $OUTPUT_FILENAME = ARGV[i+1]
+        idx = i
+    end
+end
+if idx != -1 then
+    ARGV.delete_at(idx)
+    ARGV.delete_at(idx)
 end
 
 # read existing configuration or generate a new one
