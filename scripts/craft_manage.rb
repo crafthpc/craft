@@ -193,6 +193,9 @@ def run_main_search_loop
         remove_from_inproc(cfg)
         rebuild_final_config
 
+        # let the strategy do any bookkeeping necessary
+        $strategy.handle_completed_config(cfg)
+
         add_children = true
         if $strategy_name == "rprec" then
 

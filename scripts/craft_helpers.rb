@@ -113,6 +113,7 @@ def parse_command_line
                 $variable_mode = true
                 $base_type = $TYPE_VARIABLE
                 $strategy_name = "combinational"
+                $disable_queue_sort = true
             elsif opt == '-b' then
                 # stop splitting at basic blocks
                 $base_type = $TYPE_BASICBLOCK
@@ -362,6 +363,8 @@ def initialize_strategy
         $strategy = ExhaustiveStrategy.new($program, $status_preferred, $status_alternate)
     elsif $strategy_name == "combinational" then
         $strategy = ExhaustiveCombinationalStrategy.new($program, $status_preferred, $status_alternate)
+    elsif $strategy_name == "compositional" then
+        $strategy = CompositionalStrategy.new($program, $status_preferred, $status_alternate)
     elsif $strategy_name == "rprec" then
         $strategy = RPrecStrategy.new($program, $status_preferred, $status_alternate)
         $strategy.split_threshold = $rprec_split_threshold
@@ -755,7 +758,7 @@ def print_usage
     puts "   -S             disable queue sorting (improves overall performance but may converge slower"
     puts "   -t <n>         run <n> trials and use max error / min runtime for evaluation"
     puts "   -V             enable variable mode for variable-level tuning and performance testing"
-    puts "                    (-V also sets the default strategy to \"combinational\")"
+    puts "                    (-V also sets the default strategy to \"combinational\" and disables queue sorting)"
     puts " "
     puts "Mixed-precision-specific options:"
     puts "   --mixed-use_rprec <X>                  use reduced-precision to simulate <X> bits for single precision"

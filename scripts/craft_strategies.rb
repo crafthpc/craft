@@ -54,6 +54,9 @@ class Strategy
         return configs
     end
 
+    def handle_completed_config(config)
+    end
+
     def split_config(config)
         # add a config for each child node of each exception
         configs = Array.new
@@ -448,6 +451,80 @@ class ExhaustiveCombinationalStrategy < Strategy
     def split_config(config)
         # don't split
         return Array.new
+    end
+end # }}}
+
+# CompositionalStrategy
+#
+# Search algorithm that begins by testing each initial point individually, and
+# then repeatedly attempts to build new configurations based on compositions of
+# passing configurations.
+#
+# {{{ CompositionalStrategy
+class CompositionalStrategy < Strategy
+
+    def build_initial_configs
+        all_configs = []
+        find_points(@program).each do |pt|
+            name = pt.attrs["desc"]
+            cfg = AppConfig.new(name, name, @alternate)
+            cfg.add_pt_info(pt)
+            cfg.exceptions[pt.uid] = @preferred
+            cfg.attrs["level"] = pt.type
+            all_configs << cfg
+        end
+        return all_configs
+    end
+
+    def find_points(pt)
+        all_points = []
+        if pt.type == @base_type then
+            all_points << pt
+        else
+            pt.children.each { |child| all_points += find_points(child) }
+        end
+        return all_points
+    end
+
+    def handle_completed_config(config)
+        return if not config.attrs["result"] == $RESULT_PASS
+
+        # reload information about tested configurations
+        good_configs = []
+        get_tested_configs.each do |cfg|
+            if cfg.attrs["result"] == $RESULT_PASS then
+                ck = cfg.exceptions.keys.size
+                while good_configs.size < ck+1 do
+                    good_configs << []
+                end
+                good_configs[ck] << cfg
+            end
+        end
+
+        # build 2k and k+1 cardinality configurations by combining other passing
+        # k and 1 cardinality configurations
+        k = config.exceptions.keys.size
+        [1,k].uniq.each do |nk|
+            good_configs[nk].each do |cfg|
+
+                # get list of combined replacements
+                ids = (config.cuid.split("_") | cfg.cuid.split("_")).sort
+                name = ids.join("_")
+
+                # build new configuration
+                new_cfg = AppConfig.new(name, name, @alternate)
+                if config.attrs.has_key?("cinst") and cfg.attrs.has_key?("cinst") then
+                    new_cfg.attrs["cinst"] = config.attrs["cinst"] + cfg.attrs["cinst"]
+                end
+                (config.exceptions.keys | cfg.exceptions.keys).each do |x|
+                    new_cfg.exceptions[x] = @preferred
+                end
+                new_cfg.attrs["level"] = config.attrs["level"]
+
+                # add configuration if it's actually different
+                add_to_workqueue(new_cfg) if new_cfg.exceptions.keys.size > k
+            end
+        end
     end
 end # }}}
 
