@@ -13,8 +13,16 @@ require 'json'
 $OUTPUT_FILENAME="craft_initial.cfg"
 $cfg = Hash.new
 
+$compiler="g++"
+
 if ARGV.size < 1 then
     puts "Usage: craft_find_variables <c-flags> <source-file> [--craft-initial <output-filename>]"
+end
+
+# set C mode if specified
+if ARGV.include?("--c") then
+    ARGV.delete("--c")
+    $compiler = "gcc"
 end
 
 # look for and extract initial configuration filename switch if present
@@ -84,5 +92,5 @@ ARGV.each do |arg|
 end
 
 # pass arguments through to compiler
-exec("g++", *ARGV)
+exec($compiler, *ARGV)
 

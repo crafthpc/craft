@@ -10,8 +10,16 @@
 
 require 'json'
 
+$compiler="g++"
+
 if ARGV.size < 2 then
     puts "Usage: craft_change_types <spec-file> <c-flags> <source-file>"
+end
+
+# set C mode if specified
+if ARGV.include?("--c") then
+    ARGV.delete("--c")
+    $compiler = "gcc"
 end
 
 # open and parse specification file
@@ -56,5 +64,5 @@ ARGV.each do |arg|
 end
 
 # pass arguments through to compiler
-exec("g++", *ARGV[1..-1])
+exec($compiler, *ARGV[1..-1])
 
