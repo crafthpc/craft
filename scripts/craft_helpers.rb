@@ -257,6 +257,7 @@ def read_json_config(cfg)
     program.children << mod
     vidx = 0
     fidx = 0
+    # TODO: incorporate "uid" field information if present
     global_variables.each do |v|
         vidx += 1
         var = PPoint.new("VAR ##{vidx}", $TYPE_VARIABLE, $STATUS_CANDIDATE)
