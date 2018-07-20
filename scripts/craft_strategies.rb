@@ -212,7 +212,16 @@ end # }}}
 # DeltaDebugStrategy
 #
 # Implements a lower-cost delta-debugging strategy as described in
-# Rubio-Gonzalez et al. [SC'13].
+# Rubio-Gonzalez et al. [SC'13]. This strategy really only works in variable
+# mode because no speedup information is available for binary mode.
+#
+# Note that their notion of a "change set" is the opposite of what we store in a
+# configuration. From the paper: "In this algorithm, a change set is a set of
+# variables. The variables in the change set must have higher precision." In our
+# configurations, however, the PPoints included as exceptions are the variables
+# that are to be converted to lower precision. We maintain the authors'
+# definition of a "change set" and take the complement of a change set to obtain
+# a CRAFT configuration.
 #
 # {{{ DeltaDebugStrategy
 class DeltaDebugStrategy < Strategy
@@ -225,61 +234,69 @@ class DeltaDebugStrategy < Strategy
         return cfg.attrs["runtime"].to_f
     end
 
+    def build_config(change_set)
+        # take complement of change set to obtain replacements
+        replacements = @all_variables - change_set
+
+        # generate CUID and label
+        cuid  = replacements.map { |pt| pt.id.to_s }.sort.join("_")
+        cuid  = "NONE" if cuid == ""
+        label = replacements.map { |pt| pt.attrs["desc"] }.sort.join("_")
+        label = "NONE" if label == ""
+
+        # create configuration object
+        cfg = AppConfig.new(cuid, label, @alternate)
+        replacements.each do |pt|
+            cfg.add_pt_info(pt)
+            cfg.exceptions[pt.uid] = @preferred
+            cfg.attrs["level"] = pt.type
+        end
+        cfg.attrs["changeset"] = change_set
+        return cfg
+    end
+
     def run_custom_supervisor
 
-        # get set of all possible basetype-level changes
-        root = AppConfig.new("ALL", "ALL", @alternate)
-        find_configs(@program, root)
+        # get set of all possible basetype-level changes (usually variables)
+        @all_variables = []
+        find_variables(@program, @all_variables)
 
         # number of divisions at current level
         div = 2
 
-        # lowest-cost (most replacements) config found so far
-        @lc_cfg = root
+        # lowest-cost change set found so far
+        @lc = @all_variables
+        @lc_cfg = build_config(@lc)
         @lc_cfg.attrs["runtime"] = $baseline_runtime
 
         done = false
         while not done do
 
-            puts "Current LC: #{@lc_cfg.exceptions.size} change(s), #{@lc_cfg.attrs["cinst"]} execution(s), cost=#{get_cost(@lc_cfg)}"
+            puts "Current LC: #{@lc_cfg.exceptions.size} change(s), cost=#{get_cost(@lc_cfg)}, label=#{@lc_cfg.label}"
 
             # partition current
 
             lc_div = div
-            divs = @lc_cfg.exceptions.each_slice([1,(@lc_cfg.exceptions.size.to_f/div.to_f).ceil.to_i].max).to_a
+            divs = @lc.each_slice([1,(@lc.size.to_f/div.to_f).ceil.to_i].max).to_a
             set_cuids = []
             com_cuids = []
             divs.size.times do |i|
 
-                puts "Test #{i+1}/#{divs.size} in round of #{div}"
+                puts "Test subset #{i+1}/#{divs.size} in round of #{div}"
 
-                # build test subset
-                setuid = @lc_cfg.cuid + " S_#{i+1}_#{div}"
-                set = AppConfig.new(setuid, setuid, @lc_cfg.default)
-                set.attrs["cinst"] = 0
-                divs[i].each do |k,v|
-                    set.exceptions[k] = v
-                    set.attrs["cinst"] += @program.lookup_by_uid(k).attrs["cinst"].to_i
+                # build and test subset
+                set_cfg = build_config(divs[i])
+                if set_cfg.exceptions.keys.size > 0 then
+                    add_to_workqueue(set_cfg)
+                    set_cuids << set_cfg.cuid
                 end
-                puts "SET: #{set.exceptions.size} change(s), #{set.attrs["cinst"]} execution(s)"
-                add_to_workqueue(set)
-                set_cuids << setuid
 
                 # build and test complement set
-                comuid = @lc_cfg.cuid + " C_#{i+1}_#{div}"
-                com = AppConfig.new(comuid, comuid, @lc_cfg.default)
-                com.attrs["cinst"] = 0
-                divs.size.times do |j|
-                    if i != j then
-                        divs[j].each do |k,v|
-                            com.exceptions[k] = v
-                            com.attrs["cinst"] += @program.lookup_by_uid(k).attrs["cinst"].to_i
-                        end
-                    end
+                com_cfg = build_config(@all_variables - divs[i])
+                if com_cfg.exceptions.keys.size > 0 then
+                    add_to_workqueue(com_cfg)
+                    com_cuids << com_cfg.cuid
                 end
-                puts "COMPLEMENT: #{com.exceptions.size} change(s), #{com.attrs["cinst"]} execution(s)"
-                add_to_workqueue(com)
-                com_cuids << comuid
 
             end
             puts "ADDED #{set_cuids.size + com_cuids.size} configs to queue"
@@ -292,30 +309,33 @@ class DeltaDebugStrategy < Strategy
             changed = false
             configs = get_tested_configs
             configs.each do |cfg|
-                #puts "EVALUATING: #{cfg.inspect}  cost=#{get_cost(cfg)}"
-                if set_cuids.include?(cfg.cuid) and cfg.attrs["result"] == $RESULT_PASS and
-                        get_cost(cfg) < get_cost(@lc_cfg) then
-                    @lc_cfg = cfg
-                    lc_div = 2
-                    changed = true
-                    puts "LC REPLACED by #{cfg.cuid}!  cost=#{get_cost(cfg)}"
-                end
-                if com_cuids.include?(cfg.cuid) and cfg.attrs["result"] == $RESULT_PASS and
-                        get_cost(cfg) < get_cost(@lc_cfg) then
-                    @lc_cfg = cfg
-                    lc_div = div-1
-                    changed = true
-                    puts "LC REPLACED by #{cfg.cuid}!  cost=#{get_cost(cfg)}"
+                if cfg.attrs["result"] == $RESULT_PASS and
+                        (set_cuids.include?(cfg.cuid) or com_cuids.include?(cfg.cuid)) then
+                    puts "EVALUATING: #{cfg.label}  cost=#{get_cost(cfg)} result=#{cfg.attrs["result"]}"
+                    if set_cuids.include?(cfg.cuid) and get_cost(cfg) < get_cost(@lc_cfg) then
+                        @lc = cfg.attrs["changeset"]
+                        @lc_cfg = cfg
+                        lc_div = 2
+                        changed = true
+                        puts "LC REPLACED by #{cfg.label}!  cost=#{get_cost(cfg)}"
+                    end
+                    if com_cuids.include?(cfg.cuid) and get_cost(cfg) < get_cost(@lc_cfg) then
+                        @lc = cfg.attrs["changeset"]
+                        @lc_cfg = cfg
+                        lc_div = div-1
+                        changed = true
+                        puts "LC REPLACED by #{cfg.label}!  cost=#{get_cost(cfg)}"
+                    end
                 end
             end
 
             # set up next iteration (if not done)
             if changed then
-                #puts "FOUND NEW LC: #{@lc_cfg.inspect}  cost=#{get_cost(@lc_cfg)}"
+                puts "FOUND NEW LC: #{@lc_cfg.label}  cost=#{get_cost(@lc_cfg)}"
                 div = lc_div
             else
                 print "NO NEW LC - "
-                if div > @lc_cfg.exceptions.size then
+                if div > @lc.size then
                     puts "DONE!"
                     done = true
                 else
@@ -330,7 +350,6 @@ class DeltaDebugStrategy < Strategy
 
     def build_final_config(results)
         final_cfg = AppConfig.new("FINAL", "FINAL", @alternate)
-        final_cfg.attrs["cinst"] = 0
         results.each do |r|
             if not @lc_cfg.nil? and r.cuid == @lc_cfg.cuid then
                 return r
@@ -348,13 +367,12 @@ class DeltaDebugStrategy < Strategy
         return []
     end
 
-    def find_configs(pt, cfg)
+    def find_variables(pt, vars)
         if pt.type == @base_type then
-            cfg.add_pt_info(pt)
-            cfg.exceptions[pt.uid] = @preferred
+            vars << pt
         else
             pt.children.each do |child|
-                find_configs(child, cfg)
+                find_variables(child, vars)
             end
         end
     end
