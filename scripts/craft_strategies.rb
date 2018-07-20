@@ -420,12 +420,9 @@ class ExhaustiveCombinationalStrategy < Strategy
         all_configs = []
         1.upto(all_points.size) do |n|
             all_points.combination(n).each do |cmb|
-                name = ""
-                cmb.each do |pt|
-                    name += "_" if name.size > 0
-                    name += pt.attrs["desc"]
-                end
-                cfg = AppConfig.new(name, name, @alternate)
+                ids   = cmb.map { |pt| pt.id.to_s }
+                names = cmb.map { |pt| pt.attrs["desc"] }
+                cfg = AppConfig.new(ids.join("_"), names.join("_"), @alternate)
                 cmb.each do |pt|
                     cfg.add_pt_info(pt)
                     cfg.exceptions[pt.uid] = @preferred
@@ -466,8 +463,7 @@ class CompositionalStrategy < Strategy
     def build_initial_configs
         all_configs = []
         find_points(@program).each do |pt|
-            name = pt.attrs["desc"]
-            cfg = AppConfig.new(name, name, @alternate)
+            cfg = AppConfig.new(pt.id.to_s, pt.attrs["desc"], @alternate)
             cfg.add_pt_info(pt)
             cfg.exceptions[pt.uid] = @preferred
             cfg.attrs["level"] = pt.type
@@ -508,11 +504,11 @@ class CompositionalStrategy < Strategy
             good_configs[nk].each do |cfg|
 
                 # get list of combined replacements
-                ids = (config.cuid.split("_") | cfg.cuid.split("_")).sort
-                name = ids.join("_")
+                ids   = (config.cuid.split("_")  | cfg.cuid.split("_")).sort
+                names = (config.label.split("_") | cfg.label.split("_")).sort
 
                 # build new configuration
-                new_cfg = AppConfig.new(name, name, @alternate)
+                new_cfg = AppConfig.new(ids.join("_"), names.join("_"), @alternate)
                 if config.attrs.has_key?("cinst") and cfg.attrs.has_key?("cinst") then
                     new_cfg.attrs["cinst"] = config.attrs["cinst"] + cfg.attrs["cinst"]
                 end
