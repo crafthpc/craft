@@ -397,11 +397,17 @@ def run_baseline_performance
     $baseline_runtime = 0.0
     if $variable_mode then
         File.open("tmp.cfg","w") do |f| f.print("{\"actions\":[]}") end
+        cmd = "#{$search_path}#{$craft_builder}"
+        if File.exists?(cmd) then
+            cmd += " tmp.cfg"
+            Open3.popen3(cmd) do |io_in, io_out, io_err|
+                io_out.each_line { |line| }
+            end
+        end
         cmd = "#{$search_path}#{$craft_driver} tmp.cfg"
     else
         cmd = "#{$search_path}#{$craft_driver} #{$binary_path}"
     end
-    puts cmd
     Open3.popen3(cmd) do |io_in, io_out, io_err|
         io_out.each_line do |line|
             if line =~ /status:\s*(pass|fail)/i then
@@ -587,7 +593,16 @@ def run_config_file (fn, keep, label)
     $status_buffer = "    Finished testing #{label}:\n"
 
     # build rewritten mutatee
-    if not $variable_mode then
+    if $variable_mode then
+        cmd = "#{$search_path}#{$craft_builder}"
+        if File.exists?(cmd) then
+            cmd += " #{fn}"
+            add_to_mainlog("    Building executable for #{basename}: #{cmd}")
+            Open3.popen3(cmd) do |io_in, io_out, io_err|
+                io_out.each_line { |line| }
+            end
+        end
+    else
         cmd = "#{$fpinst_invoke} -i #{$fortran_mode ? "-N" : ""}"
         cmd += " -c #{fn}"
         cmd += " #{$binary_path}"
