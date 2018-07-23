@@ -629,7 +629,7 @@ def run_config_file (fn, keep, label)
                 runtime = $1.to_f
             end
         end
-end
+    end
 
     # run additional trials if requested
     2.upto($num_trials) do |t|
