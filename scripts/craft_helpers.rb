@@ -242,10 +242,8 @@ def read_json_config(cfg)
                     a.has_key?("handle") then
                 if not a.has_key?("scope") or a["scope"] == "global" then
                     global_variables << a
-                elsif a["scope"] == "function_local" and
-                        a.has_key?("functions") and
-                        a["functions"].size == 1 then
-                    func = a["functions"][0]
+                elsif a["scope"] ~= "function:<(.*)>" then
+                    func = $1
                     functions[func] = [] if not functions.has_key?(func)
                     functions[func] << a
                 end
