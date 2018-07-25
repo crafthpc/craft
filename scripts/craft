@@ -465,7 +465,7 @@ class AppConfig
                 end
             end
         end
-        fn << ".cfg"
+        fn << ($variable_mode ? ".json" : ".cfg")
         return fn
     end
 
