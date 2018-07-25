@@ -396,15 +396,15 @@ def run_baseline_performance
     $baseline_error = 0.0
     $baseline_runtime = 0.0
     if $variable_mode then
-        File.open("tmp.cfg","w") do |f| f.print("{\"actions\":[]}") end
+        File.open("tmp.json","w") do |f| f.print("{\"actions\":[]}") end
         cmd = "#{$search_path}#{$craft_builder}"
         if File.exists?(cmd) then
-            cmd += " tmp.cfg"
+            cmd += " tmp.json"
             Open3.popen3(cmd) do |io_in, io_out, io_err|
                 io_out.each_line { |line| }
             end
         end
-        cmd = "#{$search_path}#{$craft_driver} tmp.cfg"
+        cmd = "#{$search_path}#{$craft_driver} tmp.json"
     else
         cmd = "#{$search_path}#{$craft_driver} #{$binary_path}"
     end
