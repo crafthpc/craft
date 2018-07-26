@@ -10,7 +10,7 @@
 
 require 'json'
 
-$OUTPUT_FILENAME="craft_initial.cfg"
+$OUTPUT_FILENAME="craft_initial.json"
 $cfg = Hash.new
 
 $compiler="g++"
