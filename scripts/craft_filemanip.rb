@@ -63,12 +63,12 @@ def load_settings
             when "baseline_runtime"
                 $baseline_runtime = value.to_f
             when "lang"
-                if value == "fortran" then $fortran_mode = true
-                else                       $fortran_mode = false
-                end
+                $fortran_mode = (value == "fortran")
             when "variable_mode"
-                if value == "yes" then $variable_mode = true
-                else                   $variable_mode = false
+                $variable_mode = (value == "yes")
+                if $variable_mode then
+                    $orig_config_fn  = "#{$search_path}craft_orig.json"
+                    $final_config_fn = "#{$search_path}craft_final.json"
                 end
             when "base_type"
                 $base_type = value

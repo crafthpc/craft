@@ -576,8 +576,8 @@ def main
     $tested_fn = "#{$search_path}#{$search_tag}.tested"           # finished (passed, failed, or aborted)
 
     # important single configuration files
-    $orig_config_fn = "#{$search_path}craft_orig.cfg"
-    $final_config_fn = "#{$search_path}craft_final.cfg"
+    $orig_config_fn  = "#{$search_path}craft_orig.#{ $variable_mode ? "json" : "cfg"}"
+    $final_config_fn = "#{$search_path}craft_final.#{$variable_mode ? "json" : "cfg"}"
 
     # configuration file directories
     $perf_path     = "#{$search_path}baseline/"    # baseline performance test
