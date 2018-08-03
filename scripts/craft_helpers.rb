@@ -195,9 +195,10 @@ def merge_additional_configs
     $addt_cfg_fns.each do |fn|
         begin
             cfg = JSON.parse(IO.read(fn))
-            if cfg.has_key?("tool_id") and cfg["tool_id"] == "ADaPT" then
-                print "merging ADaPT output #{fn} ... "
-                adapt_actions = Hash.new
+            if cfg.has_key?("tool_id") and cfg["tool_id"] == "ADAPT" then
+                print "merging ADAPT output #{fn} ... "
+
+                # discard all non-replacement actions
                 cfg["actions"].select! { |a| a["action"] == "replace_varbasetype" }
                 cfg["actions"].each { |a| adapt_actions[a["name"]] = a }
                 main_cfg["actions"].select! { |a| adapt_actions.has_key?(a["name"]) }
@@ -265,6 +266,8 @@ def read_json_config(cfg)
         else
             var.attrs["desc"] = v["handle"]
         end
+        var.attrs["error"] = v["error"] if v.has_key?("error")
+        var.attrs["ivcount"] = v["ivcount"] if v.has_key?("ivcount")
         mod.children << var
     end
     functions.each_key do |f|
@@ -284,6 +287,8 @@ def read_json_config(cfg)
             else
                 var.attrs["desc"] = v["handle"]
             end
+            var.attrs["error"] = v["error"] if v.has_key?("error")
+            var.attrs["ivcount"] = v["ivcount"] if v.has_key?("ivcount")
             func.children << var
         end
     end
