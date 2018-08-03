@@ -200,11 +200,20 @@ def merge_additional_configs
 
                 # discard all non-replacement actions
                 cfg["actions"].select! { |a| a["action"] == "replace_varbasetype" }
-                cfg["actions"].each { |a| adapt_actions[a["name"]] = a }
-                main_cfg["actions"].select! { |a| adapt_actions.has_key?(a["name"]) }
+
+                # create handle => action mapping for ADAPT actions
+                adapt_actions = Hash.new
+                cfg["actions"].each { |a| adapt_actions[a["handle"]] = a }
+
+                # remove all variables that are not in the ADAPT file
+                #main_cfg["actions"].select! { |a| adapt_actions.has_key?(a["handle"]) }
+
+                # merge all ADAPT information into main configuration
                 main_cfg["actions"].each do |a|
-                    a["error"] = adapt_actions[a["name"]]["error"]
-                    a["dynamic_assignments"] = adapt_actions[a["name"]]["dynamic_assignments"]
+                    if a.has_key?("handle") and adapt_actions.has_key?(a["handle"]) then
+                        a["error"] = adapt_actions[a["handle"]]["error"]
+                        a["ivcount"] = adapt_actions[a["handle"]]["dynamic_assignments"]
+                    end
                 end
             end
         rescue => e

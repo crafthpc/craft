@@ -261,6 +261,22 @@ class DeltaDebugStrategy < Strategy
         @all_variables = []
         find_variables(@program, @all_variables)
 
+        #puts @all_variables.map { |v| v.attrs["desc"] +
+                                  #(v.attrs.has_key?("error") ? " " + v.attrs["error"].to_s : "") }
+
+        # sort variables by error (if present)
+        @all_variables.sort! do |x,y|
+            if x.attrs.has_key?("error") and y.attrs.has_key?("error") then
+                y.attrs["error"].to_f <=> x.attrs["error"].to_f
+            else
+                x.attrs.has_key?("error") ? -1 : 1
+            end
+        end
+
+		#puts "SORTED:"
+        #puts @all_variables.map { |v| v.attrs["desc"] +
+                                  #(v.attrs.has_key?("error") ? " " + v.attrs["error"].to_s : "") }
+
         # number of divisions at current level
         div = 2
 
@@ -434,6 +450,11 @@ class ExhaustiveCombinationalStrategy < Strategy
         all_points = []
         find_points(@program, all_points)
 
+        # if ADAPT info is present, filter out non-recommended points
+        if is_adapt_info_present?(all_points) then
+            all_points.select! { |p| p.attrs.has_key?("error") }
+        end
+
         # build all configurations
         all_configs = []
         1.upto(all_points.size) do |n|
@@ -461,6 +482,15 @@ class ExhaustiveCombinationalStrategy < Strategy
                 find_points(child, all_points)
             end
         end
+    end
+
+    def is_adapt_info_present?(all_points)
+        all_points.each do |p|
+            if p.attrs.has_key?("error") then
+                return true
+            end
+        end
+        return false
     end
 
     def split_config(config)
