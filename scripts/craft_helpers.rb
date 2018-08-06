@@ -53,7 +53,7 @@ def parse_command_line
     if $main_mode == "search" then
         $main_mode = "start"
     end
-    if not ["start","resume","worker","status","help","clean"].include?($main_mode) then
+    if not ["start","resume","worker","status","help","clean","wizard"].include?($main_mode) then
         puts "Invalid mode: #{$main_mode}"
         exit
     end

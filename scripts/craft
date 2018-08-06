@@ -485,6 +485,9 @@ require_relative 'craft_strategies'
 # Search management routines
 require_relative 'craft_manage'
 
+# Wizard mode routines
+require_relative 'craft_wizard'
+
 # File I/O routines
 require_relative 'craft_filemanip'
 
@@ -543,12 +546,18 @@ def main
     end
 
     parse_command_line
-    
+
     # cleaning mode
     if $main_mode == "clean" then
         puts "Cleaning..."
         clean_everything
         puts "Done."
+        exit
+    end
+
+    # wizard mode
+    if $main_mode == "wizard" then
+        run_wizard
         exit
     end
 
