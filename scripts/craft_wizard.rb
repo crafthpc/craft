@@ -126,22 +126,98 @@ def run_wizard
         puts ""
     end
 
-    # TODO: generate build script
-    # TODO: generate run script
-    # TODO: generate verification script
+    # generate build script
+    if not File.exist?($WIZARD_BUILD) then
+        puts "How is your project built?"
+        puts "  a) \"make\""
+        puts "  b) \"./configure && make\""
+        puts "  c) \"cmake .\""
+        opt = input_option("Choose an option above: ", "abc")
+        case opt
+        when "a"
+            cmd = "make"
+        when "b"
+            cmd = "./configure && make"
+        when "c"
+            cmd = "cmake ."
+        end
+        File.open($WIZARD_BUILD, 'w') do |f|
+            f.puts "#/usr/bin/bash"
+            f.puts cmd
+        end
+        File.chmod(0700, $WIZARD_BUILD)
+        puts "Build script created: #{$WIZARD_BUILD}"
+        puts ""
+    end
 
+    # generate run script
+    if not File.exist?($WIZARD_RUN) then
+        puts "Enter command(s) to run your program with representative input: (empty line to finish)"
+        script = []
+        line = gets.chomp
+        while line != ""
+            script << line
+            line = gets.chomp
+        end
+        File.open($WIZARD_RUN, 'w') do |f|
+            f.puts "#/usr/bin/bash"
+            script.each { |line| f.puts line }
+        end
+        File.chmod(0700, $WIZARD_RUN)
+        puts "Run script created: #{$WIZARD_RUN}"
+        puts ""
+    end
+
+    # TODO: smooth over run -> verify transition (stdout/stdin?)
+
+    # generate verification script
+    if not File.exist?($WIZARD_VERIFY) then
+        puts "How should the output be verified?"
+        puts "  a) Exact match with original"
+        puts "  b) Contains a line matching a regex"
+        puts "  c) Contains no lines matching a regex"
+        puts "  d) Custom script"
+        opt = input_option("Choose an option above: ", "abcd")
+        script = []
+        case opt
+        when "a"
+            # TODO: run original and use 'diff'
+        when "b"
+            # TODO: input regex and use grep/awk
+        when "c"
+            # TODO: input regex and use grep/awk
+        when "d"
+            puts "Enter Bash code to verify your program output: (empty line to finish)"
+            script = []
+            line = gets.chomp
+            while line != ""
+                script << line
+                line = gets.chomp
+            end
+        end
+        File.open($WIZARD_VERIFY, 'w') do |f|
+            f.puts "#/usr/bin/bash"
+            script.each { |line| f.puts line }
+        end
+        File.chmod(0700, $WIZARD_VERIFY)
+        puts "Verify script created: #{$WIZARD_VERIFY}"
+        puts ""
+    end
+
+    # run sanity check
     if input_boolean("Do you want to run a sanity check to test the generated scripts?", true) then
         FileUtils.rm_rf $WIZARD_SANITY
         Dir.mkdir $WIZARD_SANITY
         Dir.chdir $WIZARD_SANITY
-        exec_cmd($WIZARD_ACQUIRE)
-        #exec_cmd($WIZARD_BUILD)
-        #exec_cmd($WIZARD_RUN)
-        #exec_cmd($WIZARD_VERIFY)
+        exec_cmd $WIZARD_ACQUIRE
+        exec_cmd $WIZARD_BUILD
+        exec_cmd $WIZARD_RUN
+        exec_cmd $WIZARD_VERIFY
     end
 
     # TODO: build with TypeForge to generate list of variables
     # TODO: instrument and run with ADAPT
+    # TODO: generate craft_builder and craft_driver from wizard scripts
     # TODO: run craft search
 
 end # }}}
