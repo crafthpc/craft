@@ -1,14 +1,6 @@
 #!/usr/bin/env ruby
 #
 
-# paths
-$WIZARD_ROOT    = File.absolute_path("./.craft")
-$WIZARD_SANITY  = "#{$WIZARD_ROOT}/sanity"
-$WIZARD_ACQUIRE = "#{$WIZARD_ROOT}/wizard_acquire"
-$WIZARD_BUILD   = "#{$WIZARD_ROOT}/wizard_build"
-$WIZARD_RUN     = "#{$WIZARD_ROOT}/wizard_run"
-$WIZARD_VERIFY  = "#{$WIZARD_ROOT}/wizard_verify"
-
 #{{{ input routines
 
 # read a boolean (yes/no) from standard input
@@ -25,7 +17,7 @@ def input_boolean(prompt, default)
         r = gets.chomp.downcase
         r = (default ? "y" : "n") if r == "" and not default.nil?
     end
-    return r
+    return r == 'y'
 end
 
 # read a single-letter option from standard input
@@ -72,8 +64,21 @@ end
 
 # }}}
 
-# {{{ exec_cmd - run a command and optionally echo output
-def exec_cmd(cmd, echo_stdout=true, echo_stderr=false)
+# {{{ exec_cmd - run a command and optionally echo or return output
+def exec_cmd(cmd, echo_stdout=true, echo_stderr=false, return_stdout=false)
+    stdout = []
+    Open3.popen3(cmd) do |io_in, io_out, io_err|
+        io_out.each_line do |line|
+            puts line if echo_stdout
+            stdout << line if return_stdout
+        end
+        io_err.each_line { |line| puts line } if echo_stderr
+    end
+    return stdout.join("\n")
+end # }}}
+
+# {{{ save_cmd - run a command and save standard output to a file
+def save_cmd(cmd, stdout_fn)
     Open3.popen3(cmd) do |io_in, io_out, io_err|
         io_out.each_line { |line| puts line } if echo_stdout
         io_err.each_line { |line| puts line } if echo_stderr
@@ -88,6 +93,23 @@ def run_wizard
     puts ""
     puts "Welcome to the CRAFT source tuning wizard."
     puts ""
+
+    # initialize paths
+    $WIZARD_ROOT    = File.absolute_path(input_path("Where do you want to " +
+                      "save configuration and search files?", "./.craft", false))
+    $WIZARD_SANITY  = "#{$WIZARD_ROOT}/sanity"
+    $WIZARD_BASE    = "#{$WIZARD_ROOT}/baseline"
+    $WIZARD_INITIAL = "#{$WIZARD_ROOT}/initial"
+    $WIZARD_INITCFG = "#{$WIZARD_ROOT}/craft_initial.json"
+    $WIZARD_ADAPT   = "#{$WIZARD_ROOT}/adapt"
+    $WIZARD_CODI    = "#{$WIZARD_ROOT}/codipack"
+    $WIZARD_ADRUN   = "#{$WIZARD_ROOT}/autodiff"
+    $WIZARD_ADOUT   = "#{$WIZARD_ROOT}/craft_recommend.json"
+    $WIZARD_SEARCH  = "#{$WIZARD_ROOT}/search"
+    $WIZARD_ACQUIRE = "#{$WIZARD_ROOT}/wizard_acquire"
+    $WIZARD_BUILD   = "#{$WIZARD_ROOT}/wizard_build"
+    $WIZARD_RUN     = "#{$WIZARD_ROOT}/wizard_run"
+    $WIZARD_VERIFY  = "#{$WIZARD_ROOT}/wizard_verify"
 
     # make sure configuration folder exists
     if not File.exist?($WIZARD_ROOT) then
@@ -152,7 +174,11 @@ def run_wizard
 
     # generate run script
     if not File.exist?($WIZARD_RUN) then
-        puts "Enter command(s) to run your program with representative input: (empty line to finish)"
+        puts "Enter command(s) to run your program with representative input."
+        puts "If you need to save the output for verification purposes, please"
+        puts "write it to \"stdout\" in the current folder. Enter an empty line"
+        puts "to finish."
+        puts ""
         script = []
         line = gets.chomp
         while line != ""
@@ -168,8 +194,6 @@ def run_wizard
         puts ""
     end
 
-    # TODO: smooth over run -> verify transition (stdout/stdin?)
-
     # generate verification script
     if not File.exist?($WIZARD_VERIFY) then
         puts "How should the output be verified?"
@@ -181,11 +205,36 @@ def run_wizard
         script = []
         case opt
         when "a"
-            # TODO: run original and use 'diff'
+            FileUtils.rm_rf $WIZARD_BASE
+            Dir.mkdir $WIZARD_BASE
+            Dir.chdir $WIZARD_BASE
+            exec_cmd($WIZARD_ACQUIRE, false)
+            exec_cmd($WIZARD_BUILD, false)
+            exec_cmd($WIZARD_RUN, false)
+            script << "outdiff=$(diff stdout #{$WIZARD_BASE}/stdout)"
+            script << "if [[ -z \"$outdiff\" ]]; then"
+            script << "    echo \"status:  pass\""
+            script << "else"
+            script << "    echo \"status:  fail\""
+            script << "fi"
         when "b"
-            # TODO: input regex and use grep/awk
+            puts "Enter regex: "
+            regex = gets.chomp
+            script << "search=$(grep -E '#{regex}' stdout)"
+            script << "if [[ -z \"$search\" ]]; then"
+            script << "    echo \"status:  fail\""
+            script << "else"
+            script << "    echo \"status:  pass\""
+            script << "fi"
         when "c"
-            # TODO: input regex and use grep/awk
+            puts "Enter regex: "
+            regex = gets.chomp
+            script << "search=$(grep -E '#{regex}' stdout)"
+            script << "if [[ -z \"$search\" ]]; then"
+            script << "    echo \"status:  pass\""
+            script << "else"
+            script << "    echo \"status:  fail\""
+            script << "fi"
         when "d"
             puts "Enter Bash code to verify your program output: (empty line to finish)"
             script = []
@@ -213,11 +262,106 @@ def run_wizard
         exec_cmd $WIZARD_BUILD
         exec_cmd $WIZARD_RUN
         exec_cmd $WIZARD_VERIFY
+        puts ""
     end
 
-    # TODO: build with TypeForge to generate list of variables
-    # TODO: instrument and run with ADAPT
-    # TODO: generate craft_builder and craft_driver from wizard scripts
-    # TODO: run craft search
+    # phase 1: variable discovery
+    if not Dir.exist?($WIZARD_INITIAL) then
+        puts "Finding variables to be tuned."
+        Dir.mkdir $WIZARD_INITIAL
+        Dir.chdir $WIZARD_INITIAL
+        script = []
+        script << "{ \"version\": \"1\","
+        script << "  \"tool_id\": \"CRAFT\","
+        script << "  \"actions\": ["
+        script << "    { \"action\": \"list_basereplacements\","
+        script << "      \"name\": \"#{$WIZARD_INITCFG}\","
+        script << "      \"from_type\": \"double\","
+        script << "      \"to_type\": \"float\""
+        script << "    } ] }"
+        File.open("#{$WIZARD_INITIAL}/initial.json", "w") do |f|
+            script.each { |line| f.puts line }
+        end
+        exec_cmd $WIZARD_ACQUIRE
+        File.open("#{$WIZARD_INITIAL}/run.sh", "w") do |f|
+            f.puts "export CC='typeforge --spec-file initial.json --compile'"
+            f.puts "export CXX='typeforge --spec-file initial.json --compile'"
+            f.puts "#{$WIZARD_BUILD}"
+        end
+        File.chmod(0700, "#{$WIZARD_INITIAL}/run.sh")
+        exec_cmd "#{$WIZARD_INITIAL}/run.sh"
+        puts "Initial configuration created: #{$WIZARD_INITCFG}"
+        puts ""
+        # TODO: review/modify list of variables interactively
+    end
+
+    # phase 2: ADAPT instrumentation (optional)
+    if not Dir.exist?($WIZARD_ADRUN) then
+        puts "If you wish, now we can run your program with ADAPT"
+        puts "instrumentation. This ill most likely cause the search to"
+        puts "converge faster, but your program must be compilable using"
+        puts "'--std=C++11' and you must have included all of the appropriate"
+        puts "pragmas (see documentation)."
+        if input_boolean("Do you wish to run ADAPT?", false) then
+            exec_cmd "git clone https://github.com/SciCompKL/CoDiPack.git #{$WIZARD_CODI}"
+            #exec_cmd "git clone https://github.com/LLNL/ADAPT.git #{$WIZARD_ADAPT}"
+            exec_cmd "ln -s \"$HOME/src/adtests/adapt\" #{$WIZARD_ADAPT}"
+            Dir.mkdir $WIZARD_ADRUN
+            Dir.chdir $WIZARD_ADRUN
+            exec_cmd $WIZARD_ACQUIRE
+            File.open("#{$WIZARD_ADRUN}/run.sh", "w") do |f|
+                f.puts "export CODIPACK_PATH=\"#{$WIZARD_CODI}\""
+                f.puts "export ADAPT_PATH=\"#{$WIZARD_ADAPT}\""
+                f.puts "export CXX=craft_insert_adapt"
+                f.puts "#{$WIZARD_BUILD}"
+                f.puts "#{$WIZARD_RUN}"
+                f.puts "cp craft_recommend.json #{$WIZARD_ADOUT}"
+            end
+            File.chmod(0700, "#{$WIZARD_ADRUN}/run.sh")
+            exec_cmd "#{$WIZARD_ADRUN}/run.sh"
+            puts "AD instrumentation results created: #{$WIZARD_ADOUT}"
+        end
+    end
+
+    # phase 3: mixed-precision search
+    if not Dir.exist?($WIZARD_SEARCH) then
+        Dir.mkdir $WIZARD_SEARCH
+        Dir.chdir $WIZARD_SEARCH
+        File.open("#{$WIZARD_SEARCH}/craft_builder", "w") do |f|
+            f.puts IO.read($WIZARD_ACQUIRE)
+            f.puts "export CC='typeforge --spec-file=$1 --compile'"
+            f.puts "export CXX='typeforge --spec-file=$1 --compile'"
+            f.puts IO.read($WIZARD_BUILD)
+            # TODO: print "status:  abort" if build fails
+        end
+        File.chmod(0700, "#{$WIZARD_SEARCH}/craft_builder")
+        File.open("#{$WIZARD_SEARCH}/craft_driver", "w") do |f|
+            f.puts "#!/bin/bash"
+            f.puts "t_start=$(date +%s.%3N)"
+            f.puts IO.read($WIZARD_RUN)
+            f.puts "t_stop=$(date +%s.%3N)"
+            f.puts "time:    $(echo \"$t_stop - $t_start\" | bc)"
+            f.puts IO.read($WIZARD_VERIFY)
+            # TODO: handle 'error' output
+        end
+        File.chmod(0700, "#{$WIZARD_SEARCH}/craft_driver")
+        cmd = "craft search -V -c ../craft_initial.json"
+        if File.exist?($WIZARD_ADOUT) then
+            cmd += " -A ../craft_recommend.json"
+        end
+        puts "CRAFT supports several search strategies:"
+        puts "  a) Combinational - try all combinations (very expensive!)"
+        puts "  b) Compositional - try individuals then try to compose passing configurations"
+        puts "  c) Delta debugging - binary search on the list of variables"
+        opt = input_option("Which strategy do you wish to use for the search? ", "abc")
+        cmd += " -s compositional" if opt == "b"
+        cmd += " -s ddebug" if opt == "c"
+        File.open("#{$WIZARD_SEARCH}/run.sh", "w") do |f|
+            f.puts "#!/bin/bash"
+            f.puts cmd
+        end
+        File.chmod(0700, "#{$WIZARD_SEARCH}/run.sh")
+        exec_cmd "#{$WIZARD_SEARCH}/run.sh"
+    end
 
 end # }}}
