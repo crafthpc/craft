@@ -758,6 +758,8 @@ def print_usage
     puts "          or"
     puts "        #{$self_invoke} clean                              (reset search)"
     puts "          or"
+    puts "        #{$self_invoke} wizard                             (wizard mode"
+    puts "          or"
     puts "        #{$self_invoke} worker <id> <dir>                  (worker process; used internally)"
     puts " "
     puts "Shortcut mode modifications:"

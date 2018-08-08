@@ -154,18 +154,29 @@ def run_wizard
         puts "  a) \"make\""
         puts "  b) \"./configure && make\""
         puts "  c) \"cmake .\""
-        opt = input_option("Choose an option above: ", "abc")
+        puts "  d) Custom script"
+        opt = input_option("Choose an option above: ", "abcd")
+        script = []
         case opt
         when "a"
-            cmd = "make"
+            script << "make || (echo \"status:  error\" && exit)"
         when "b"
-            cmd = "./configure && make"
+            script << "(./configure && make) || (echo \"status:  error\" && exit)"
         when "c"
-            cmd = "cmake ."
+            script << "cmake . || (echo \"status:  error\" && exit)"
+        when "d"
+            puts "Enter Bash code to build your program."
+            puts "Print \"status:  error\" if the build fails."
+            puts "Enter an empty line to finish."
+            line = gets.chomp
+            while line != ""
+                script << line
+                line = gets.chomp
+            end
         end
         File.open($WIZARD_BUILD, 'w') do |f|
             f.puts "#/usr/bin/bash"
-            f.puts cmd
+            script.each { |line| f.puts line }
         end
         File.chmod(0700, $WIZARD_BUILD)
         puts "Build script created: #{$WIZARD_BUILD}"
@@ -321,6 +332,7 @@ def run_wizard
             exec_cmd "#{$WIZARD_ADRUN}/run.sh"
             puts "AD instrumentation results created: #{$WIZARD_ADOUT}"
         end
+        puts ""
     end
 
     # phase 3: mixed-precision search
@@ -329,8 +341,8 @@ def run_wizard
         Dir.chdir $WIZARD_SEARCH
         File.open("#{$WIZARD_SEARCH}/craft_builder", "w") do |f|
             f.puts IO.read($WIZARD_ACQUIRE)
-            f.puts "export CC='typeforge --spec-file=$1 --compile'"
-            f.puts "export CXX='typeforge --spec-file=$1 --compile'"
+            f.puts "export CC=\"typeforge --spec-file=$1 --compile\""
+            f.puts "export CXX=\"typeforge --spec-file=$1 --compile\""
             f.puts IO.read($WIZARD_BUILD)
             # TODO: print "status:  abort" if build fails
         end
@@ -340,7 +352,7 @@ def run_wizard
             f.puts "t_start=$(date +%s.%3N)"
             f.puts IO.read($WIZARD_RUN)
             f.puts "t_stop=$(date +%s.%3N)"
-            f.puts "time:    $(echo \"$t_stop - $t_start\" | bc)"
+            f.puts "echo \"time:    $(echo \"$t_stop - $t_start\" | bc)\""
             f.puts IO.read($WIZARD_VERIFY)
             # TODO: handle 'error' output
         end
@@ -356,12 +368,18 @@ def run_wizard
         opt = input_option("Which strategy do you wish to use for the search? ", "abc")
         cmd += " -s compositional" if opt == "b"
         cmd += " -s ddebug" if opt == "c"
+        cpus = exec_cmd("cat /proc/cpuinfo | grep processor | wc -l", false, false, true).chomp
+        print "How many worker threads do you want to use? [default=#{cpus}] "
+        nworkers = gets.chomp
+        nworkers = cpus if nworkers == ""
+        cmd += " -j #{nworkers}" if nworkers.to_i > 1
         File.open("#{$WIZARD_SEARCH}/run.sh", "w") do |f|
             f.puts "#!/bin/bash"
             f.puts cmd
         end
         File.chmod(0700, "#{$WIZARD_SEARCH}/run.sh")
         exec_cmd "#{$WIZARD_SEARCH}/run.sh"
+        puts ""
     end
 
 end # }}}
