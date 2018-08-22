@@ -314,12 +314,16 @@ def run_wizard
         puts "'-std=c++11' and you must have included all of the appropriate"
         puts "pragmas (see documentation)."
         if input_boolean("Do you wish to run ADAPT?", false) then
-            exec_cmd "git clone https://github.com/SciCompKL/CoDiPack.git #{$WIZARD_CODI}"
-            # TODO: switch to cloning ADAPT once it has been released
-            #       (the symlink is currently a hack and relies on having the
-            #        AD repository in a particular place in your home folder)
-            #exec_cmd "git clone https://github.com/LLNL/ADAPT.git #{$WIZARD_ADAPT}"
-            exec_cmd "ln -s \"$HOME/src/adtests/adapt\" #{$WIZARD_ADAPT}"
+            if not Dir.exist?($WIZARD_CODI) then
+                exec_cmd "git clone https://github.com/SciCompKL/CoDiPack.git #{$WIZARD_CODI}"
+            end
+            if not Dir.exist?($WIZARD_ADAPT) then
+                # TODO: switch to cloning ADAPT once it has been released
+                #       (the symlink is currently a hack and relies on having the
+                #        AD repository in a particular place in your home folder)
+                #exec_cmd "git clone https://github.com/LLNL/ADAPT.git #{$WIZARD_ADAPT}"
+                exec_cmd "ln -s \"$HOME/src/adtests/adapt\" #{$WIZARD_ADAPT}"
+            end
             Dir.mkdir $WIZARD_ADRUN
             Dir.chdir $WIZARD_ADRUN
             script = []
