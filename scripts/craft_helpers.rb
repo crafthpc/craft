@@ -196,10 +196,11 @@ def merge_additional_configs
         begin
             cfg = JSON.parse(IO.read(fn))
             if cfg.has_key?("tool_id") and cfg["tool_id"] == "ADAPT" then
-                print "merging ADAPT output #{fn} ... "
+                print "\n  Merging ADAPT output #{fn} ... "
 
                 # discard all non-replacement actions
                 cfg["actions"].select! { |a| a["action"] == "replace_varbasetype" }
+                print "(#{cfg["actions"].size} recommendations) "
 
                 # create handle => action mapping for ADAPT actions
                 adapt_actions = Hash.new
