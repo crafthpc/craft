@@ -309,34 +309,93 @@ def run_wizard
     # phase 2: ADAPT instrumentation (optional)
     if not Dir.exist?($WIZARD_ADRUN) then
         puts "If you wish, now we can run your program with ADAPT"
-        puts "instrumentation. This ill most likely cause the search to"
+        puts "instrumentation. This will most likely cause the search to"
         puts "converge faster, but your program must be compilable using"
-        puts "'--std=C++11' and you must have included all of the appropriate"
+        puts "'-std=c++11' and you must have included all of the appropriate"
         puts "pragmas (see documentation)."
         if input_boolean("Do you wish to run ADAPT?", false) then
             exec_cmd "git clone https://github.com/SciCompKL/CoDiPack.git #{$WIZARD_CODI}"
+            # TODO: switch to cloning ADAPT once it has been released
+            #       (the symlink is currently a hack and relies on having the
+            #        AD repository in a particular place in your home folder)
             #exec_cmd "git clone https://github.com/LLNL/ADAPT.git #{$WIZARD_ADAPT}"
             exec_cmd "ln -s \"$HOME/src/adtests/adapt\" #{$WIZARD_ADAPT}"
             Dir.mkdir $WIZARD_ADRUN
             Dir.chdir $WIZARD_ADRUN
+            script = []
+            script << "{ \"version\": \"1\","
+            script << "  \"tool_id\": \"CRAFT\","
+            script << "  \"actions\": ["
+            script << "    { \"action\": \"replace_pragma\","
+            script << "      \"from_type\": \"adapt output\","
+            script << "      \"to_type\": \"AD_dependent($2, \\\"$2\\\", $3);\""
+            script << "    }, { \"action\": \"replace_pragma\","
+            script << "      \"from_type\": \"adapt begin\","
+            script << "      \"to_type\": \"AD_begin();\""
+            script << "    }, { \"action\": \"replace_pragma\","
+            script << "      \"from_type\": \"adapt end\","
+            script << "      \"to_type\": \"AD_end(); AD_report();\""
+            script << "    }, { \"action\": \"introduce_include\","
+            script << "      \"name\": \"adapt.h\","
+            script << "      \"scope\": \"*\""
+            script << "    }, { \"action\": \"introduce_include\","
+            script << "      \"name\": \"adapt-impl.cpp\","
+            script << "      \"scope\": \"main\""
+            script << "    }, { \"action\": \"transform\","
+            script << "      \"scope\": \"*\","
+            script << "      \"from_type\": \"float\","
+            script << "      \"name\": \"ad_intermediate_instrumentation\""
+            script << "    }, { \"action\": \"change_basetype\","
+            script << "      \"scope\": \"*:args,ret,body\","
+            script << "      \"from_type\": \"double\","
+            script << "      \"to_type\": \"AD_real\""
+            script << "    }, { \"action\": \"change_basetype\","
+            script << "      \"scope\": \"$global\","
+            script << "      \"from_type\": \"double\","
+            script << "      \"to_type\": \"AD_real\""
+            script << "    }, { \"action\": \"change_basetype\","
+            script << "      \"scope\": \"*:args,ret,body\","
+            script << "      \"from_type\": \"float\","
+            script << "      \"to_type\": \"AD_real\""
+            script << "    }, { \"action\": \"change_basetype\","
+            script << "      \"scope\": \"$global\","
+            script << "      \"from_type\": \"float\","
+            script << "      \"to_type\": \"AD_real\""
+            script << "    } ] }"
+            File.open("#{$WIZARD_ADRUN}/instrument.json", "w") do |f|
+                script.each { |line| f.puts line }
+            end
             exec_cmd $WIZARD_ACQUIRE
             File.open("#{$WIZARD_ADRUN}/run.sh", "w") do |f|
                 f.puts "export CODIPACK_PATH=\"#{$WIZARD_CODI}\""
                 f.puts "export ADAPT_PATH=\"#{$WIZARD_ADAPT}\""
-                f.puts "export CXX=craft_insert_adapt"
+                f.puts "export CXX='typeforge --spec-file instrument.json --compile" +
+                       " -std=c++11 -I#{$WIZARD_CODI}/include -I#{$WIZARD_ADAPT}" +
+                       " -DCODI_EnableImplicitConversion -DCODI_DisableImplicitConversionWarning'"
                 f.puts "#{$WIZARD_BUILD}"
                 f.puts "#{$WIZARD_RUN}"
                 f.puts "cp craft_recommend.json #{$WIZARD_ADOUT}"
             end
             File.chmod(0700, "#{$WIZARD_ADRUN}/run.sh")
             exec_cmd "#{$WIZARD_ADRUN}/run.sh"
-            puts "AD instrumentation results created: #{$WIZARD_ADOUT}"
+            if File.exist?($WIZARD_ADOUT) then
+                puts "AD instrumentation results created: #{$WIZARD_ADOUT}"
+            else
+                puts "AD instrumentation results were NOT created!"
+            end
         end
         puts ""
     end
 
     # phase 3: mixed-precision search
-    if not Dir.exist?($WIZARD_SEARCH) then
+    if Dir.exist?($WIZARD_SEARCH) then
+        run_search = input_boolean("There are existing (possibly incomplete) search results.\n" +
+                                   "Do you wish to erase them and run again?", true)
+    else
+        run_search = true
+    end
+    if run_search then
+        FileUtils.rm_rf $WIZARD_SEARCH
         Dir.mkdir $WIZARD_SEARCH
         Dir.chdir $WIZARD_SEARCH
         File.open("#{$WIZARD_SEARCH}/craft_builder", "w") do |f|
