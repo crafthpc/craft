@@ -100,6 +100,7 @@ def run_wizard
     $WIZARD_SANITY  = "#{$WIZARD_ROOT}/sanity"
     $WIZARD_BASE    = "#{$WIZARD_ROOT}/baseline"
     $WIZARD_INITIAL = "#{$WIZARD_ROOT}/initial"
+    $WIZARD_TFVARS  = "#{$WIZARD_ROOT}/typeforge_vars.json"
     $WIZARD_INITCFG = "#{$WIZARD_ROOT}/craft_initial.json"
     $WIZARD_ADAPT   = "#{$WIZARD_ROOT}/adapt"
     $WIZARD_CODI    = "#{$WIZARD_ROOT}/codipack"
@@ -276,9 +277,10 @@ def run_wizard
         puts ""
     end
 
-    # phase 1: variable discovery
-    if not Dir.exist?($WIZARD_INITIAL) then
+    # phase 1a: variable discovery
+    if not File.exist?($WIZARD_TFVARS) then
         puts "Finding variables to be tuned."
+        FileUtils.rm_rf($WIZARD_INITIAL)
         Dir.mkdir $WIZARD_INITIAL
         Dir.chdir $WIZARD_INITIAL
         script = []
@@ -286,7 +288,7 @@ def run_wizard
         script << "  \"tool_id\": \"CRAFT\","
         script << "  \"actions\": ["
         script << "    { \"action\": \"list_basereplacements\","
-        script << "      \"name\": \"#{$WIZARD_INITCFG}\","
+        script << "      \"name\": \"#{$WIZARD_TFVARS}\","
         script << "      \"from_type\": \"double\","
         script << "      \"to_type\": \"float\""
         script << "    } ] }"
@@ -301,9 +303,33 @@ def run_wizard
         end
         File.chmod(0700, "#{$WIZARD_INITIAL}/run.sh")
         exec_cmd "#{$WIZARD_INITIAL}/run.sh"
+        puts "Variables discovered: #{$WIZARD_TFVARS}"
+        puts ""
+    end
+
+    # phase 1b: variable review (optional)
+    if not File.exist?($WIZARD_INITCFG) then
+        puts "Some variables may not be appropriate candidates for tuning (e.g., if they"
+        puts "are used for calculating error). You may wish to remove them from the list."
+        if input_boolean("Do you wish to review/edit the list of variables?", true) then
+            cfg = JSON.parse(IO.read($WIZARD_TFVARS))
+            cfg["actions"].each_index do |i|
+                a = cfg["actions"][i]
+                puts "  #{i}) #{a["name"]} (#{a["scope"]}) [#{a["source_info"].gsub(/.*\//, "")}]"
+            end
+            puts "Enter ID numbers for any variables you wish to remove, separate by spaces:"
+            ids = gets.split(" ").map { |x| x.to_i }
+            new_actions = []
+            cfg["actions"].each_index do |i|
+                new_actions << cfg["actions"][i] if not ids.include?(i)
+            end
+            cfg["actions"] = new_actions
+            IO.write($WIZARD_INITCFG, JSON.pretty_generate(cfg))
+        else
+            File.cp($WIZARD_TFVARS, $WIZARD_INITCFG)
+        end
         puts "Initial configuration created: #{$WIZARD_INITCFG}"
         puts ""
-        # TODO: review/modify list of variables interactively
     end
 
     # phase 2: ADAPT instrumentation (optional)
