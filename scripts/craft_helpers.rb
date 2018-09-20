@@ -199,7 +199,7 @@ def merge_additional_configs
                 print "\n  Merging ADAPT output #{fn} ... "
 
                 # discard all non-replacement actions
-                cfg["actions"].select! { |a| a["action"] == "replace_varbasetype" }
+                cfg["actions"].select! { |a| a["action"] == "change_var_basetype" }
                 print "(#{cfg["actions"].size} recommendations) "
 
                 # create handle => action mapping for ADAPT actions
@@ -248,7 +248,7 @@ def read_json_config(cfg)
     functions = Hash.new()
     if cfg.has_key?("actions") then
         cfg["actions"].each do |a|
-            if a.has_key?("action") and a["action"] == "replace_varbasetype" and
+            if a.has_key?("action") and a["action"] == "change_var_basetype" and
                     a.has_key?("to_type") and a["to_type"] == "float" and
                     a.has_key?("handle") then
                 if not a.has_key?("scope") or a["scope"] == "global" then
@@ -360,7 +360,7 @@ def add_variables_to_config_file(fn, cfg)
             vname = $2
             cfg.print "    "
             cfg.print "," if vcount > 0
-            cfg.puts "{ \"action\": \"replace_varbasetype\", \"scope\": \"global\","
+            cfg.puts "{ \"action\": \"change_var_basetype\", \"scope\": \"global\","
             cfg.puts "      \"name\": \"#{vname}\","
             cfg.puts "      \"from_type\": \"craft_t\", \"to_type\":\"float\" }"
             vcount += 1

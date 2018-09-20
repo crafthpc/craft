@@ -331,7 +331,7 @@ class PPoint
                     flag = config.exceptions[@uid]
                 end
                 if flag == $STATUS_SINGLE then
-                    fout.puts "replace_vartype;#{func_name};#{@attrs["desc"]};float"
+                    fout.puts "change_var_type;#{func_name};#{@attrs["desc"]};float"
                 end
             end
         else
@@ -359,7 +359,7 @@ class PPoint
                 if flag == $STATUS_SINGLE then
                     a = Hash.new
                     a["uid"] = @id.to_s
-                    a["action"] = "replace_varbasetype"
+                    a["action"] = "change_var_basetype"
                     a["handle"] = @attrs["addr"]
                     a["name"] = @attrs["desc"]
                     a["to_type"] = "float"
