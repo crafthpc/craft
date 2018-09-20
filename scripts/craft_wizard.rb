@@ -426,7 +426,7 @@ def run_wizard
     end
     if run_search then
         FileUtils.rm_rf $WIZARD_SEARCH
-        Dir.mkdir $WIZARD_SEARCH
+        Dir.mkdir $WIZARD_SEARCH if not Dir.exist?($WIZARD_SEARCH)
         Dir.chdir $WIZARD_SEARCH
         File.open("#{$WIZARD_SEARCH}/craft_builder", "w") do |f|
             f.puts IO.read($WIZARD_ACQUIRE)
