@@ -5,7 +5,7 @@
 
 
 # pointer to the "extras/xed-intel64" folder (for lib/libxed.a)
-XED_KIT=
+XED_KIT=/nfs/home/lam2mo/src/craft/extern/pin-2.14-71313-gcc.4.4.7-linux/extras/xed-intel64
 
 # modify these lines if you need the compiler/linker to find things in
 # non-standard locations (e.g., Boost or libdwarf)

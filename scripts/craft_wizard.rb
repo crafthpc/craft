@@ -326,7 +326,7 @@ def run_wizard
             cfg["actions"] = new_actions
             IO.write($WIZARD_INITCFG, JSON.pretty_generate(cfg))
         else
-            File.cp($WIZARD_TFVARS, $WIZARD_INITCFG)
+            FileUtils.cp($WIZARD_TFVARS, $WIZARD_INITCFG)
         end
         puts "Initial configuration created: #{$WIZARD_INITCFG}"
         puts ""
