@@ -20,7 +20,7 @@ Note that using variable mode means that you do not need to build the binary
 instrumentation part of CRAFT, which negates the instructions in the section
 below; all you need is to make sure the `scripts` folder is in your `PATH` and
 that you have Ruby 2.0 or later installed. You will also need to install the
-[TypeForge tool](https://github.com/rose-compiler/rose-develop/blob/master/projects/CodeThorn/src/typeforge.C)
+[TypeForge tool](https://github.com/rose-compiler/rose-develop/tree/master/projects/typeforge)
 created using the [Rose compiler framework](https://github.com/rose-compiler/rose-develop).
 
 This mode includes a wizard script that guides you through the process of
