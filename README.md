@@ -19,58 +19,22 @@ the binary mode described below).
 Note that using variable mode means that you do not need to build the binary
 instrumentation part of CRAFT, which negates the instructions in the section
 below; all you need is to make sure the `scripts` folder is in your `PATH` and
-that you have Ruby 2.0 or later installed.
+that you have Ruby 2.0 or later installed. You will also need to install the
+[TypeForge tool](https://github.com/rose-compiler/rose-develop/blob/master/projects/CodeThorn/src/typeforge.C)
+created using the [Rose compiler framework](https://github.com/rose-compiler/rose-develop).
 
-To use this mode, you should first clean and build your project using
-`craft_find_variables` instead of `CC` or `CXX`. This should produce a file
-named `craft_initial.cfg` that contains the base list of variables in your project
-that can be tuned.
-
-The next step is to perform a search to find a mixed-precision version of your
-program with speedup, subject to a verification procedure that you provide.
-
-To begin, create a new folder and write a new script called `craft_driver`
-([sample](scripts/craft_driver_source)), which will be run in a new, empty
-folder for every candidate configuration generated during the search process.
-This script is similar to the identically-named script used in the binary mode
-except it should also handle copying your original project files to the current
-directory, and it should build your project using the following instead of `CC`
-or `CXX` (the `$1` is a parameter that will be provided by CRAFT):
-
-    craft_replace_types $1
-
-In addition, the `craft_driver` script should handle running your project with a
-representative input, and it should write results to standard out using the
-following format:
-
-    status:  [pass|fail|error]
-    time:    <seconds>
-    error:   <error>
-
-The status must be either `pass`, `fail`, or `error` and the time must be in
-seconds (and may be fractional). The error is optional but if present should be
-given as a scalar double-precision number. Unlike the binary mode, you should
-run your program using your regular executable name.
-
-Finally, run the search using the following command from the search folder:
-
-    craft search -c ../path/to/craft_initial.cfg -V
-
-If you have multiple cores, it is recommended that you use the `-j <N>` option
-to run up to N multiple configurations in parallel.
+This mode includes a wizard script that guides you through the process of
+running the analysis on your program. To run this, just execute `craft wizard`
+from your project root folder.  For now, skip the ADAPT step when it appears;
+that package has not yet been released.
 
 The search will print various status information while it is running. When it is
 finished, you will find your final recommended configuration in the `final`
 subfolder. You may examine `craft_final.cfg` for a list of converted variables.
 
 This support is still very brittle and experimental, and it is under active
-development as of Summer 2018. More documentation is on the way. Please contact
+development as of Fall 2018. More documentation is on the way. Please contact
 the author if you have questions or run into issues.
-
-Eventually these source file configurations will be generated using the
-[TypeForge tool](https://github.com/rose-compiler/rose-develop/blob/master/projects/CodeThorn/src/typeforge.C)
-created using the [Rose compiler framework](https://github.com/rose-compiler/rose-develop),
-but for now there are some temporary work-arounds provided in this repository.
 
 
 ### Binary Mode (original)
