@@ -30,7 +30,8 @@ that package has not yet been released.
 
 The search will print various status information while it is running. When it is
 finished, you will find your final recommended configuration in the `final`
-subfolder. You may examine `craft_final.cfg` for a list of converted variables.
+subfolder. You may examine `.craft/search/craft_final.json` for a list of
+converted variables.
 
 This support is still very brittle and experimental, and it is under active
 development as of Fall 2018. More documentation is on the way. Please contact
