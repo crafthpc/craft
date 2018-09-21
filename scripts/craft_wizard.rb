@@ -287,8 +287,8 @@ def run_wizard
         script << "{ \"version\": \"1\","
         script << "  \"tool_id\": \"CRAFT\","
         script << "  \"actions\": ["
-        script << "    { \"action\": \"list_basereplacements\","
-        script << "      \"name\": \"#{$WIZARD_TFVARS}\","
+        script << "    { \"action\": \"list_changes_basetype\","
+        script << "      \"scope\": \"\","
         script << "      \"from_type\": \"double\","
         script << "      \"to_type\": \"float\""
         script << "    } ] }"
@@ -297,8 +297,9 @@ def run_wizard
         end
         exec_cmd $WIZARD_ACQUIRE
         File.open("#{$WIZARD_INITIAL}/run.sh", "w") do |f|
-            f.puts "export CC='typeforge --spec-file initial.json --compile'"
-            f.puts "export CXX='typeforge --spec-file initial.json --compile'"
+          script << "      \"name\": \"#{$WIZARD_TFVARS}\","
+            f.puts "export CC='typeforge --plugin initial.json --typeforge-out #{$WIZARD_TFVARS} --compile'"
+            f.puts "export CXX='typeforge --plugin initial.json --typeforge-out #{$WIZARD_TFVARS} --compile'"
             f.puts "#{$WIZARD_BUILD}"
         end
         File.chmod(0700, "#{$WIZARD_INITIAL}/run.sh")
@@ -365,29 +366,27 @@ def run_wizard
             script << "    }, { \"action\": \"replace_pragma\","
             script << "      \"from_type\": \"adapt end\","
             script << "      \"to_type\": \"AD_end(); AD_report();\""
-            script << "    }, { \"action\": \"introduce_include\","
+            script << "    }, { \"action\": \"add_include\","
             script << "      \"name\": \"adapt.h\","
             script << "      \"scope\": \"*\""
-            script << "    }, { \"action\": \"introduce_include\","
+            script << "    }, { \"action\": \"add_include\","
             script << "      \"name\": \"adapt-impl.cpp\","
             script << "      \"scope\": \"main\""
-            script << "    }, { \"action\": \"transform\","
-            script << "      \"scope\": \"*\","
-            script << "      \"from_type\": \"float\","
-            script << "      \"name\": \"ad_intermediate_instrumentation\""
-            script << "    }, { \"action\": \"change_basetype\","
+            script << "    }, { \"action\": \"ad_intermediate_instrumentation\","
+            script << "      \"scope\": \"*\""
+            script << "    }, { \"action\": \"change_every_basetype\","
             script << "      \"scope\": \"*:args,ret,body\","
             script << "      \"from_type\": \"double\","
             script << "      \"to_type\": \"AD_real\""
-            script << "    }, { \"action\": \"change_basetype\","
+            script << "    }, { \"action\": \"change_every_basetype\","
             script << "      \"scope\": \"$global\","
             script << "      \"from_type\": \"double\","
             script << "      \"to_type\": \"AD_real\""
-            script << "    }, { \"action\": \"change_basetype\","
+            script << "    }, { \"action\": \"change_every_basetype\","
             script << "      \"scope\": \"*:args,ret,body\","
             script << "      \"from_type\": \"float\","
             script << "      \"to_type\": \"AD_real\""
-            script << "    }, { \"action\": \"change_basetype\","
+            script << "    }, { \"action\": \"change_every_basetype\","
             script << "      \"scope\": \"$global\","
             script << "      \"from_type\": \"float\","
             script << "      \"to_type\": \"AD_real\""
@@ -399,7 +398,7 @@ def run_wizard
             File.open("#{$WIZARD_ADRUN}/run.sh", "w") do |f|
                 f.puts "export CODIPACK_PATH=\"#{$WIZARD_CODI}\""
                 f.puts "export ADAPT_PATH=\"#{$WIZARD_ADAPT}\""
-                f.puts "export CXX='typeforge --spec-file instrument.json --compile" +
+                f.puts "export CXX='typeforge --plugin instrument.json --compile" +
                        " -std=c++11 -I#{$WIZARD_CODI}/include -I#{$WIZARD_ADAPT}" +
                        " -DCODI_EnableImplicitConversion -DCODI_DisableImplicitConversionWarning'"
                 f.puts "#{$WIZARD_BUILD}"
@@ -430,8 +429,8 @@ def run_wizard
         Dir.chdir $WIZARD_SEARCH
         File.open("#{$WIZARD_SEARCH}/craft_builder", "w") do |f|
             f.puts IO.read($WIZARD_ACQUIRE)
-            f.puts "export CC=\"typeforge --spec-file=$1 --compile\""
-            f.puts "export CXX=\"typeforge --spec-file=$1 --compile\""
+            f.puts "export CC=\"typeforge --plugin $1 --compile\""
+            f.puts "export CXX=\"typeforge --plugin $1 --compile\""
             f.puts IO.read($WIZARD_BUILD)
             # TODO: print "status:  abort" if build fails
         end
