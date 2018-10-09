@@ -456,6 +456,10 @@ def run_wizard
         opt = input_option("Which strategy do you wish to use for the search? ", "abc")
         cmd += " -s compositional" if opt == "b"
         cmd += " -s ddebug" if opt == "c"
+        print "How many trials of each configuration do you want to run? [default=5] "
+        ntrials = gets.chomp
+        ntrials = "5" if ntrials == ""
+        cmd += " -t #{ntrials}" if ntrials.to_i > 1
         cpus = exec_cmd("cat /proc/cpuinfo | grep processor | wc -l", false, false, true).chomp
         print "How many worker threads do you want to use? [default=#{cpus}] "
         nworkers = gets.chomp
