@@ -122,6 +122,8 @@ def run_wizard
 
     # print intro text and generate acquisition script
     if not File.exist?($WIZARD_ACQUIRE) then
+        puts "NOTE: We recommend cleaning your project before running this script!"
+        puts ""
         puts "To search in parallel automatically, the system must be able to:"
         puts "  1) acquire a copy of your code,"
         puts "  2) build your code using generic CC/CXX variables,"
