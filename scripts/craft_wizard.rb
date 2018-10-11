@@ -310,6 +310,14 @@ def run_wizard
         puts ""
     end
 
+    # verify that TypeForge found at least one variable
+    cfg = JSON.parse(IO.read($WIZARD_TFVARS))
+    if not cfg.has_key?("actions") or cfg["actions"].size == 0 then
+        puts "TypeForge did not find any variables to tune."
+        puts "Aborting search."
+        exit
+    end
+
     # phase 1b: variable review (optional)
     if not File.exist?($WIZARD_INITCFG) then
         puts "Some variables may not be appropriate candidates for tuning (e.g., if they"
