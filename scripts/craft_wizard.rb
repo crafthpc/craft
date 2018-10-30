@@ -359,7 +359,7 @@ def run_wizard
                 #       (the symlink is currently a hack and relies on having the
                 #        AD repository in a particular place in your home folder)
                 #exec_cmd "git clone https://github.com/LLNL/ADAPT.git #{$WIZARD_ADAPT}"
-                exec_cmd "ln -s \"$HOME/src/adtests/adapt\" #{$WIZARD_ADAPT}"
+                exec_cmd "ln -s \"$HOME/src/pipeline-tests/adapt\" #{$WIZARD_ADAPT}"
             end
             Dir.mkdir $WIZARD_ADRUN
             Dir.chdir $WIZARD_ADRUN
