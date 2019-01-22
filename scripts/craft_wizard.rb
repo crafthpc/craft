@@ -355,11 +355,7 @@ def run_wizard
                 exec_cmd "git clone https://github.com/SciCompKL/CoDiPack.git #{$WIZARD_CODI}"
             end
             if not Dir.exist?($WIZARD_ADAPT) then
-                # TODO: switch to cloning ADAPT once it has been released
-                #       (the symlink is currently a hack and relies on having the
-                #        AD repository in a particular place in your home folder)
-                #exec_cmd "git clone https://github.com/LLNL/ADAPT.git #{$WIZARD_ADAPT}"
-                exec_cmd "ln -s \"$HOME/src/pipeline-tests/adapt\" #{$WIZARD_ADAPT}"
+                exec_cmd "git clone https://github.com/LLNL/adapt-fp #{$WIZARD_ADAPT}"
             end
             Dir.mkdir $WIZARD_ADRUN
             Dir.chdir $WIZARD_ADRUN
