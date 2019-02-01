@@ -251,12 +251,12 @@ def read_json_config(cfg)
             if a.has_key?("action") and a["action"] == "change_var_basetype" and
                     a.has_key?("to_type") and a["to_type"] == "float" and
                     a.has_key?("handle") then
-                if not a.has_key?("scope") or a["scope"] == "global" then
-                    global_variables << a
-                elsif a["scope"] =~ /function:<(.*)>/ then
+                if not a.has_key?("scope") and a["scope"] =~ /function:<(.*)>/ then
                     func = $1
                     functions[func] = [] if not functions.has_key?(func)
                     functions[func] << a
+                else
+                    global_variables << a
                 end
             end
         end

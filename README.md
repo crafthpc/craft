@@ -102,6 +102,11 @@ later.
 For further instructions and a short tutorial, see the
 [Sum2PI_X](demo/sum2pi_x/README) example/demo.
 
+### Papers
+
+* "[Dynamic Floating-Point Cancellation Detection](https://doi.org/10.1016/j.parco.2012.08.002)" (PARCO'13)
+* "[Automatically Adapting Programs for Mixed-Precision Floating-Point Computation](https://doi.org/10.1016/j.parco.2012.08.002)" (ICS'13)
+* "[Fine-Grained Floating-Point Precision Analysis](http://dx.doi.org/10.1177%2F1094342016652462)" (IJHPCA'16)
 
 ### License Notice
 

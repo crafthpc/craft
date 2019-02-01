@@ -122,6 +122,8 @@ def run_wizard
 
     # print intro text and generate acquisition script
     if not File.exist?($WIZARD_ACQUIRE) then
+        puts "NOTE: We recommend cleaning your project before running this script!"
+        puts ""
         puts "To search in parallel automatically, the system must be able to:"
         puts "  1) acquire a copy of your code,"
         puts "  2) build your code using generic CC/CXX variables,"
@@ -308,6 +310,14 @@ def run_wizard
         puts ""
     end
 
+    # verify that TypeForge found at least one variable
+    cfg = JSON.parse(IO.read($WIZARD_TFVARS))
+    if not cfg.has_key?("actions") or cfg["actions"].size == 0 then
+        puts "TypeForge did not find any variables to tune."
+        puts "Aborting search."
+        exit
+    end
+
     # phase 1b: variable review (optional)
     if not File.exist?($WIZARD_INITCFG) then
         puts "Some variables may not be appropriate candidates for tuning (e.g., if they"
@@ -345,11 +355,7 @@ def run_wizard
                 exec_cmd "git clone https://github.com/SciCompKL/CoDiPack.git #{$WIZARD_CODI}"
             end
             if not Dir.exist?($WIZARD_ADAPT) then
-                # TODO: switch to cloning ADAPT once it has been released
-                #       (the symlink is currently a hack and relies on having the
-                #        AD repository in a particular place in your home folder)
-                #exec_cmd "git clone https://github.com/LLNL/ADAPT.git #{$WIZARD_ADAPT}"
-                exec_cmd "ln -s \"$HOME/src/adtests/adapt\" #{$WIZARD_ADAPT}"
+                exec_cmd "git clone https://github.com/LLNL/adapt-fp #{$WIZARD_ADAPT}"
             end
             Dir.mkdir $WIZARD_ADRUN
             Dir.chdir $WIZARD_ADRUN
