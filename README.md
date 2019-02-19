@@ -23,18 +23,11 @@ that you have Ruby 2.0 or later installed. You will also need to install the
 [TypeForge tool](https://github.com/rose-compiler/rose-develop/tree/master/projects/typeforge)
 created using the [Rose compiler framework](https://github.com/rose-compiler/rose-develop).
 
-This mode includes a wizard script that guides you through the process of
-running the analysis on your program. To run this, just execute `craft wizard`
-from your project root folder.  For now, skip the ADAPT step when it appears;
-that package has not yet been released.
-
-The search will print various status information while it is running. When it is
-finished, you will find your final recommended configuration in the `final`
-subfolder. You may examine `.craft/search/craft_final.json` for a list of
-converted variables.
+For a more automated and interactive experience, see the
+[FloatSmith](https://github.com/crafthpc/floatsmith) project.
 
 This support is still very brittle and experimental, and it is under active
-development as of Fall 2018. More documentation is on the way. Please contact
+development as of Spring 2019. More documentation is on the way. Please contact
 the author if you have questions or run into issues.
 
 
