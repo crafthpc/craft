@@ -785,7 +785,7 @@ def print_usage
     puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
     puts "   -R <file>      use an archived craft.tested file to avoid re-running tests from a previous search"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
-    puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"combinational\", \"rprec\""
+    puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"combinational\", \"compositional\", \"rprec\""
     puts "   -S             disable queue sorting (improves overall performance but may converge slower"
     puts "   -t <n>         run <n> trials and use max error / min runtime for evaluation"
     puts "   -V             enable variable mode for variable-level tuning and performance testing"
