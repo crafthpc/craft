@@ -207,7 +207,7 @@ def merge_additional_configs
                 cfg["actions"].each { |a| adapt_actions[a["handle"]] = a }
 
                 # remove all variables that are not in the ADAPT file
-                #main_cfg["actions"].select! { |a| adapt_actions.has_key?(a["handle"]) }
+                main_cfg["actions"].select! { |a| adapt_actions.has_key?(a["handle"]) }
 
                 # merge all ADAPT information into main configuration
                 main_cfg["actions"].each do |a|
