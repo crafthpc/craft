@@ -456,7 +456,10 @@ class AppConfig
             end
         end
         # add sanitized description for readability (in some cases)
-        if @attrs.has_key?("desc") and (@cuid.include?($TYPE_MODULE) or @cuid.include?($TYPE_FUNCTION)) then
+        if @attrs.has_key?("desc") and (@type == $TYPE_MODULE or
+                                        @type == $TYPE_FUNCTION or
+                                        @type == $TYPE_VARIABLE) then
+            fn << "_"
             @attrs["desc"].each_char do |c|
                 if c =~ /[0-9a-zA-Z_]/ then
                     fn << c.downcase
@@ -464,6 +467,19 @@ class AppConfig
                     fn << "_"
                 end
             end
+        else
+            fn << "_"
+            @label.each_char do |c|
+                if c =~ /[0-9a-zA-Z_]/ then
+                    fn << c.downcase
+                elsif c == ' ' then
+                    fn << "_"
+                end
+            end
+        end
+        # if file size is too long, use hash instead
+        if fn.size > 32 then
+            fn = "#{$search_tag}_#{fn.hash.abs.to_s(16)}"
         end
         fn << ($variable_mode ? ".json" : ".cfg")
         return fn
