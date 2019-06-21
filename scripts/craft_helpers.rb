@@ -611,13 +611,19 @@ def run_config_file (fn, keep, label)
     $status_buffer = "    Finished testing #{label}:\n"
 
     # build rewritten mutatee
+    build_status = $RESULT_PASS
     if $variable_mode then
         cmd = "#{$search_path}#{$craft_builder}"
         if File.exists?(cmd) then
             cmd += " #{fn}"
             add_to_mainlog("    Building executable for #{basename}: #{cmd}")
             Open3.popen3(cmd) do |io_in, io_out, io_err|
-                io_out.each_line { |line| }
+                io_out.each_line do |line|
+                    if line =~ /status:\s*error/i then
+                        build_status = $RESULT_ERROR
+                        $status_buffer += "   Build failed!"
+                    end
+                end
             end
         end
     else
@@ -636,50 +642,54 @@ def run_config_file (fn, keep, label)
         end
     end
 
-    # execute rewritten mutatee and check for success
     result = $RESULT_ERROR
     runtime = 0.0
     error = 0.0
-    cmd = "#{$search_path}#{$craft_driver}"
-    if $variable_mode then
-        cmd += " #{fn}"
-    else
-        cmd += " #{Dir.getwd}/mutant"
-    end
-    #add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
-    Open3.popen3(cmd) do |io_in, io_out, io_err|
-        io_out.each_line do |line|
-            if line =~ /status:\s*(pass|fail)/i then
-                tmp = $1
-                if tmp =~ /pass/i then
-                    result = $RESULT_PASS
-                elsif tmp =~ /fail/i then
-                    result = $RESULT_FAIL
-                end
-            elsif line =~ /error:\s*(.+)/i then
-                error = $1.to_f
-            elsif line =~ /time:\s*(.+)/i then
-                runtime = $1.to_f
-            end
-        end
-    end
 
-    # run additional trials if requested
-    2.upto($num_trials) do |t|
+    if build_status != $RESULT_ERROR then
+
+        # execute rewritten mutatee and check for success
+        cmd = "#{$search_path}#{$craft_driver}"
+        if $variable_mode then
+            cmd += " #{fn}"
+        else
+            cmd += " #{Dir.getwd}/mutant"
+        end
+        #add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
         Open3.popen3(cmd) do |io_in, io_out, io_err|
             io_out.each_line do |line|
                 if line =~ /status:\s*(pass|fail)/i then
                     tmp = $1
-                    if tmp =~ /pass/i and result != $RESULT_PASS then
-                        add_to_mainlog "    Inconsistent test result for #{basename}"
-                    elsif tmp =~ /fail/i and result != $RESULT_FAIL then
-                        add_to_mainlog "    Inconsistent test result for #{basename}"
+                    if tmp =~ /pass/i then
+                        result = $RESULT_PASS
+                    elsif tmp =~ /fail/i then
                         result = $RESULT_FAIL
                     end
                 elsif line =~ /error:\s*(.+)/i then
-                    error = [error, $1.to_f].max
+                    error = $1.to_f
                 elsif line =~ /time:\s*(.+)/i then
-                    runtime = [runtime, $1.to_f].min
+                    runtime = $1.to_f
+                end
+            end
+        end
+
+        # run additional trials if requested
+        2.upto($num_trials) do |t|
+            Open3.popen3(cmd) do |io_in, io_out, io_err|
+                io_out.each_line do |line|
+                    if line =~ /status:\s*(pass|fail)/i then
+                        tmp = $1
+                        if tmp =~ /pass/i and result != $RESULT_PASS then
+                            add_to_mainlog "    Inconsistent test result for #{basename}"
+                        elsif tmp =~ /fail/i and result != $RESULT_FAIL then
+                            add_to_mainlog "    Inconsistent test result for #{basename}"
+                            result = $RESULT_FAIL
+                        end
+                    elsif line =~ /error:\s*(.+)/i then
+                        error = [error, $1.to_f].max
+                    elsif line =~ /time:\s*(.+)/i then
+                        runtime = [runtime, $1.to_f].min
+                    end
                 end
             end
         end
@@ -698,13 +708,15 @@ def run_config_file (fn, keep, label)
 
     # print output
     $status_buffer += "        #{result}"
-    #$status_buffer += "   Walltime: #{format_time(runtime.to_f)}"
-    if $variable_mode then
-      $status_buffer += "   Speedup: %.1fx"%[$baseline_runtime / runtime]
-    else
-      $status_buffer += "   Overhead: %.1fx"%[runtime / $baseline_runtime]
+    if result != $RESULT_ERROR then
+        $status_buffer += "   Walltime: #{format_time(runtime.to_f)}"
+        if $variable_mode then
+          $status_buffer += "   Speedup: %.1fx"%[$baseline_runtime / runtime]
+        else
+          $status_buffer += "   Overhead: %.1fx"%[runtime / $baseline_runtime]
+        end
+        $status_buffer += "  Error: %g"%[error]
     end
-    $status_buffer += "  Error: %g"%[error]
     puts $status_buffer
     add_to_mainlog($status_buffer)
     if keep then
