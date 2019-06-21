@@ -197,6 +197,10 @@ def merge_additional_configs
             cfg = JSON.parse(IO.read(fn))
             if cfg.has_key?("tool_id") and cfg["tool_id"] == "ADAPT" then
                 print "\n  Merging ADAPT output #{fn} ... "
+                if not cfg.has_key?("actions") or cfg["actions"].size == 0 then
+                    puts "WARNING: No recommendations!"
+                    next
+                end
 
                 # discard all non-replacement actions
                 cfg["actions"].select! { |a| a["action"] == "change_var_basetype" }
@@ -216,6 +220,7 @@ def merge_additional_configs
                         a["ivcount"] = adapt_actions[a["handle"]]["dynamic_assignments"]
                     end
                 end
+                puts "Done."
             end
         rescue => e
             puts "ERROR: Unable to read configuration #{fn}"

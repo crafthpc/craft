@@ -62,7 +62,6 @@ def initialize_search
     end
     orig_cfg.close
     merge_additional_configs
-    puts "Done."
 
     # read all program control points
     # depends on initial configuration being present
