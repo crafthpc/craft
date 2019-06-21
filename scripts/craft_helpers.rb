@@ -419,7 +419,12 @@ def run_baseline_performance
         if File.exists?(cmd) then
             cmd += " tmp.json"
             Open3.popen3(cmd) do |io_in, io_out, io_err|
-                io_out.each_line { |line| }
+                io_out.each_line do |line|
+                    if line =~ /status:\s*error/i then
+                        $status_buffer += "   Build failed!"
+                        return false
+                    end
+                end
             end
         end
         cmd = "#{$search_path}#{$craft_driver} tmp.json"
