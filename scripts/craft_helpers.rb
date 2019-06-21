@@ -196,7 +196,7 @@ def merge_additional_configs
         begin
             cfg = JSON.parse(IO.read(fn))
             if cfg.has_key?("tool_id") and cfg["tool_id"] == "ADAPT" then
-                print "\n  Merging ADAPT output #{fn} ... "
+                print "Merging ADAPT output #{fn} ... "
                 if not cfg.has_key?("actions") or cfg["actions"].size == 0 then
                     puts "WARNING: No recommendations!"
                     next
