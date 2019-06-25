@@ -362,6 +362,8 @@ class PPoint
                     a["action"] = "change_var_basetype"
                     a["handle"] = @attrs["addr"]
                     a["name"] = @attrs["desc"]
+                    a["scope"] = @attrs["scope"] if @attrs.has_key?("scope")
+                    a["source_info"] = @attrs["source_info"] if @attrs.has_key?("source_info")
                     a["to_type"] = "float"
                     actions << a
                 end

@@ -281,6 +281,8 @@ def read_json_config(cfg)
         else
             var.attrs["desc"] = v["handle"]
         end
+        var.attrs["scope"] = v["scope"] if v.has_key?("scope")
+        var.attrs["source_info"] = v["source_info"] if v.has_key?("source_info")
         var.attrs["error"] = v["error"] if v.has_key?("error")
         var.attrs["ivcount"] = v["ivcount"] if v.has_key?("ivcount")
         mod.children << var
@@ -302,6 +304,8 @@ def read_json_config(cfg)
             else
                 var.attrs["desc"] = v["handle"]
             end
+            var.attrs["scope"] = v["scope"] if v.has_key?("scope")
+            var.attrs["source_info"] = v["source_info"] if v.has_key?("source_info")
             var.attrs["error"] = v["error"] if v.has_key?("error")
             var.attrs["ivcount"] = v["ivcount"] if v.has_key?("ivcount")
             func.children << var
