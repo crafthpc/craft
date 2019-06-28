@@ -17,7 +17,7 @@ def initialize_search
         puts "  runtime_pct_threshold=#{$rprec_runtime_pct_threshold}"
         puts "  skip_app_level=#{$rprec_skip_app_level}"
     else
-        puts "Initializing standard search:  strategy=#{$strategy_name}"
+        puts "Initializing #{$variable_mode ? "variable" : "binary"} search:  strategy=#{$strategy_name}"
         if $mixed_use_rprec then
             puts "  mixed_use_rprec=#{$mixed_use_rprec}"
             puts "  split_threshold=#{$rprec_split_threshold}"

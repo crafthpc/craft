@@ -636,7 +636,7 @@ def main
 
         puts ""
         puts "CRAFT #{$CRAFT_VERSION}"
-        puts "Executable:  #{$binary_name}"
+        puts "Executable:  #{$binary_name}" unless $variable_mode
         puts "Working dir: #{$search_path}"
         puts ""
 
