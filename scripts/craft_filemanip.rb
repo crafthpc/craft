@@ -283,28 +283,26 @@ end
 
 
 def add_tested_config(cfg)
-    f = File.new($tested_fn, "a")
+    f = File.new($tested_fn, "r+")
     f.flock File::LOCK_EX
-    YAML.dump(cfg, f)
+    tested = read_cfg_array(f)
+    tested << cfg
+    f.pos = 0
+    write_cfg_array(tested, f)
+    f.truncate(f.pos)
     f.close
 end
 def get_tested_configs
-    tested = Array.new
     f = File.new("#{$tested_fn}", "r")
     f.flock File::LOCK_SH
-    YAML.load_stream(f).each do |doc|
-        tested << doc
-    end
+    tested = read_cfg_array(f)
     f.close
     return tested
 end
 def get_tested_config_count
-    len = 0
     f = File.new("#{$tested_fn}", "r")
     f.flock File::LOCK_SH
-    YAML.load_stream(f).each do |doc|
-        len += 1
-    end
+    len = read_cfg_array(f).size
     f.close
     return len
 end
