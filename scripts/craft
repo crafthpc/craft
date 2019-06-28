@@ -22,6 +22,9 @@ require 'fileutils'
 # needed for inter-tool JSON parsing and generating
 require 'json'
 
+# needed for quick set membership checking
+require 'set'
+
 # {{{ top-level: global constants
 
 $CRAFT_VERSION = "1.2"                              # release version
@@ -74,6 +77,7 @@ $FPCONF_OPTS[$STATUS_DNAN]    = "-c --dnan"
 $FPCONF_OPTS[$STATUS_TRANGE]  = "-c --trange"
 $FPCONF_OPTS[$STATUS_RPREC]   = "-c --rprec 52"
 
+$PERFCFG_CUID  = "BASELINE"                         # special config; baseline performance run
 $FINALCFG_CUID = "FINAL"                            # special config; represents "best" final results
 
 # }}}
@@ -398,6 +402,8 @@ class AppConfig
     attr_accessor :defprec          # default precision (int)
     attr_accessor :precisions       # cuid -> int
 
+    MAX_SHORTLABEL_LENGTH=64
+
     def initialize (cuid, label, default)
         @cuid = cuid
         @label = label
@@ -447,7 +453,7 @@ class AppConfig
         return result
     end
 
-    def filename
+    def filename (include_ext = true)
         # add sanitized cuid for uniqueness
         fn = "#{$search_tag}_"
         @cuid.each_char do |c|
@@ -483,8 +489,12 @@ class AppConfig
         if fn.size > 32 then
             fn = "#{$search_tag}_#{fn.hash.abs.to_s(16)}"
         end
-        fn << ($variable_mode ? ".json" : ".cfg")
+        fn << ($variable_mode ? ".json" : ".cfg") if include_ext
         return fn
+    end
+
+    def shortlabel
+        return format_text(@label, MAX_SHORTLABEL_LENGTH)
     end
 
     def add_pt_info(pt)
@@ -517,8 +527,11 @@ def main
 
     # initialize global variables
     $search_tag = "craft"                   # filename tag
+    $search_path = Dir.getwd + "/"          # working folder
     $craft_builder = "craft_builder"        # standard builder program name
     $craft_driver = "craft_driver"          # standard driver program name
+    $craft_run = "craft_run"                # configuration run script (generated)
+    $craft_output = "craft.log"             # standard driver output file name
     $binary_name = ""                       # prevents crashes if there is no binary (e.g., in variable mode)
     $status_preferred = $STATUS_SINGLE      # preferred replacement status
     $status_alternate = $STATUS_DOUBLE      # replacement status if cannot be preferred
@@ -536,14 +549,11 @@ def main
     $prof_log_fn = ""                       # initial profiling log (may be blank)
     $cached_fn = ""                         # cached results from previous run (may be blank)
     $max_queue_length = 0                   # track largest queue size (approximate)
-    $main_mode = "start"                    # main status ("start/search", "resume", "status", "clean", "worker", "help")
-    $restart_inproc = false                 # resume by restarting all inprocess tests
+    $main_mode = "start"                    # main status ("start/search", "resume", "status", "clean", "help")
     $resume_lower = false                   # resume at a lower level
-    $num_workers = 1                        # number of worker threads
-    $workers = Hash.new                     # worker proc info (pid => dirname)
-    $status_buffer = ""                     # buffer for output (keeps multiprocess output clean)
+    $max_inproc = 1                         # maximum number of concurrent in-process tests (-1 to remove cap)
     $strategy_name = "bin_simple"           # desired search strategy
-    $self_invoke = File.basename($0)        # used to spawn worker threads
+    $self_invoke = File.basename($0)        # used for help text
     $fpconf_invoke = "fpconf"               # invoke configuration generator
     $fpconf_options = "-c --svinp double"   # configuration generator options
     $fpinst_invoke = "fpinst"               # invoke mutator
@@ -552,6 +562,7 @@ def main
     $disable_queue_sort = false             # disable workqueue sorting
     $run_final_config = true                # test the final config?
     $num_trials = 1                         # default number of trials
+    $keep_all_runs = false                  # don't keep temporary files
 
     # check command-line options
     if ARGV.size == 0 or ARGV[0] == "help" or ARGV.include?("-h") then
@@ -560,27 +571,9 @@ def main
         exit
     end
 
+    # read search/command-line options
+    read_craft_driver
     parse_command_line
-
-    # cleaning mode
-    if $main_mode == "clean" then
-        puts "Cleaning..."
-        clean_everything
-        puts "Done."
-        exit
-    end
-
-    # set up environment and filenames
-    if $main_mode != "worker" then
-        $search_path = Dir.getwd + "/"
-
-        # this really should happen BEFORE parse_command_line so that the
-        # command-line parameters will override the craft_driver options, but
-        # the worker threads shouldn't read the craft_driver since the options
-        # are saved in the settings files, but we don't know if we're a worker
-        # until we parse the command-line options
-        read_craft_driver
-    end
 
     # plain text info files
     $settings_fn = "#{$search_path}#{$search_tag}.settings"
@@ -600,6 +593,7 @@ def main
     # configuration file directories
     $perf_path     = "#{$search_path}baseline/"    # baseline performance test
     $prof_path     = "#{$search_path}profile/"     # profiler run
+    $run_path      = "#{$search_path}run/"         # work folders for runs
     $final_path    = "#{$search_path}final/"       # single final "best" config (cfg file + mutant)
     $best_path     = "#{$search_path}best/"        # top 10 "best" individual configs (cfg files only)
     $passed_path   = "#{$search_path}passed/"      # all successful configs (cfg files only)
@@ -612,103 +606,75 @@ def main
         exit
     end
 
-    # check for driver script
+    # cleaning mode
+    if $main_mode == "clean" then
+        puts "Cleaning..."
+        clean_everything
+        puts "Done."
+        exit
+    end
+
+    # check for builder and driver scripts
+    if $variable_mode and !File.exist?("#{$search_path}#{$craft_builder}") then
+        puts "No driver program \"craft_builder\" found."
+        puts "Aborting."
+        exit
+    end
     if !File.exist?("#{$search_path}#{$craft_driver}") then
         puts "No driver program \"craft_driver\" found."
         puts "Aborting."
         exit
     end
 
-    if $main_mode == "worker" then
+    puts ""
+    puts "CRAFT #{$CRAFT_VERSION}"
+    puts "Executable:  #{$binary_name}" unless $variable_mode
+    puts "Working dir: #{$search_path}"
+    puts ""
 
-        # this is just a worker process
-        
+    if $main_mode == "start" then
+        # this is the first invocation of this analysis; initialize everything
+        initialize_search
+    else
+        # we're resuming an analysis
+        if not File.exists?($settings_fn) then
+            puts "Cannot resume; no search detected in current folder"
+            exit
+        end
+        puts "Resuming in-process search ..."
+        if File.exist?($final_path) then
+            # clear out any final configuration testing
+            FileUtils.rm_rf($final_path)
+        end
+        if File.exist?($walltime_fn) then
+            # previous search was completed; restart wall timer
+            $start_time = Time.now
+            FileUtils.rm_rf($walltime_fn)
+        end
         load_settings
         initialize_program
         read_profiler_data
+        load_cached_configs
         initialize_strategy
-        run_main_search_loop                      # main loop
-        #puts "Worker finished.  [Empty queue]"
-
-    else
-
-        # this is a supervisor process
-
-        puts ""
-        puts "CRAFT #{$CRAFT_VERSION}"
-        puts "Executable:  #{$binary_name}" unless $variable_mode
-        puts "Working dir: #{$search_path}"
-        puts ""
-
-        if $main_mode == "start" then
-            # this is the first invocation of this analysis; initialize everything
-            initialize_search
-        else
-            # we're resuming an analysis
-            if not File.exists?($settings_fn) then
-                puts "Cannot resume; no search detected in current folder"
-                exit
-            end
-            puts "Resuming in-process search ..."
-            if File.exist?($final_path) then
-                # clear out any final configuration testing
-                FileUtils.rm_rf($final_path)
-            end
-            if File.exist?($walltime_fn) then
-                # previous search was completed; restart wall timer
-                $start_time = Time.now
-                FileUtils.rm_rf($walltime_fn)
-            end
-            load_settings
-            initialize_program
-            read_profiler_data
-            initialize_strategy
-            if $restart_inproc then
-                toDelete = Array.new
-                Dir.glob("*_worker*") do |fn| toDelete << fn end
-                toDelete.each do |f| FileUtils.rm_rf(f) end
-                move_all_inproc_to_workqueue
-            end
-            if $resume_lower then
-                resume_lower_search
-                save_settings
-            end
+        move_all_inproc_to_workqueue
+        if $resume_lower then
+            resume_lower_search
+            save_settings
         end
-
-        # set up worker thread folders
-        $num_workers.times do |id|
-            worker_dir = "#{$search_path + $binary_name}_#{Process.pid}_worker#{id}"
-            if File.exist?(worker_dir) then
-                FileUtils.rm_rf(worker_dir)
-            end
-            Dir.mkdir(worker_dir)
-            $workers[id] = worker_dir
-        end
-
-        # spawn worker threads (don't spawn more than we need right now, though)
-        [get_workqueue_length, $num_workers].min.times do |id|
-            worker_dir = "#{$search_path + $binary_name}_#{Process.pid}_worker#{id}"
-            job = fork do
-                exec "cd #{worker_dir} && #{$self_invoke} worker #{id} #{$search_path}"
-            end
-            $workers.delete(id)
-            $workers[job] = worker_dir
-            #puts "Spawned worker thread #{id} (pid=#{job})."
-        end
-
-        # main loop
-        puts "Initialization complete. Starting main search routine with #{get_workqueue_length} configuration(s) in the queue."
-        puts ""
-        if $strategy.has_custom_supervisor? then
-            $strategy.run_custom_supervisor
-        else
-            run_main_supervisor_loop
-        end
-
-        # test final config, assemble results, etc.
-        finalize_search
-
     end
+
+    # main loop
+    puts "Initialization complete. Starting main search routine with #{get_workqueue_length} configuration(s) in the queue."
+    puts ""
+    if $strategy.has_custom_supervisor? then
+        $strategy.run_custom_supervisor
+    else
+        run_main_search_loop
+    end
+
+    # test final config, assemble results, etc.
+    finalize_search
+
 end # }}}
 
 # top-level: call main

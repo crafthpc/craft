@@ -54,7 +54,50 @@ class Strategy
         return configs
     end
 
-    def handle_completed_config(config)
+    def handle_completed_config(config, force_add=false)
+        if force_add or (config.attrs["result"] != $RESULT_PASS and
+                         not is_single_base(config, $base_type)) then
+
+            # add any children we need to test
+            configs = split_config(config)
+            new_cfgs = Set.new
+            configs.each do |child|
+                add_child = true
+
+                # skip single-exception configs where the only exception
+                # is lower than the base type; currently there is no
+                # situation where we will encounter mixed-level configs
+                if child.exceptions.keys.size == 1 then
+                    pt = $program.lookup_by_uid(child.exceptions.keys.first)
+                    if !pt.nil? and $TYPE_RANK[pt.type] > $TYPE_RANK[$base_type] then
+                        add_child = false
+                    end
+                end
+
+                # skip non-executed instructions if desired; assume they
+                # will pass
+                if $skip_nonexecuted and child.attrs["cinst"].to_i == 0 then
+                    puts "Skipping non-executed config #{child.shortlabel}."
+                    add_to_mainlog("    Skipping non-executed config #{child.shortlabel}.")
+                    child.attrs["result"] = $RESULT_PASS
+                    child.attrs["skipped"] = "yes"
+                    if $strategy_name == "rprec" then
+                        child.precisions.each_key do |k|
+                            child.precisions[k] = 0
+                        end
+                    end
+                    calculate_pct_stats(child)
+                    add_tested_config(child)
+                    add_child = false
+                end
+
+                if add_child then
+                    new_cfgs << child
+                end
+            end
+
+            add_to_workqueue_bulk(new_cfgs) if new_cfgs.size > 0
+        end
     end
 
     def split_config(config)
@@ -255,6 +298,10 @@ class DeltaDebugStrategy < Strategy
         return cfg
     end
 
+    def handle_completed_config(config)
+        # do nothing (custom supervisor routine)
+    end
+
     def run_custom_supervisor
 
         # get set of all possible basetype-level changes (usually variables)
@@ -288,14 +335,15 @@ class DeltaDebugStrategy < Strategy
         done = false
         while not done do
 
-            puts "Current LC: #{@lc_cfg.exceptions.size} change(s), cost=#{get_cost(@lc_cfg)}, label=#{@lc_cfg.label}"
+            puts "Current LC: #{@lc_cfg.exceptions.size} change(s), cost=#{get_cost(@lc_cfg)}, label=#{@lc_cfg.shortlabel}"
 
             # partition current
 
             lc_div = div
             divs = @lc.each_slice([1,(@lc.size.to_f/div.to_f).ceil.to_i].max).to_a
-            set_cuids = []
-            com_cuids = []
+            set_cuids = Set.new
+            com_cuids = Set.new
+            new_cfgs = []
             divs.size.times do |i|
 
                 puts "Test subset #{i+1}/#{divs.size} in round of #{div}"
@@ -303,22 +351,23 @@ class DeltaDebugStrategy < Strategy
                 # build and test subset
                 set_cfg = build_config(divs[i])
                 if set_cfg.exceptions.keys.size > 0 then
-                    add_to_workqueue(set_cfg)
+                    new_cfgs << set_cfg
                     set_cuids << set_cfg.cuid
                 end
 
                 # build and test complement set
                 com_cfg = build_config(@all_variables - divs[i])
                 if com_cfg.exceptions.keys.size > 0 then
-                    add_to_workqueue(com_cfg)
+                    new_cfgs << com_cfg
                     com_cuids << com_cfg.cuid
                 end
 
             end
-            puts "ADDED #{set_cuids.size + com_cuids.size} configs to queue"
+            num_added = add_to_workqueue_bulk(new_cfgs)
+            puts "ADDED #{num_added} configs to queue"
 
             # wait until all the previously-added configs are finished
-            run_main_supervisor_loop
+            run_main_search_loop
 
             # look through the tested configurations and update LC if
             # appropriate
@@ -327,27 +376,27 @@ class DeltaDebugStrategy < Strategy
             configs.each do |cfg|
                 if cfg.attrs["result"] == $RESULT_PASS and
                         (set_cuids.include?(cfg.cuid) or com_cuids.include?(cfg.cuid)) then
-                    puts "EVALUATING: #{cfg.label}  cost=#{get_cost(cfg)} result=#{cfg.attrs["result"]}"
+                    puts "EVALUATING: #{cfg.shortlabel}  cost=#{get_cost(cfg)} result=#{cfg.attrs["result"]}"
                     if set_cuids.include?(cfg.cuid) and get_cost(cfg) < get_cost(@lc_cfg) then
                         @lc = cfg.attrs["changeset"]
                         @lc_cfg = cfg
                         lc_div = 2
                         changed = true
-                        puts "LC REPLACED by #{cfg.label}!  cost=#{get_cost(cfg)}"
+                        puts "LC REPLACED by #{cfg.shortlabel}!  cost=#{get_cost(cfg)}"
                     end
                     if com_cuids.include?(cfg.cuid) and get_cost(cfg) < get_cost(@lc_cfg) then
                         @lc = cfg.attrs["changeset"]
                         @lc_cfg = cfg
                         lc_div = div-1
                         changed = true
-                        puts "LC REPLACED by #{cfg.label}!  cost=#{get_cost(cfg)}"
+                        puts "LC REPLACED by #{cfg.shortlabel}!  cost=#{get_cost(cfg)}"
                     end
                 end
             end
 
             # set up next iteration (if not done)
             if changed then
-                puts "FOUND NEW LC: #{@lc_cfg.label}  cost=#{get_cost(@lc_cfg)}"
+                puts "FOUND NEW LC: #{@lc_cfg.shortlabel}  cost=#{get_cost(@lc_cfg)}"
                 div = lc_div
             else
                 print "NO NEW LC - "
@@ -660,6 +709,11 @@ class RPrecStrategy < Strategy
                 configs << cfg
             end
         end
+    end
+
+    def handle_completed_config(config)
+        reload_bounds_from_results(get_tested_configs)
+        super(config, true)
     end
 
     def split_config(cfg)

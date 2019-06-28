@@ -35,6 +35,7 @@ def save_settings
     f.puts "run_final_config=#{$run_final_config.to_s}"
     f.puts "mixed_use_rprec=#{$mixed_use_rprec.to_s}"
     f.puts "num_trials=#{$num_trials.to_s}"
+    f.puts "max_inproc=#{$max_inproc.to_s}"
 
     f.close
 end
@@ -66,10 +67,6 @@ def load_settings
                 $fortran_mode = (value == "fortran")
             when "variable_mode"
                 $variable_mode = (value == "yes")
-                if $variable_mode then
-                    $orig_config_fn  = "#{$search_path}craft_orig.json"
-                    $final_config_fn = "#{$search_path}craft_final.json"
-                end
             when "base_type"
                 $base_type = value
             when "skip_nonexecuted"
@@ -98,6 +95,8 @@ def load_settings
                 $mixed_use_rprec = (value == true.to_s)
             when "num_trials"
                 $num_trials = value.to_i
+            when "max_inproc"
+                $max_inproc = value.to_i
             end
             temp = f.gets
         end
@@ -161,45 +160,59 @@ def write_cfg_array(configs, io)
 end
 
 def add_to_workqueue_bulk(configs)
-    f = File.new("#{$workqueue_fn}", "r+")
-    f.flock File::LOCK_EX
-    queue = read_cfg_array(f)
-    configs.each do |cfg|
-        calculate_pct_stats(cfg)
-        queue << cfg
-        puts "Added config #{cfg.label} to workqueue."
-    end
-    if not $disable_queue_sort then
-        queue.sort!
-    end
-    f.truncate(0)
-    f.pos = 0
-    write_cfg_array(queue, f)
-    f.close
-end
+    # don't add a config if we've seen another one with an identical CUID
+    load_cached_configs
+    seen_cuids = Set.new
+    get_inproc_configs.each { |c| seen_cuids << c.cuid }
+    get_tested_configs.each { |c| seen_cuids << c.cuid }
+    $cached_configs.each    { |c| seen_cuids << c.cuid }
 
-def add_to_workqueue(cfg)
+    num_added = 0
     File.open("#{$workqueue_fn}", File::RDWR|File::CREAT) do |f|
         f.flock File::LOCK_EX
         queue = read_cfg_array(f)
+        queue.each          { |c| seen_cuids << c.cuid }
+        configs.each do |cfg|
+            if not seen_cuids.include?(cfg.cuid) then
+                calculate_pct_stats(cfg)
+                queue << cfg
+                seen_cuids << cfg.cuid
+                puts "Added config #{cfg.shortlabel} to workqueue."
+                num_added += 1
+            end
+        end
+        if not $disable_queue_sort then
+            queue.sort!
+        end
+        f.rewind
+        write_cfg_array(queue, f)
+        f.truncate(f.pos)
+    end
+    return num_added
+end
 
-        # don't add a config if we've seen another one with an identical CUID
-        seen_cuids = []
-        queue.each              { |c| seen_cuids << c.cuid }
-        get_inproc_configs.each { |c| seen_cuids << c.cuid }
-        get_tested_configs.each { |c| seen_cuids << c.cuid }
+def add_to_workqueue(cfg)
+    # don't add a config if we've seen another one with an identical CUID
+    load_cached_configs
+    seen_cuids = Set.new
+    get_inproc_configs.each { |c| seen_cuids << c.cuid }
+    get_tested_configs.each { |c| seen_cuids << c.cuid }
+    $cached_configs.each    { |c| seen_cuids << c.cuid }
 
+    File.open("#{$workqueue_fn}", File::RDWR|File::CREAT) do |f|
+        f.flock File::LOCK_EX
+        queue = read_cfg_array(f)
+        queue.each          { |c| seen_cuids << c.cuid }
         if not seen_cuids.include?(cfg.cuid)
             calculate_pct_stats(cfg)
             queue << cfg
+            puts "Added config #{cfg.shortlabel} to workqueue."
             if not $disable_queue_sort then
                 queue.sort!
             end
             f.rewind
             write_cfg_array(queue, f)
             f.truncate(f.pos)
-            #puts "Added config #{cfg.label} to workqueue. Seen: #{seen_cuids.inspect}"
-            puts "Added config #{cfg.label} to workqueue."
         end
     end
 end
@@ -244,13 +257,9 @@ def add_to_inproc(cfg)
     f.close
 end
 def remove_from_inproc(cfg)
-    inproc = Array.new
     f = File.new($inproc_fn, "r+")
     f.flock File::LOCK_EX
-    configs = read_cfg_array(f)
-    configs.each do |cfg|
-        inproc << cfg if not (cfg.cuid == cfg.cuid)
-    end
+    inproc = read_cfg_array(f).select { |c| c.cuid != cfg.cuid }
     f.pos = 0
     write_cfg_array(inproc, f)
     f.truncate(f.pos)

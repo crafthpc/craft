@@ -11,7 +11,7 @@ def read_craft_driver
             $binary_name = File.basename($1)
             $binary_path = File.expand_path($1)
         elsif line =~ /^#\s*NUM_WORKERS\s*=\s*(\d+)/ then
-            $num_workers = $1.to_i
+            $max_inproc = $1.to_i
         elsif line =~ /^#\s*PREFERRED_STATUS\s*=\s*(.)/ then
             $status_preferred = $1
         elsif line =~ /^#\s*ALTERNATE_STATUS\s*=\s*(.)/ then
@@ -53,13 +53,9 @@ def parse_command_line
     if $main_mode == "search" then
         $main_mode = "start"
     end
-    if not ["start","resume","worker","status","help","clean","wizard"].include?($main_mode) then
+    if not ["start","resume","status","help","clean","wizard"].include?($main_mode) then
         puts "Invalid mode: #{$main_mode}"
         exit
-    end
-    if $main_mode == "worker" then
-        $worker_id = ARGV.shift
-        $search_path = ARGV.shift
     end
     parsed_binary = false
     while ARGV.size > 0 do
@@ -67,10 +63,13 @@ def parse_command_line
         if $main_mode == "start" then
             if opt == "-j" then
                 # parallel: "-j 4" variant
-                $num_workers = ARGV.shift.to_i
+                $max_inproc = ARGV.shift.to_i
             elsif opt =~ /^-j/ then
                 # parallel: "-j4" variant
-                $num_workers = opt[2,opt.length-2].to_i
+                $max_inproc = opt[2,opt.length-2].to_i
+            elsif opt == "-k" then
+                # keep all temporary files
+                $keep_all_runs = true
             elsif opt == "-d" then
                 # debug mode
                 $status_preferred = ARGV.shift
@@ -166,14 +165,12 @@ def parse_command_line
         elsif $main_mode == "resume" then
             if opt == "-j" then
                 # parallel: "-j 4" variant
-                $num_workers = ARGV.shift.to_i
+                $max_inproc = ARGV.shift.to_i
             elsif opt =~ /^-j/ then
                 # parallel: "-j4" variant
-                $num_workers = opt[2,opt.length-2].to_i
+                $max_inproc = opt[2,opt.length-2].to_i
             elsif opt == "-l" then
                 $resume_lower = true
-            elsif opt == "-n" then
-                $restart_inproc = true
             else
                 puts "Invalid resume option: #{opt}"
                 exit
@@ -211,7 +208,9 @@ def merge_additional_configs
                 cfg["actions"].each { |a| adapt_actions[a["handle"]] = a }
 
                 # remove all variables that are not in the ADAPT file
-                main_cfg["actions"].select! { |a| adapt_actions.has_key?(a["handle"]) }
+                if $strategy_name != "ddebug" then
+                    main_cfg["actions"].select! { |a| adapt_actions.has_key?(a["handle"]) }
+                end
 
                 # merge all ADAPT information into main configuration
                 main_cfg["actions"].each do |a|
@@ -408,75 +407,18 @@ def initialize_strategy
     end
 end
 
-
 def run_baseline_performance
-    passed = false
-    if not File.exist?($perf_path) then
-        Dir.mkdir($perf_path)
-    end
-    Dir.chdir($perf_path)
-    $baseline_error = 0.0
-    $baseline_runtime = 0.0
-    if $variable_mode then
-        File.open("tmp.json","w") do |f| f.print("{\"actions\":[]}") end
-        cmd = "#{$search_path}#{$craft_builder}"
-        if File.exists?(cmd) then
-            cmd += " tmp.json"
-            Open3.popen3(cmd) do |io_in, io_out, io_err|
-                io_out.each_line do |line|
-                    if line =~ /status:\s*error/i then
-                        $status_buffer += "   Build failed!"
-                        return false
-                    end
-                end
-            end
-        end
-        cmd = "#{$search_path}#{$craft_driver} tmp.json"
-    else
-        cmd = "#{$search_path}#{$craft_driver} #{$binary_path}"
-    end
-    Open3.popen3(cmd) do |io_in, io_out, io_err|
-        io_out.each_line do |line|
-            if line =~ /status:\s*(pass|fail)/i then
-                if $1 =~ /pass/i then
-                    passed = true
-                end
-            end
-            if line =~ /error:\s*(.+)/i then
-                $baseline_error = $1.to_f
-            end
-            if line =~ /time:\s*(.+)/i then
-                $baseline_runtime = $1.to_f
-            end
-        end
-    end
-    # run additional trials if requested
-    2.upto($num_trials) do |t|
-        Open3.popen3(cmd) do |io_in, io_out, io_err|
-            io_out.each_line do |line|
-                if line =~ /status:\s*(pass|fail)/i then
-                    if not $1 =~ /pass/i then
-                        passed = false
-                    end
-                elsif line =~ /error:\s*(.+)/i then
-                    $baseline_error = [$baseline_error, $1.to_f].max
-                elsif line =~ /time:\s*(.+)/i then
-                    $baseline_runtime = [$baseline_runtime, $1.to_f].min
-                end
-            end
-        end
-    end
-
-    if $baseline_runtime == 0.0 then
-        $baseline_runtime = 0.0001      # avoid divide-by-zero errors later
-    end
-    Dir.chdir($search_path)
-    return passed
+    perf_cfg = AppConfig.new($PERFCFG_CUID, "baseline", $STATUS_NONE)
+    run_config(perf_cfg, true)
+    get_run_results(perf_cfg)
+    FileUtils.cp_r("#{$run_path}#{perf_cfg.filename(false)}", $perf_path[0...-1])
+    $baseline_error = perf_cfg.attrs["error"]
+    $baseline_runtime = perf_cfg.attrs["runtime"]
+    return perf_cfg.attrs["result"] == $RESULT_PASS
 end
 
-
 def run_profiler
-    # there's no need for profile info in variable mode
+    # there's no equivalent to a profiling pass in variable mode
     return true if $variable_mode
 
     passed = false
@@ -583,189 +525,97 @@ def calculate_pct_stats (cfg)
     cfg.attrs["pct_cinst"] = pct_cinst.to_s
 end
 
-def run_config (cfg)
+def run_config (cfg, wait=false)
+
+    # create temporary folder
+    cfg_path = "#{$run_path}#{cfg.filename(false)}/"
+    FileUtils.rm_rf(cfg_path) if File.exists?(cfg_path)
+    Dir.mkdir(cfg_path)
 
     # write actual configuration file
-    cfg_path = $search_path + cfg.filename
+    cfg_file = cfg_path + cfg.filename
     if $variable_mode then
-        #puts "Writing JSON file for #{cfg.cuid}"
-        $program.build_json_file(cfg, cfg_path)
+        $program.build_json_file(cfg, cfg_file)
     else
-        #puts "Writing CRAFT file for #{cfg.cuid}"
-        $program.build_config_file(cfg, cfg_path)
+        $program.build_config_file(cfg, cfg_file)
     end
 
-    # pass off to filename version
-    result,error,runtime = run_config_file(cfg_path, false, cfg.label)
+    # create run script
+    run_fn = "#{cfg_path}#{$craft_run}"
+    script = File.new(run_fn, "w")
+    script.puts "#!/usr/bin/env bash"
+    script.puts "cd #{cfg_path}"
+    if $variable_mode then
+        script.puts "#{$search_path}#{$craft_builder} #{cfg_file} | tee .build_status"
+    else
+        script.print "#{$fpinst_invoke} -i #{$fortran_mode ? "-N" : ""}"
+        script.puts " -c #{cfg_file} #{$binary_path} | tee .build_status"
+    end
+    script.puts 'if [ -z "$(grep -E "status:\s*error" .build_status)" ]; then'
+    $num_trials.times do
+        script.print "    #{$search_path}#{$craft_driver}"
+        script.puts $variable_mode ? "" : " #{cfg_path}mutant"
+    end
+    script.puts 'fi'
 
-    # save result
-    cfg.attrs["result"] = result
-    cfg.attrs["error"] = error
-    cfg.attrs["runtime"] = runtime
+    # finalize and launch the run script
+    script.close
+    File.chmod(0700, run_fn)
+    pid = fork { exec "#{run_fn} &>#{cfg_path}#{$craft_output}" }
+    cfg.attrs["pid"] = pid
 
-    # delete actual configuration file
-    FileUtils.rm_rf(cfg_path)
-
-    return result
+    # wait for test to finish if desired
+    Process.wait(pid) if wait
 end
 
-def run_config_file (fn, keep, label)
+def get_run_results (cfg)
 
-    # status updates
-    basename = File.basename(fn)
-    if basename =~ /^#{$binary_name}(.*)/ then
-        basename = $1
-    end
-    #puts "  Testing #{basename} ..."
-    $status_buffer = "    Finished testing #{label}:\n"
-
-    # build rewritten mutatee
-    build_status = $RESULT_PASS
-    if $variable_mode then
-        cmd = "#{$search_path}#{$craft_builder}"
-        if File.exists?(cmd) then
-            cmd += " #{fn}"
-            add_to_mainlog("    Building executable for #{basename}: #{cmd}")
-            Open3.popen3(cmd) do |io_in, io_out, io_err|
-                io_out.each_line do |line|
-                    if line =~ /status:\s*error/i then
-                        build_status = $RESULT_ERROR
-                        $status_buffer += "   Build failed!"
-                    end
-                end
-            end
-        end
-    else
-        cmd = "#{$fpinst_invoke} -i #{$fortran_mode ? "-N" : ""}"
-        cmd += " -c #{fn}"
-        cmd += " #{$binary_path}"
-        add_to_mainlog("    Building mutatee for #{basename}: #{cmd}")
-        Open3.popen3(cmd) do |io_in, io_out, io_err|
-            io_out.each_line do |line|
-                if line =~ /Inplace: (.*)$/ then
-                    $status_buffer += "        #{$1}\n"
-                #elsif line =~ /replacing "(\w+)"/ then
-                    #$status_buffer += " #{$1}"
-                end
-            end
+    # extract results
+    result = nil
+    error = nil
+    runtime = nil
+    File.foreach("#{$run_path}#{cfg.filename(false)}/#{$craft_output}") do |line|
+        if line =~ /status:\s*pass/i and result.nil? then
+            result = $RESULT_PASS
+        elsif line =~ /status:\s*fail/i and (result.nil? or
+                                                result == $RESULT_PASS) then
+            result = $RESULT_FAIL
+        elsif line =~ /status:\s*error/i and
+            result = $RESULT_ERROR
+        elsif line =~ /error:\s*(.+)/i then
+            error = error.nil? ? $1.to_f : max(error, $1.to_f)
+        elsif line =~ /time:\s*(.+)/i then
+            runtime = runtime.nil? ? $1.to_f : min(runtime, $1.to_f)
         end
     end
+    cfg.attrs["result"]  = result
+    cfg.attrs["error"]   = error.nil?   ? 0.0 : error
+    cfg.attrs["runtime"] = runtime.nil? ? 1.0 : runtime
 
-    result = $RESULT_ERROR
-    runtime = 0.0
-    error = 0.0
-
-    if build_status != $RESULT_ERROR then
-
-        # execute rewritten mutatee and check for success
-        cmd = "#{$search_path}#{$craft_driver}"
-        if $variable_mode then
-            cmd += " #{fn}"
-        else
-            cmd += " #{Dir.getwd}/mutant"
-        end
-        #add_to_mainlog("    Testing mutatee for #{basename}: #{cmd}")
-        Open3.popen3(cmd) do |io_in, io_out, io_err|
-            io_out.each_line do |line|
-                if line =~ /status:\s*(pass|fail)/i then
-                    tmp = $1
-                    if tmp =~ /pass/i then
-                        result = $RESULT_PASS
-                    elsif tmp =~ /fail/i then
-                        result = $RESULT_FAIL
-                    end
-                elsif line =~ /error:\s*(.+)/i then
-                    error = $1.to_f
-                elsif line =~ /time:\s*(.+)/i then
-                    runtime = $1.to_f
-                end
-            end
-        end
-
-        # run additional trials if requested
-        2.upto($num_trials) do |t|
-            Open3.popen3(cmd) do |io_in, io_out, io_err|
-                io_out.each_line do |line|
-                    if line =~ /status:\s*(pass|fail)/i then
-                        tmp = $1
-                        if tmp =~ /pass/i and result != $RESULT_PASS then
-                            add_to_mainlog "    Inconsistent test result for #{basename}"
-                        elsif tmp =~ /fail/i and result != $RESULT_FAIL then
-                            add_to_mainlog "    Inconsistent test result for #{basename}"
-                            result = $RESULT_FAIL
-                        end
-                    elsif line =~ /error:\s*(.+)/i then
-                        error = [error, $1.to_f].max
-                    elsif line =~ /time:\s*(.+)/i then
-                        runtime = [runtime, $1.to_f].min
-                    end
-                end
-            end
-        end
-    end
-
-    # scan log file(s) for info
-    Dir.glob("*.log").each do |lfn|
-        if lfn != "fpinst.log" then
-            IO.foreach(lfn) do |line|
-                if line =~ /Inplace: (.*)$/ then
-                    $status_buffer += "        #{$1.gsub(/<.*>/, "")}\n"
-                end
-            end
-        end
-    end
-
-    # print output
-    $status_buffer += "        #{result}"
-    if result != $RESULT_ERROR then
-        $status_buffer += "   Walltime: #{format_time(runtime.to_f)}"
-        if $variable_mode then
-          $status_buffer += "   Speedup: %.1fx"%[$baseline_runtime / runtime]
-        else
-          $status_buffer += "   Overhead: %.1fx"%[runtime / $baseline_runtime]
-        end
-        $status_buffer += "  Error: %g"%[error]
-    end
-    puts $status_buffer
-    add_to_mainlog($status_buffer)
-    if keep then
-        f = File.new("result.txt", "w")
-        f.puts $status_buffer
-        f.close
-    end
-    $status_buffer = ""
-
-    # copy config to appropriate folder
-    if result == $RESULT_PASS then
+    # clean up files
+    fn = "#{$run_path}#{cfg.filename(false)}/#{cfg.filename}"
+    if cfg.attrs["result"] == $RESULT_PASS then
         FileUtils.cp(fn, $passed_path)
-    elsif result == $RESULT_FAIL then
+    elsif cfg.attrs["result"] == $RESULT_FAIL then
         FileUtils.cp(fn, $failed_path)
-    elsif result == $RESULT_ERROR then
+    elsif cfg.attrs["result"] == $RESULT_ERROR then
         FileUtils.cp(fn, $aborted_path)
     end
-
-    # clean out mutant, logs, and rewritten library files
-    if !keep then
-        begin
-            toDelete = Array.new
-            Dir.glob("*").each do |lfn|
-                toDelete << lfn
-                #if lfn =~ /mutant/ || lfn =~ /\.log/ || lfn =~ /lib(c|m)\.so\.6/ then
-                #if lfn =~ /mutant/ || lfn =~ /\.log/ || lfn =~ /\.so$/ then
-                    #File.delete(lfn)
-                #end
-            end
-            toDelete.each do |fn|
-                File.delete(fn)
-            end
-        rescue
-            puts "Error clearing old files"
-        end
-    end
-
-    return [result,error,runtime]
+    FileUtils.rm_rf("#{$run_path}#{cfg.filename(false)}") unless $keep_all_runs or
+        (cfg.cuid == $PERFCFG_CUID or cfg.cuid == $FINALCFG_CUID)
 end
 
+def is_config_running?(cfg)
+    return `ps -o state= -p #{cfg.attrs["pid"]}`.chomp =~ /R|D|S/
+end
+
+def min(a, b)
+    return a < b ? a : b
+end
+
+def max(a, b)
+    return a > b ? a : b
+end
 
 # }}}
 # {{{ output
@@ -786,8 +636,6 @@ def print_usage
     puts "        #{$self_invoke} clean                              (reset search)"
     puts "          or"
     puts "        #{$self_invoke} wizard                             (wizard mode"
-    puts "          or"
-    puts "        #{$self_invoke} worker <id> <dir>                  (worker process; used internally)"
     puts " "
     puts "Shortcut mode modifications:"
     puts "   <default>      operation-based mixed-precision analysis"
@@ -807,7 +655,8 @@ def print_usage
     puts "                    (-d and -D also adjust the fpconf options appropriately)"
     puts "   -f             stop splitting configs at the function level"
     puts "   -F             don't test final configuration"
-    puts "   -j <np>        spawn <np> worker threads"
+    puts "   -j <np>        spawn up to <np> simultaneous jobs/configurations (-1 to remove limit)"
+    puts "   -k             keep all temporary run files"
     puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
     puts "   -R <file>      use an archived craft.tested file to avoid re-running tests from a previous search"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
@@ -826,20 +675,11 @@ def print_usage
     puts "   --rprec-skip_app_level                 don't test at the whole-application level"
     puts " "
     puts "Resumption options:"
-    puts "   -j <np>        spawn <np> worker threads"
+    puts "   -j <np>        spawn up to <np> simultaneous jobs/configurations (-1 to remove limit)"
     puts "   -l             resume search at lower level (e.g., INSN instead of BBLK)"
-    puts "   -n             resume search and restart in-process tests"
     puts " "
     puts "Using Ruby #{RUBY_VERSION} #{RUBY_RELEASE_DATE}"
     puts " "
-end
-
-
-def get_worker_thread_count
-    cmd = "ps -C #{$self_invoke} -o s="
-    psr = `#{cmd}`
-    num_workers = [0,psr.lines.count - ($main_mode == "status" ? 2 : 1)].max
-    return num_workers
 end
 
 
@@ -870,7 +710,6 @@ def print_status
     overall_status = get_status     # calls load_settings
     full_output = (overall_status == "waiting" or overall_status == "running" or
                    overall_status == "finalizing" or overall_status == "DONE")
-    nworkers = get_worker_thread_count
 
     status_text = Array.new
     status_text << "Snapshot taken at #{ptag}"
@@ -888,7 +727,7 @@ def print_status
         #status_text << "#{indent}Fortran mode:  #{"%24s" % ($fortran_mode ? "Y" : "N")}"
         #status_text << "#{indent}Variable mode:  #{"%24s" % ($variable_mode ? "Y" : "N")}"
         status_text << "#{indent}Base type:  #{"%28s" % $base_type}"
-        status_text << "#{indent}Worker threads:            #{"%13d" % nworkers}"
+        status_text << "#{indent}Max in-proc configs:       #{"%13d" % $max_inproc}"
         status_text << "#{indent}Trials per config:         #{"%13d" % $num_trials}"
         status_text << "#{indent}Total candidates:          #{"%13d" % $total_candidates}"
         summary = get_tested_configs_summary
@@ -1208,16 +1047,16 @@ def clean_everything
     Dir.glob("#{$search_tag}.*") do |fn| toDelete << fn end
     Dir.glob("#{$search_tag}_*.cfg") do |fn| toDelete << fn end
     Dir.glob("#{$search_tag}_*.json") do |fn| toDelete << fn end
-    Dir.glob("*_worker*") do |fn| toDelete << fn end
     Dir.glob("*.log") do |fn| toDelete << fn end
-    Dir.glob("baseline") do |fn| toDelete << fn end
-    #Dir.glob("profile") do |fn| toDelete << fn end
-    Dir.glob("final") do |fn| toDelete << fn end
-    Dir.glob("best") do |fn| toDelete << fn end
-    Dir.glob("passed") do |fn| toDelete << fn end
-    Dir.glob("failed") do |fn| toDelete << fn end
-    Dir.glob("aborted") do |fn| toDelete << fn end
-    Dir.glob("snapshots") do |fn| toDelete << fn end
+    Dir.glob($perf_path) do |fn| toDelete << fn end
+    Dir.glob($prof_path) do |fn| toDelete << fn end
+    Dir.glob($run_path) do |fn| toDelete << fn end
+    Dir.glob($final_path) do |fn| toDelete << fn end
+    Dir.glob($best_path) do |fn| toDelete << fn end
+    Dir.glob($passed_path) do |fn| toDelete << fn end
+    Dir.glob($failed_path) do |fn| toDelete << fn end
+    Dir.glob($aborted_path) do |fn| toDelete << fn end
+    Dir.glob($snapshot_path) do |fn| toDelete << fn end
     toDelete.each do |fn|
         FileUtils.rm_rf(fn)
     end
