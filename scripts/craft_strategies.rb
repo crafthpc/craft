@@ -264,7 +264,7 @@ class DeltaDebugStrategy < Strategy
         #puts @all_variables.map { |v| v.attrs["desc"] +
                                   #(v.attrs.has_key?("error") ? " " + v.attrs["error"].to_s : "") }
 
-        # sort variables by error (if present)
+        # sort variables by error (if present; e.g., provided by ADAPT)
         @all_variables.sort! do |x,y|
             if x.attrs.has_key?("error") and y.attrs.has_key?("error") then
                 y.attrs["error"].to_f <=> x.attrs["error"].to_f
