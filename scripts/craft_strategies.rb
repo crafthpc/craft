@@ -273,7 +273,7 @@ class DeltaDebugStrategy < Strategy
             end
         end
 
-		#puts "SORTED:"
+        #puts "SORTED:"
         #puts @all_variables.map { |v| v.attrs["desc"] +
                                   #(v.attrs.has_key?("error") ? " " + v.attrs["error"].to_s : "") }
 
