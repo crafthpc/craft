@@ -2,7 +2,7 @@
 #
 # diffcfgs
 #
-# Compare two configuration files.
+# Compare two configuration files. (only works on binary mode configurations!)
 #
 
 $TYPE_APPLICATION = "APPLICATION"                   # control point levels

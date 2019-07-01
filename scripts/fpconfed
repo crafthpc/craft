@@ -1,4 +1,8 @@
-#!/bin/sh
+#!/usr/bin/env bash
+#
+# Runs editor UI with a few supported command-line parameters.
+# (Basically just a wrapper for launching the JAR file)
+#
 
 BACKGROUND="y"
 PROFILER="n"

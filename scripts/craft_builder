@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#
+# SAMPLE BUILDER SCRIPT
+#
+
+ORIG_DIR="/path/to/your/project"
+
+# copy source files to current folder
+#
+# MODIFY THIS if you need files or structure beyond what is provided here
+#
+for f in $(cd ${ORIG_DIR} && ls Makefile *.c *.cpp *.C *.h *.hpp *.H 2>/dev/null); do
+    cp "${ORIG_DIR}/$f" "$f"
+done
+
+# rebuild w/ compiler wrapper
+#
+# MODIFY THIS if your build is different from just running "make"
+#
+CXX="typeforge $1" make || echo "status:  error"
+

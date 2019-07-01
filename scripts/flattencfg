@@ -2,7 +2,8 @@
 #
 # flattencfg
 #
-# Flatten a config to the instruction level
+# Flatten a config to the instruction level (only works on binary-mode
+# configurations)
 #
 
 $TYPE_APPLICATION = "APPLICATION"                   # control point levels

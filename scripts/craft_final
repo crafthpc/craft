@@ -1,4 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+# Run visualization tool on a completed CRAFT run; includes final configuration
+# as well as addiitonal statistics and profiling information.
+#
 
 fpconfed $@ craft_final.cfg craft_orig.cfg profile/*-c_inst-*.log
 

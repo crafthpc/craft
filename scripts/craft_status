@@ -1,4 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+# Realtime update on CRAFT search status (updates every ten seconds).
+#
 
 watch -n 10 craft status
 

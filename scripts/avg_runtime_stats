@@ -1,4 +1,10 @@
 #!/usr/bin/env ruby
+#
+# Run a given command several times, computing average statistics about runtime
+# using the /usr/bin/time -v command.
+#
+#   Usage: avg_runtime_stats <iteration-count> <command>
+#
 
 require 'open3.rb'
 
