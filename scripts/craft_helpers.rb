@@ -355,21 +355,6 @@ def read_craft_config(cfg)
     return program
 end
 
-def add_variables_to_config_file(fn, cfg)
-    vcount = 0
-    IO.foreach(fn) do |line|
-        if line =~ /craft_t\s*(\*)?\s*(\w+)/ then
-            vname = $2
-            cfg.print "    "
-            cfg.print "," if vcount > 0
-            cfg.puts "{ \"action\": \"change_var_basetype\", \"scope\": \"global\","
-            cfg.puts "      \"name\": \"#{vname}\","
-            cfg.puts "      \"from_type\": \"craft_t\", \"to_type\":\"float\" }"
-            vcount += 1
-        end
-    end
-end
-
 def initialize_strategy
     if $strategy_name == "simple" then
         $strategy = Strategy.new($program, $status_preferred, $status_alternate)
