@@ -570,10 +570,14 @@ def main
     $mainlog_fn = "#{$search_path}#{$search_tag}.mainlog"
     $walltime_fn = "#{$search_path}#{$search_tag}.walltime"
 
-    # files containing lists of AppConfig objects
-    $workqueue_fn = "#{$search_path}#{$search_tag}.workqueue"     # waiting to be tested
-    $inproc_fn = "#{$search_path}#{$search_tag}.inproc"           # currently running
-    $tested_fn = "#{$search_path}#{$search_tag}.tested"           # finished (passed, failed, or aborted)
+    # main data structures (files just contain lists of AppConfig objects)
+    $workqueue = []                                               # ordered list of AppConfigs
+    $workqueue_lookup = Hash.new                                  # map: cuid => AppConfig (for quicker lookups and membership testing)
+    $workqueue_fn = "#{$search_path}#{$search_tag}.workqueue"     #   waiting to be tested
+    $inproc = Hash.new                                            # map: cuid => AppConfig
+    $inproc_fn = "#{$search_path}#{$search_tag}.inproc"           #   currently running
+    $tested = Hash.new                                            # map: cuid => AppConfig
+    $tested_fn = "#{$search_path}#{$search_tag}.tested"           #   finished (passed, failed, or aborted)
 
     # configuration file directories
     $perf_path     = "#{$search_path}baseline/"    # baseline performance test
@@ -596,9 +600,9 @@ def main
     # read search options
     read_craft_driver
     parse_command_line
-    if $main_mode == "resume" then
+    if $main_mode == "resume" or $main_mode == "status" then
         if not File.exists?($settings_fn) then
-            puts "Cannot resume; no search detected in current folder"
+            puts "No search detected in current folder"
             exit
         end
         load_settings
@@ -610,6 +614,7 @@ def main
     $final_config_fn = "#{$search_path}craft_final.#{$variable_mode ? "json" : "cfg"}"
 
     if $main_mode == "status" then
+        load_data_structures
         print_status
         exit
     end
@@ -657,7 +662,7 @@ def main
         end
         initialize_program
         read_profiler_data
-        load_cached_configs
+        load_data_structures
         initialize_strategy
         move_all_inproc_to_workqueue
         if $resume_lower then

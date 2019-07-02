@@ -1,10 +1,13 @@
 # {{{ file manipulation
 
-
-# FOR THE SYSTEM TO WORK, ALL OF THESE I/O ROUTINES *MUST* BE ATOMIC!
-# None should be able to interrupt or starve another. This means that
-# we need to lock the file in each function, and no function should
-# call another.
+# Originally, CRAFT used a multiple-worker thread-pool model, with multiple Ruby
+# processes running tests, using files for coordination and synchronization.
+# This led to significant scaling problems. Thus, CRAFT has been moved to a
+# single-supervisor-process model where there is only ever a single Ruby process
+# running these routines. Thus, these routines are now mostly wrappers around
+# the in-memory data structures. Changes are flushed out to disk for archival
+# and resuming, but there is no longer a need for significant synchronization
+# and we do not have to read the files at the beginning of every operation.
 
 
 def save_settings
@@ -103,220 +106,135 @@ def load_settings
 end
 
 
-def read_cfg_array(io)
-    configs = Array.new
-    begin
-        line = io.readline.chomp
-        if line == "BINARY" then
-            configs = Marshal.load(io)
+def read_cfg_array(fn)
+    return File.open(fn, File::RDONLY|File::CREAT) do |f|
+        configs = Array.new
+        begin
+            line = f.readline.chomp
+            if line == "BINARY" then
+                configs = Marshal.load(f)
+            else
+                f.rewind
+                YAML.load_stream(f).each do |doc|
+                    configs << doc
+                end
+            end
+        rescue
+        end
+        configs
+    end
+end
+
+def write_cfg_array(configs, fn)
+    File.open(fn, File::RDWR|File::CREAT) do |f|
+        if $binary_serialization then
+            f.puts "BINARY"
+            Marshal.dump(configs, f)
         else
-            io.rewind
-            YAML.load_stream(io).each do |doc|
-                configs << doc
+            configs.each do |doc|
+                YAML.dump(doc, f)
             end
         end
-    rescue
-    end
-    return configs
-end
-
-def write_cfg_array(configs, io)
-    if $binary_serialization then
-        io.puts "BINARY"
-        Marshal.dump(configs, io)
-    else
-        configs.each do |doc|
-            YAML.dump(doc, io)
-        end
-    end
-end
-
-def add_to_workqueue_bulk(configs)
-    # don't add a config if we've seen another one with an identical CUID
-    load_cached_configs
-    seen_cuids = Set.new
-    get_inproc_configs.each { |c| seen_cuids << c.cuid }
-    get_tested_configs.each { |c| seen_cuids << c.cuid }
-    $cached_configs.each    { |c| seen_cuids << c.cuid }
-
-    num_added = 0
-    File.open("#{$workqueue_fn}", File::RDWR|File::CREAT) do |f|
-        f.flock File::LOCK_EX
-        queue = read_cfg_array(f)
-        queue.each          { |c| seen_cuids << c.cuid }
-        configs.each do |cfg|
-            if not seen_cuids.include?(cfg.cuid) then
-                calculate_pct_stats(cfg)
-                queue << cfg
-                seen_cuids << cfg.cuid
-                puts "Added config #{cfg.shortlabel} to workqueue."
-                num_added += 1
-            end
-        end
-        if not $disable_queue_sort then
-            queue.sort!
-        end
-        f.rewind
-        write_cfg_array(queue, f)
         f.truncate(f.pos)
     end
+end
+
+def add_to_mainlog(reg)
+    File.open($mainlog_fn, File::RDWR|File::APPEND|File::CREAT) { |f| f.puts(reg.to_s) }
+end
+
+
+def load_data_structures
+    File.open("#{$workqueue_fn}", File::RDONLY|File::CREAT) do |f|
+        read_cfg_array(f).each do |cfg|
+            $workqueue << cfg
+            $workqueue_lookup[cfg.cuid] = cfg
+        end
+    end
+    File.open("#{$inproc_fn}", File::RDONLY|File::CREAT) do |f|
+        read_cfg_array(f).each { |cfg| $inproc[cfg.cuid] = cfg }
+    end
+    File.open("#{$tested_fn}", File::RDONLY|File::CREAT) do |f|
+        read_cfg_array(f).each { |cfg| $tested[cfg.cuid] = cfg }
+    end
+end
+
+
+def add_to_workqueue_bulk(configs)
+    num_added = 0
+    configs.each do |cfg|
+        # don't add a config if we've seen another one with an identical CUID
+        if not $workqueue_lookup.has_key?(cfg.cuid) and
+           not $inproc.has_key?(cfg.cuid) and
+           not $tested.has_key?(cfg.cuid) then
+            calculate_pct_stats(cfg)
+            $workqueue << cfg
+            $workqueue_lookup[cfg.cuid] = cfg
+            puts "Added config #{cfg.shortlabel} to workqueue."
+            num_added += 1
+        end
+    end
+    write_cfg_array($workqueue, $workqueue_fn)
     return num_added
 end
 
 def add_to_workqueue(cfg)
     # don't add a config if we've seen another one with an identical CUID
-    load_cached_configs
-    seen_cuids = Set.new
-    get_inproc_configs.each { |c| seen_cuids << c.cuid }
-    get_tested_configs.each { |c| seen_cuids << c.cuid }
-    $cached_configs.each    { |c| seen_cuids << c.cuid }
-
-    File.open("#{$workqueue_fn}", File::RDWR|File::CREAT) do |f|
-        f.flock File::LOCK_EX
-        queue = read_cfg_array(f)
-        queue.each          { |c| seen_cuids << c.cuid }
-        if not seen_cuids.include?(cfg.cuid)
-            calculate_pct_stats(cfg)
-            queue << cfg
-            puts "Added config #{cfg.shortlabel} to workqueue."
-            if not $disable_queue_sort then
-                queue.sort!
-            end
-            f.rewind
-            write_cfg_array(queue, f)
-            f.truncate(f.pos)
-        end
+    if not $workqueue_lookup.has_key?(cfg.cuid) and
+        not $inproc.has_key?(cfg.cuid) and
+        not $tested.has_key?(cfg.cuid) then
+        calculate_pct_stats(cfg)
+        $workqueue << cfg
+        $workqueue_lookup[cfg.cuid] = cfg
+        puts "Added config #{cfg.shortlabel} to workqueue."
     end
+    write_cfg_array($workqueue, $workqueue_fn)
 end
 def get_next_workqueue_item
-    next_cfg = nil
-    f = File.new($workqueue_fn, "r+")
-    f.flock File::LOCK_EX
-    queue = read_cfg_array(f)
-    next_cfg = queue.shift
-    f.pos = 0
-    write_cfg_array(queue, f)
-    f.truncate(f.pos)
-    f.close
+    next_cfg = $workqueue.shift
+    $workqueue_lookup.delete(next_cfg.cuid)
+    write_cfg_array($workqueue, $workqueue_fn)
     return next_cfg
 end
 def get_workqueue_configs
-    f = File.new("#{$workqueue_fn}", "r")
-    f.flock File::LOCK_SH
-    queue = read_cfg_array(f)
-    f.close
-    return queue
+    return $workqueue
 end
 def get_workqueue_length
-    len = 0
-    f = File.new($workqueue_fn, "r")
-    f.flock File::LOCK_SH
-    queue = read_cfg_array(f)
-    len = queue.size
-    f.close
-    return len
+    return $workqueue.size
 end
 
 
 def add_to_inproc(cfg)
-    f = File.new($inproc_fn, "r+")
-    f.flock File::LOCK_EX
-    inproc = read_cfg_array(f)
-    inproc << cfg
-    f.pos = 0
-    write_cfg_array(inproc, f)
-    f.truncate(f.pos)
-    f.close
+    $inproc[cfg.cuid] = cfg
+    write_cfg_array($inproc.values(), $inproc_fn)
 end
 def remove_from_inproc(cfg)
-    f = File.new($inproc_fn, "r+")
-    f.flock File::LOCK_EX
-    inproc = read_cfg_array(f).select { |c| c.cuid != cfg.cuid }
-    f.pos = 0
-    write_cfg_array(inproc, f)
-    f.truncate(f.pos)
-    f.close
+    $inproc.delete(cfg.cuid)
+    write_cfg_array($inproc.values(), $inproc_fn)
 end
 def get_inproc_configs
-    f = File.new("#{$inproc_fn}", "r")
-    f.flock File::LOCK_SH
-    inproc = read_cfg_array(f)
-    f.close
-    return inproc
+    return $inproc.values()
 end
 def get_inproc_length
-    len = 0
-    f = File.new($inproc_fn, "r")
-    f.flock File::LOCK_SH
-    inproc = read_cfg_array(f)
-    len = inproc.size
-    f.close
-    return len
+    return $inproc.size
 end
 def move_all_inproc_to_workqueue
-    f = File.new($inproc_fn, "r+")
-    f.flock File::LOCK_EX
-    configs = read_cfg_array(f)
-    add_to_workqueue_bulk(configs)
-    f.truncate(0)
-    f.close
+    cfgs = $inproc.values()
+    cfgs.each { |cfg| $inproc.delete(cfg.cuid) }
+    write_cfg_array($inproc.values(), $inproc_fn)
+    add_to_workqueue_bulk(cfgs)
 end
 
 
 def add_tested_config(cfg)
-    f = File.new($tested_fn, "r+")
-    f.flock File::LOCK_EX
-    tested = read_cfg_array(f)
-    tested << cfg
-    f.pos = 0
-    write_cfg_array(tested, f)
-    f.truncate(f.pos)
-    f.close
+    $tested[cfg.cuid] = cfg
+    write_cfg_array($tested.values(), $tested_fn)
 end
 def get_tested_configs
-    f = File.new("#{$tested_fn}", "r")
-    f.flock File::LOCK_SH
-    tested = read_cfg_array(f)
-    f.close
-    return tested
+    return $tested.values()
 end
 def get_tested_config_count
-    f = File.new("#{$tested_fn}", "r")
-    f.flock File::LOCK_SH
-    len = read_cfg_array(f).size
-    f.close
-    return len
+    return $tested.size
 end
-
-
-def load_cached_configs
-    if ($cached_configs.size == 0) and (not $cached_fn == "") and (File.exists?($cached_fn)) then
-        f = File.new("#{$cached_fn}", "r")
-        f.flock File::LOCK_SH
-        ydocs = YAML.load_stream(f)
-        f.close
-        if not ydocs.nil? then
-            ydocs.documents.each do |doc|
-                $cached_configs << doc
-            end
-        end
-    end
-end
-
-
-def add_to_mainlog(reg)
-    f = File.new($mainlog_fn, "a")
-    f.flock File::LOCK_EX
-    f.puts(reg.to_s)
-    f.close
-end
-def load_mainlog
-    f = File.new($mainlog_fn, "r")
-    f.flock File::LOCK_SH
-    lines = f.readlines
-    f.close
-    return lines
-end
-
 
 # }}}

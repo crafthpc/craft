@@ -37,6 +37,11 @@ def initialize_search
         end
     end
 
+    # save project settings to file (possibly incomplete, but we at least want
+    # the basics to be there for any concurrent "craft status" calls while the
+    # next few possibly time-consuming things happen)
+    save_settings
+
     # generate initial configuration by calling fpconf
     # and initialize global data structures
     print "Generating initial configuration ... "
@@ -111,11 +116,10 @@ def initialize_search
     initialize_strategy
     puts "Done.  [#{$total_candidates} candidates]"
 
-    # save project settings to file
+    # save project settings to file (complete now)
     save_settings
 
     # initialize work queue
-    load_cached_configs
     configs = $strategy.build_initial_configs
     add_to_workqueue_bulk(configs)
     $max_queue_length = get_workqueue_length
@@ -144,7 +148,7 @@ def resume_lower_search
         $strategy.reload_bounds_from_results(old_configs)
     end
     old_configs.each do |cfg|
-        if is_single_base(cfg, old_base_type) and 
+        if is_single_base(cfg, old_base_type) and
                 (cfg.attrs["result"] != $RESULT_PASS or $strategy_name == "rprec") then
             $strategy.split_config(cfg).each do |c|
                 if not already_added[c.cuid] then
@@ -187,7 +191,6 @@ def run_main_search_loop
             puts msg
             add_to_mainlog(msg)
 
-
             # update data structures and invoke strategy to update search
             add_tested_config(cfg)
             remove_from_inproc(cfg)
@@ -201,31 +204,10 @@ def run_main_search_loop
         while get_workqueue_length > 0 and ($max_inproc < 0 or
                                             get_inproc_length < $max_inproc) do
             cfg = get_next_workqueue_item
-
-            # check list of already-tested configs
-            cached = false
-            $cached_configs.each do |c|
-                if c.cuid == cfg.cuid then
-
-                    # if we've already run this test, no need to run it again
-                    result = c.attrs["result"]
-                    puts "Using cached result for config #{cfg.shortlabel}: #{result}"
-                    cfg.attrs["cached"] = "yes"
-                    cfg.attrs["result"]  = c.attrs["result"]
-                    cfg.attrs["error"]   = c.attrs["error"]
-                    cfg.attrs["runtime"] = c.attrs["runtime"]
-                    cached = true
-                    add_tested_config(cfg)
-                end
-            end
-
-            # run the test and update queue
-            if not cached then
-                puts "Testing config #{cfg.shortlabel}."
-                start_config(cfg)
-                add_to_inproc(cfg)
-                wait_for_config(cfg) if $max_inproc == 1
-            end
+            puts "Testing config #{cfg.shortlabel}."
+            start_config(cfg)
+            add_to_inproc(cfg)
+            wait_for_config(cfg) if $max_inproc == 1
         end
 
         sleep wait_time unless $max_inproc == 1
@@ -253,8 +235,9 @@ def finalize_search
     puts "Done."
 
     # try the final config (and keep results)
-    puts "Testing final configuration ... "
+    print "Testing final configuration ... "
     run_config($final_config)
+    puts $final_config.attrs["result"]
     FileUtils.cp_r("#{$run_path}#{$final_config.filename(false)}", $final_path[0...-1])
 
     # start generating final report
