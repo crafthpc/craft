@@ -44,88 +44,60 @@ def load_settings
     f.flock File::LOCK_SH
     parser = /^\s*(\w+)\s*=\s*(.*)\s*$/
     temp = f.gets
-    if temp =~ parser then
-        while temp != nil and temp =~ parser do
-            key = $1
-            value = $2
-            case key
-            when "start_time"
-                $start_time = Time.at(value.to_i)
-            when "binary_name"
-                $binary_name = value
-            when "binary_path"
-                $binary_path = value
-            when "strategy_name"
-                $strategy_name = value
-            when "status_preferred"
-                $status_preferred = value
-            when "status_alternate"
-                $status_alternate = value
-            when "baseline_runtime"
-                $baseline_runtime = value.to_f
-            when "lang"
-                $fortran_mode = (value == "fortran")
-            when "variable_mode"
-                $variable_mode = (value == "yes")
-            when "base_type"
-                $base_type = value
-            when "skip_nonexecuted"
-                $skip_nonexecuted = (value == true.to_s)
-            when "cached_fn"
-                $cached_fn = value
-            when "initial_cfg_fn"
-                $initial_cfg_fn = value
-            when "addt_cfg_fns"
-                $addt_cfg_fns = value.split(',')
-            when "prof_log_fn"
-                $prof_log_fn = value
-            when "total_candidates"
-                $total_candidates = value.to_i
-            when "rprec_split_threshold"
-                $rprec_split_threshold = value.to_i
-            when "rprec_runtime_pct_threshold"
-                $rprec_runtime_pct_threshold = value.to_f
-            when "rprec_skip_app_level"
-                $rprec_skip_app_level = (value == true.to_s)
-            when "disable_queue_sort"
-                $disable_queue_sort = (value == true.to_s)
-            when "run_final_config"
-                $run_final_config = (value == true.to_s)
-            when "mixed_use_rprec"
-                $mixed_use_rprec = (value == true.to_s)
-            when "num_trials"
-                $num_trials = value.to_i
-            when "max_inproc"
-                $max_inproc = value.to_i
-            end
-            temp = f.gets
+    while temp != nil and temp =~ parser do
+        key = $1
+        value = $2
+        case key
+        when "start_time"
+            $start_time = Time.at(value.to_i)
+        when "binary_name"
+            $binary_name = value
+        when "binary_path"
+            $binary_path = value
+        when "strategy_name"
+            $strategy_name = value
+        when "status_preferred"
+            $status_preferred = value
+        when "status_alternate"
+            $status_alternate = value
+        when "baseline_runtime"
+            $baseline_runtime = value.to_f
+        when "lang"
+            $fortran_mode = (value == "fortran")
+        when "variable_mode"
+            $variable_mode = (value == "yes")
+        when "base_type"
+            $base_type = value
+        when "skip_nonexecuted"
+            $skip_nonexecuted = (value == true.to_s)
+        when "cached_fn"
+            $cached_fn = value
+        when "initial_cfg_fn"
+            $initial_cfg_fn = value
+        when "addt_cfg_fns"
+            $addt_cfg_fns = value.split(',')
+        when "prof_log_fn"
+            $prof_log_fn = value
+        when "total_candidates"
+            $total_candidates = value.to_i
+        when "rprec_split_threshold"
+            $rprec_split_threshold = value.to_i
+        when "rprec_runtime_pct_threshold"
+            $rprec_runtime_pct_threshold = value.to_f
+        when "rprec_skip_app_level"
+            $rprec_skip_app_level = (value == true.to_s)
+        when "disable_queue_sort"
+            $disable_queue_sort = (value == true.to_s)
+        when "run_final_config"
+            $run_final_config = (value == true.to_s)
+        when "mixed_use_rprec"
+            $mixed_use_rprec = (value == true.to_s)
+        when "num_trials"
+            $num_trials = value.to_i
+        when "max_inproc"
+            $max_inproc = value.to_i
         end
-    else
-        # old style settings file; included for backwards compatibility
-        $start_time = Time.at(temp.to_i)
-        $binary_name = f.gets.chomp
-        $binary_path = f.gets.chomp
-        $strategy_name = f.gets.chomp
-        $status_preferred = f.gets.chomp
-        $status_alternate = f.gets.chomp
-        $baseline_runtime = f.gets.chomp.to_i
-        lang = f.gets.chomp
-        if lang == "fortran" then
-            $fortran_mode = true
-        else
-            $fortran_mode = false
-        end
-        $base_type = f.gets.chomp
-        $skip_nonexecuted = (f.gets.chomp == true.to_s)
-        $initial_cfg_fn = f.gets.chomp
-        line = f.gets; $prof_log_fn           = (line != nil ? line.chomp      : "")
-        line = f.gets; $total_candidates      = (line != nil ? line.chomp.to_i : 0)
-        line = f.gets; $rprec_split_threshold = (line != nil ? line.chomp.to_i : 0)
-        line = f.gets; $rprec_runtime_pct_threshold = (line != nil ? line.chomp.to_i : 0)
-        line = f.gets; $rprec_skip_app_level  = (line != nil ? line.chomp == true.to_s : false)
-        line = f.gets; $disable_queue_sort    = (line != nil ? line.chomp == true.to_s : false)
-        line = f.gets; $run_final_config      = (line != nil ? line.chomp == true.to_s : false)
-        line = f.gets; $mixed_use_rprec       = (line != nil ? line.chomp == true.to_s : false)
+        temp = f.gets
     end
     f.close
 end
