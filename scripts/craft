@@ -564,17 +564,6 @@ def main
     $num_trials = 1                         # default number of trials
     $keep_all_runs = false                  # don't keep temporary files
 
-    # check command-line options
-    if ARGV.size == 0 or ARGV[0] == "help" or ARGV.include?("-h") then
-        $main_mode = "help"
-        print_usage
-        exit
-    end
-
-    # read search/command-line options
-    read_craft_driver
-    parse_command_line
-
     # plain text info files
     $settings_fn = "#{$search_path}#{$search_tag}.settings"
     $program_fn = "#{$search_path}#{$search_tag}.program"
@@ -586,10 +575,6 @@ def main
     $inproc_fn = "#{$search_path}#{$search_tag}.inproc"           # currently running
     $tested_fn = "#{$search_path}#{$search_tag}.tested"           # finished (passed, failed, or aborted)
 
-    # important single configuration files
-    $orig_config_fn  = "#{$search_path}craft_orig.#{ $variable_mode ? "json" : "cfg"}"
-    $final_config_fn = "#{$search_path}craft_final.#{$variable_mode ? "json" : "cfg"}"
-
     # configuration file directories
     $perf_path     = "#{$search_path}baseline/"    # baseline performance test
     $prof_path     = "#{$search_path}profile/"     # profiler run
@@ -600,6 +585,29 @@ def main
     $failed_path   = "#{$search_path}failed/"      # all failed configs (cfg files only)
     $aborted_path  = "#{$search_path}aborted/"     # all aborted configs (cfg files only)
     $snapshot_path = "#{$search_path}snapshots/"   # status printouts
+
+    # check command-line options
+    if ARGV.size == 0 or ARGV[0] == "help" or ARGV.include?("-h") then
+        $main_mode = "help"
+        print_usage
+        exit
+    end
+
+    # read search options
+    read_craft_driver
+    parse_command_line
+    if $main_mode == "resume" then
+        if not File.exists?($settings_fn) then
+            puts "Cannot resume; no search detected in current folder"
+            exit
+        end
+        load_settings
+    end
+
+    # important single configuration files (must be initialized after loading
+    # settings to ascertain correct extension)
+    $orig_config_fn  = "#{$search_path}craft_orig.#{ $variable_mode ? "json" : "cfg"}"
+    $final_config_fn = "#{$search_path}craft_final.#{$variable_mode ? "json" : "cfg"}"
 
     if $main_mode == "status" then
         print_status
@@ -637,10 +645,6 @@ def main
         initialize_search
     else
         # we're resuming an analysis
-        if not File.exists?($settings_fn) then
-            puts "Cannot resume; no search detected in current folder"
-            exit
-        end
         puts "Resuming in-process search ..."
         if File.exist?($final_path) then
             # clear out any final configuration testing
@@ -651,7 +655,6 @@ def main
             $start_time = Time.now
             FileUtils.rm_rf($walltime_fn)
         end
-        load_settings
         initialize_program
         read_profiler_data
         load_cached_configs

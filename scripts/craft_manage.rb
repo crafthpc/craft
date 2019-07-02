@@ -168,7 +168,7 @@ def run_main_search_loop
         # check for any completed configurations
         get_inproc_configs.select { |cfg| not is_config_running?(cfg) }.each do |cfg|
 
-            get_run_results(cfg)
+            get_config_results(cfg)
 
             # print output
             msg = "Finished testing config #{cfg.shortlabel}: #{cfg.attrs["result"]}"
@@ -222,12 +222,13 @@ def run_main_search_loop
             # run the test and update queue
             if not cached then
                 puts "Testing config #{cfg.shortlabel}."
-                run_config(cfg)
+                start_config(cfg)
                 add_to_inproc(cfg)
+                wait_for_config(cfg) if $max_inproc == 1
             end
         end
 
-        sleep wait_time
+        sleep wait_time unless $max_inproc == 1
         wait_time *= 2
 
     end
@@ -253,7 +254,7 @@ def finalize_search
 
     # try the final config (and keep results)
     puts "Testing final configuration ... "
-    run_config($final_config, true)
+    run_config($final_config)
     FileUtils.cp_r("#{$run_path}#{$final_config.filename(false)}", $final_path[0...-1])
 
     # start generating final report

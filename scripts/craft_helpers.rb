@@ -403,8 +403,7 @@ end
 
 def run_baseline_performance
     perf_cfg = AppConfig.new($PERFCFG_CUID, "baseline", $STATUS_NONE)
-    run_config(perf_cfg, true)
-    get_run_results(perf_cfg)
+    run_config(perf_cfg)
     FileUtils.cp_r("#{$run_path}#{perf_cfg.filename(false)}", $perf_path[0...-1])
     $baseline_error = perf_cfg.attrs["error"]
     $baseline_runtime = perf_cfg.attrs["runtime"]
@@ -519,7 +518,14 @@ def calculate_pct_stats (cfg)
     cfg.attrs["pct_cinst"] = pct_cinst.to_s
 end
 
-def run_config (cfg, wait=false)
+def run_config (cfg)
+    # synchronous wrapper around the following calls
+    start_config(cfg)
+    wait_for_config(cfg)
+    get_config_results(cfg)
+end
+
+def start_config (cfg)
 
     # create temporary folder
     cfg_path = "#{$run_path}#{cfg.filename(false)}/"
@@ -557,12 +563,17 @@ def run_config (cfg, wait=false)
     File.chmod(0700, run_fn)
     pid = fork { exec "#{run_fn} &>#{cfg_path}#{$craft_output}" }
     cfg.attrs["pid"] = pid
-
-    # wait for test to finish if desired
-    Process.wait(pid) if wait
 end
 
-def get_run_results (cfg)
+def is_config_running? (cfg)
+    return `ps -o state= -p #{cfg.attrs["pid"]}`.chomp =~ /R|D|S/
+end
+
+def wait_for_config (cfg)
+    Process.wait(cfg.attrs["pid"])
+end
+
+def get_config_results (cfg)
 
     # extract results
     result = nil
@@ -597,10 +608,6 @@ def get_run_results (cfg)
     end
     FileUtils.rm_rf("#{$run_path}#{cfg.filename(false)}") unless $keep_all_runs or
         (cfg.cuid == $PERFCFG_CUID or cfg.cuid == $FINALCFG_CUID)
-end
-
-def is_config_running?(cfg)
-    return `ps -o state= -p #{cfg.attrs["pid"]}`.chomp =~ /R|D|S/
 end
 
 def min(a, b)
