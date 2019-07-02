@@ -163,13 +163,7 @@ def parse_command_line
                 end
             end
         elsif $main_mode == "resume" then
-            if opt == "-j" then
-                # parallel: "-j 4" variant
-                $max_inproc = ARGV.shift.to_i
-            elsif opt =~ /^-j/ then
-                # parallel: "-j4" variant
-                $max_inproc = opt[2,opt.length-2].to_i
-            elsif opt == "-l" then
+            if opt == "-l" then
                 $resume_lower = true
             else
                 puts "Invalid resume option: #{opt}"
@@ -675,7 +669,6 @@ def print_usage
     puts "   --rprec-skip_app_level                 don't test at the whole-application level"
     puts " "
     puts "Resumption options:"
-    puts "   -j <np>        spawn up to <np> simultaneous jobs/configurations (-1 to remove limit)"
     puts "   -l             resume search at lower level (e.g., INSN instead of BBLK)"
     puts " "
     puts "Using Ruby #{RUBY_VERSION} #{RUBY_RELEASE_DATE}"
