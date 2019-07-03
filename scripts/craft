@@ -141,6 +141,7 @@ def main
     $num_trials = 1                         # default number of trials
     $keep_all_runs = false                  # don't keep temporary files
     $group_by_label = false                 # group by labels (variable mode only)
+    $job_mode = "exec"                      # how to submit jobs ("exec", "slurm")
 
     # plain text info files
     $settings_fn = "#{$search_path}#{$search_tag}.settings"

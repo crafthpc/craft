@@ -145,6 +145,9 @@ def parse_command_line
             elsif opt == '-g' then
                 # group by label
                 $group_by_label = true
+            elsif opt == '-J' then
+                # job submission system
+                $job_mode = ARGV.shift
             elsif !parsed_binary then
                 if not File.exists?(opt) then
                     puts "Cannot find target binary: #{opt}"
@@ -561,6 +564,8 @@ def start_config (cfg)
     run_fn = "#{cfg_path}#{$craft_run}"
     script = File.new(run_fn, "w")
     script.puts "#!/usr/bin/env bash"
+    script.puts "#SBATCH -J #{cfg.shortlabel}"
+    script.puts "#SBATCH -o #{cfg_path}#{$craft_output}" if $job_mode == "slurm"
     script.puts "cd #{cfg_path}"
     if $variable_mode then
         script.puts "#{$search_path}#{$craft_builder} #{cfg_file} | tee .build_status"
@@ -578,25 +583,58 @@ def start_config (cfg)
     # finalize and launch the run script
     script.close
     File.chmod(0700, run_fn)
-    pid = fork { exec "#{run_fn} &>#{cfg_path}#{$craft_output}" }
+    case $job_mode
+    when "exec"
+        pid = fork { exec "#{run_fn} &>#{cfg_path}#{$craft_output}" }
+    when "slurm"
+        output = `sbatch #{run_fn}`
+        if output =~ /Submitted batch job (\d+)/ then
+            pid = $1.to_i
+        else
+            puts "Error submitting batch job: #{output}"
+        end
+    end
     cfg.attrs["pid"] = pid
 end
 
 def is_config_running? (cfg)
-    return `ps -o state= -p #{cfg.attrs["pid"]}`.chomp =~ /R|D|S/
+    case $job_mode
+    when "exec"
+        return `ps -o state= -p #{cfg.attrs["pid"]}`.chomp =~ /R|D|S/
+    when "slurm"
+        status=`sacct -nDX -o state -j 246058`
+        return status =~ /PENDING|RUNNING|REQUEUED|SUSPENDED/
+    end
 end
 
 def wait_for_config (cfg)
-    Process.wait(cfg.attrs["pid"])
+    case $job_mode
+    when "exec"
+        Process.wait(cfg.attrs["pid"])
+    else
+        # default: just poll and wait
+        wait_time = 1
+        while is_config_running?(cfg)
+            sleep wait_time
+            wait_time *= 2
+            wait_time = min(wait_time, 60)  # check at least once per minute
+        end
+    end
 end
 
 def get_config_results (cfg)
+
+    # output filename
+    outfn = "#{$run_path}#{cfg.filename(false)}/#{$craft_output}"
+
+    # if we're using SLURM, give the filesystem time to catch up
+    if $job_mode == "slurm" then sleep 2 while File.size?(outfn).nil? end
 
     # extract results
     result = nil
     error = nil
     runtime = nil
-    File.foreach("#{$run_path}#{cfg.filename(false)}/#{$craft_output}") do |line|
+    File.foreach(outfn) do |line|
         if line =~ /status:\s*pass/i and result.nil? then
             result = $RESULT_PASS
         elsif line =~ /status:\s*fail/i and (result.nil? or
@@ -661,6 +699,8 @@ def print_usage
     puts "   -A <file>      use <file> as additional advisory configuration (e.g., ADaPT results)"
     puts "   -c <file>      use <file> as initial base configuration"
     puts "   -j <np>        spawn up to <np> simultaneous jobs/configurations (-1 to remove limit)"
+    puts "   -J <name>      use <name> job submission system (default is \"exec\")"
+    puts "                    valid systems: \"exec\", \"slurm\""
     puts "   -k             keep all temporary run files"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
     puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"combinational\", \"compositional\", \"rprec\""
