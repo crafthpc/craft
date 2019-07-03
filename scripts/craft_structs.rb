@@ -285,6 +285,7 @@ class PPoint
                     a["scope"] = @attrs["scope"] if @attrs.has_key?("scope")
                     a["source_info"] = @attrs["source_info"] if @attrs.has_key?("source_info")
                     a["to_type"] = "float"
+                    a["labels"] = @attrs["labels"] if @attrs.has_key?("labels")
                     actions << a
                 end
             end
@@ -419,6 +420,7 @@ class AppConfig
         else
             @attrs["cinst"] = 0
         end
+        @attrs["labels"] = pt.attrs["labels"] if pt.attrs.has_key?("labels")
     end
 
 end # }}}

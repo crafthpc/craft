@@ -38,6 +38,8 @@ def save_settings
     f.puts "mixed_use_rprec=#{$mixed_use_rprec.to_s}"
     f.puts "num_trials=#{$num_trials.to_s}"
     f.puts "max_inproc=#{$max_inproc.to_s}"
+    f.puts "keep_all_runs=#{$keep_all_runs ? "yes" : "no"}"
+    f.puts "group_by_label=#{$group_by_label ? "yes" : "no"}"
 
     f.close
 end
@@ -96,6 +98,10 @@ def load_settings
             $num_trials = value.to_i
         when "max_inproc"
             $max_inproc = value.to_i
+        when "keep_all_runs"
+            $keep_all_runs = (value == "yes")
+        when "group_by_label"
+            $group_by_label = (value == "yes")
         end
         temp = f.gets
     end

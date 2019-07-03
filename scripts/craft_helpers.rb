@@ -142,6 +142,9 @@ def parse_command_line
             elsif opt == '-t' then
                 # set trial count
                 $num_trials = ARGV.shift.to_i
+            elsif opt == '-g' then
+                # group by label
+                $group_by_label = true
             elsif !parsed_binary then
                 if not File.exists?(opt) then
                     puts "Cannot find target binary: #{opt}"
@@ -275,6 +278,7 @@ def read_json_config(cfg)
         var.attrs["source_info"] = v["source_info"] if v.has_key?("source_info")
         var.attrs["error"] = v["error"] if v.has_key?("error")
         var.attrs["ivcount"] = v["ivcount"] if v.has_key?("ivcount")
+        var.attrs["labels"] = v["labels"] if v.has_key?("labels")
         mod.children << var
     end
     functions.each_key do |f|
@@ -298,6 +302,7 @@ def read_json_config(cfg)
             var.attrs["source_info"] = v["source_info"] if v.has_key?("source_info")
             var.attrs["error"] = v["error"] if v.has_key?("error")
             var.attrs["ivcount"] = v["ivcount"] if v.has_key?("ivcount")
+            var.attrs["labels"] = v["labels"] if v.has_key?("labels")
             func.children << var
         end
     end
@@ -476,6 +481,36 @@ def update_cinst (pt)
     end
 end
 
+def group_by_label (configs)
+    grouped_cfgs = []
+    groups = Hash.new
+    configs.each do |cfg|
+        if not cfg.attrs.has_key?("labels") then
+            grouped_cfgs << cfg
+            next
+        end
+        cfg.attrs["labels"].each do |lbl|
+            if groups.has_key?(lbl) then
+                # add to existing group config
+                grp = groups[lbl]
+                cfg.exceptions.keys.each do |x|
+                    grp.exceptions[x] = @preferred
+                end
+                if grp.attrs.has_key?("cinst") and cfg.attrs.has_key?("cinst") then
+                    grp.attrs["cinst"] += cfg.attrs["cinst"]
+                end
+            else
+                # new group config
+                cfg.cuid = lbl
+                cfg.label = lbl
+                groups[lbl] = cfg
+                grouped_cfgs << cfg
+            end
+        end
+    end
+    return grouped_cfgs
+end
+
 
 # }}}
 # {{{ configuration testing
@@ -643,6 +678,9 @@ def print_usage
     puts "                    (-d and -D also adjust the fpconf options appropriately)"
     puts "   -f             stop splitting configs at the function level"
     puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
+    puts " "
+    puts "Variable-only options (no effect without \"-V\"):"
+    puts "   -g             group variables by labels"
     puts " "
     puts "Shortcuts:"
     puts "   -m             memory-based mixed-precision analysis"

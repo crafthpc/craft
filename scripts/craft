@@ -140,6 +140,7 @@ def main
     $disable_queue_sort = false             # disable workqueue sorting
     $num_trials = 1                         # default number of trials
     $keep_all_runs = false                  # don't keep temporary files
+    $group_by_label = false                 # group by labels (variable mode only)
 
     # plain text info files
     $settings_fn = "#{$search_path}#{$search_tag}.settings"

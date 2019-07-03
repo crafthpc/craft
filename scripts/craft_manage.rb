@@ -121,6 +121,7 @@ def initialize_search
 
     # initialize work queue
     configs = $strategy.build_initial_configs
+    configs = group_by_label(configs) if $group_by_label
     add_to_workqueue_bulk(configs)
     $max_queue_length = get_workqueue_length
 
