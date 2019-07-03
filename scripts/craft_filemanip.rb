@@ -35,7 +35,6 @@ def save_settings
     f.puts "rprec_runtime_pct_threshold=#{$rprec_runtime_pct_threshold}"
     f.puts "rprec_skip_app_level=#{$rprec_skip_app_level}"
     f.puts "disable_queue_sort=#{$disable_queue_sort.to_s}"
-    f.puts "run_final_config=#{$run_final_config.to_s}"
     f.puts "mixed_use_rprec=#{$mixed_use_rprec.to_s}"
     f.puts "num_trials=#{$num_trials.to_s}"
     f.puts "max_inproc=#{$max_inproc.to_s}"
@@ -91,8 +90,6 @@ def load_settings
             $rprec_skip_app_level = (value == true.to_s)
         when "disable_queue_sort"
             $disable_queue_sort = (value == true.to_s)
-        when "run_final_config"
-            $run_final_config = (value == true.to_s)
         when "mixed_use_rprec"
             $mixed_use_rprec = (value == true.to_s)
         when "num_trials"

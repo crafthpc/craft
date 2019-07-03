@@ -138,7 +138,6 @@ def main
     $cached_configs = Array.new             # cached results from a previous run
     $binary_serialization = true            # use binary serialization (faster) for queues instead of YAML
     $disable_queue_sort = false             # disable workqueue sorting
-    $run_final_config = true                # test the final config?
     $num_trials = 1                         # default number of trials
     $keep_all_runs = false                  # don't keep temporary files
 
