@@ -174,6 +174,7 @@ def add_to_workqueue_bulk(configs)
             num_added += 1
         end
     end
+    $workqueue.sort! unless $disable_queue_sort
     write_cfg_array($workqueue, $workqueue_fn)
     return num_added
 end
@@ -188,6 +189,7 @@ def add_to_workqueue(cfg)
         $workqueue_lookup[cfg.cuid] = cfg
         puts "Added config #{cfg.shortlabel} to workqueue."
     end
+    $workqueue.sort! unless $disable_queue_sort
     write_cfg_array($workqueue, $workqueue_fn)
 end
 def get_next_workqueue_item
