@@ -649,6 +649,7 @@ def print_usage
     puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"combinational\", \"compositional\", \"rprec\""
     puts "   -S             disable queue sorting (improves overall performance but may converge slower"
     puts "   -t <n>         run <n> trials and use max error / min runtime for evaluation"
+    puts "   -v             print version number and exit"
     puts "   -V             enable variable mode for variable-level tuning and performance testing"
     puts "                    (-V also sets the default strategy to \"combinational\" and disables queue sorting)"
     puts " "

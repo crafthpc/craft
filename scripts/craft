@@ -168,8 +168,14 @@ def main
     $aborted_path  = "#{$search_path}aborted/"     # all aborted configs (cfg files only)
     $snapshot_path = "#{$search_path}snapshots/"   # status printouts
 
-    # check command-line options
-    if ARGV.size == 0 or ARGV[0] == "help" or ARGV.include?("-h") then
+    # short-circuit: version text
+    if ARGV.include?("-v") or ARGV.include?("--version") then
+        puts "CRAFT #{$CRAFT_VERSION}"
+        exit
+    end
+
+    # short-circuit: help text
+    if ARGV.size == 0 or ARGV[0] == "help" or ARGV.include?("-h") or ARGV.include?("--help") then
         $main_mode = "help"
         print_usage
         exit
