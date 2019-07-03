@@ -557,6 +557,8 @@ end # }}}
 # {{{ CompositionalStrategy
 class CompositionalStrategy < Strategy
 
+    SEP="+"
+
     def build_initial_configs
         all_configs = []
         find_points(@program).each do |pt|
@@ -601,11 +603,11 @@ class CompositionalStrategy < Strategy
             good_configs[nk].each do |cfg|
 
                 # get list of combined replacements
-                ids   = (config.cuid.split("_")  | cfg.cuid.split("_")).sort
-                names = (config.label.split("_") | cfg.label.split("_")).sort
+                ids   = (config.cuid.split(SEP)  | cfg.cuid.split(SEP)).sort
+                names = (config.label.split(SEP) | cfg.label.split(SEP)).sort
 
                 # build new configuration
-                new_cfg = AppConfig.new(ids.join("_"), names.join("_"), @alternate)
+                new_cfg = AppConfig.new(ids.join(SEP), names.join(SEP), @alternate)
                 if config.attrs.has_key?("cinst") and cfg.attrs.has_key?("cinst") then
                     new_cfg.attrs["cinst"] = config.attrs["cinst"] + cfg.attrs["cinst"]
                 end
