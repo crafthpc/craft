@@ -213,6 +213,7 @@ def run_main_search_loop
 
         sleep wait_time unless $max_inproc == 1
         wait_time *= 2
+        wait_time = min(wait_time, 60)  # check at least once per minute
 
     end
 end # }}}
