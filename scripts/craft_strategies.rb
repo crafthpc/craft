@@ -339,6 +339,8 @@ class DeltaDebugStrategy < Strategy
 
             # partition current
 
+            puts "#{Time.now.to_s}     ddebug partition start"
+            start = Time.now
             lc_div = div
             divs = @lc.each_slice([1,(@lc.size.to_f/div.to_f).ceil.to_i].max).to_a
             set_cuids = Set.new
@@ -365,12 +367,15 @@ class DeltaDebugStrategy < Strategy
             end
             num_added = add_to_workqueue_bulk(new_cfgs)
             puts "ADDED #{num_added} configs to queue"
+            puts "#{Time.now.to_s}     ddebug partition stop #{(Time.now - start).round(4)}"
 
             # wait until all the previously-added configs are finished
             run_main_search_loop
 
             # look through the tested configurations and update LC if
             # appropriate
+            puts "#{Time.now.to_s}     ddebug update start"
+            start = Time.now
             changed = false
             configs = get_tested_configs
             configs.each do |cfg|
@@ -393,6 +398,7 @@ class DeltaDebugStrategy < Strategy
                     end
                 end
             end
+            puts "#{Time.now.to_s}     ddebug update stop #{(Time.now - start).round(4)}"
 
             # set up next iteration (if not done)
             if changed then
