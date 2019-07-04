@@ -11,17 +11,17 @@ def initialize_search
 
     # create run folder
     FileUtils.rm_rf($run_path)
-    Dir.mkdir($run_path)
+    Dir.mkdir($run_path) if not File.exist?($run_path)
 
     # create folders for saving configurations
     FileUtils.rm_rf($best_path)
-    Dir.mkdir($best_path)
+    Dir.mkdir($best_path) if not File.exist?($best_path)
     FileUtils.rm_rf($passed_path)
-    Dir.mkdir($passed_path)
+    Dir.mkdir($passed_path) if not File.exist?($passed_path)
     FileUtils.rm_rf($failed_path)
-    Dir.mkdir($failed_path)
+    Dir.mkdir($failed_path) if not File.exist?($failed_path)
     FileUtils.rm_rf($aborted_path)
-    Dir.mkdir($aborted_path)
+    Dir.mkdir($aborted_path) if not File.exist?($aborted_path)
 
     # print intro text
     if $strategy_name == 'rprec' then
