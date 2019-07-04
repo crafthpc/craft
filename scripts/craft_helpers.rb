@@ -602,8 +602,10 @@ def is_config_running? (cfg)
     when "exec"
         return `ps -o state= -p #{cfg.attrs["pid"]}`.chomp =~ /R|D|S/
     when "slurm"
-        status=`sacct -nDX -o state -j 246058`
-        return status =~ /PENDING|RUNNING|REQUEUED|SUSPENDED/
+        status = `sacct -nDX -o state -j #{cfg.attrs["pid"]}`
+        return false if status =~ /BOOT_FAIL|CANCELLED|COMPLETED|DEADLINE|FAILED/
+        return false if status =~ /NODE_FAIL|OUT_OF_MEMORY|PREEMPTED|TIMEOUT/
+        return true
     end
 end
 
