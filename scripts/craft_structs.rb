@@ -371,8 +371,8 @@ class AppConfig
     end
 
     def filename (include_ext = true)
-        # add sanitized cuid for uniqueness
-        fn = "#{$search_tag}_"
+        # sanitized cuid for uniqueness
+        fn = ""
         @cuid.each_char do |c|
             if c =~ /[0-9a-zA-Z_]/ then
                 fn << c.downcase
