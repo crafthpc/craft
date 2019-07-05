@@ -1,4 +1,3 @@
-# {{{ initialization
 
 
 def read_craft_driver
@@ -763,6 +762,7 @@ def get_status
     return overall_status
 end
 
+MAX_CONFIGS_TO_PRINT=20
 
 def print_status
 
@@ -830,7 +830,9 @@ def print_status
             else
                 status_text << "  Currently testing:                  STA\%   DYN\%   #{"%-33s"%progress}   STA\%   DYN\%"
             end
-            0.upto(inproc.size-1) do |i|
+            lines_to_print = max(min(inproc.size, MAX_CONFIGS_TO_PRINT),
+                                 min(queue.size,  MAX_CONFIGS_TO_PRINT))
+            lines_to_print.times do |i|
                 line = ""
                 if i < inproc.size then
                     icfg = inproc[i]
@@ -845,17 +847,15 @@ def print_status
                 if i < queue.size then
                     qcfg = queue[i]
                     if $variable_mode then
-                        line += "    - %-30s              "%[format_text(icfg.label,30)]
+                        line += "    - %-30s              "%[format_text(qcfg.label,30)]
                     else
                         line += "    - %-30s %5.1f  %5.1f "%[format_text(qcfg.label,30),qcfg.attrs["pct_icount"],qcfg.attrs["pct_cinst"]]
                     end
                 end
                 status_text << line if line.strip != ""
             end
-            if queue.size > inproc.size then
-                status_text << "%50s      ..."%" "
-            end
-            status_text << ""
+            status_text << "%-50s"%(lines_to_print < inproc.size ? "      ..." : "") +
+                                   (lines_to_print < queue.size  ? "      ..." : "")
             status_text << hbar
         end
     end
