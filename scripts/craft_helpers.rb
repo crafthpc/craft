@@ -655,6 +655,11 @@ def get_config_results (cfg)
 
     # clean up files
     fn = "#{$run_path}#{cfg.filename(false)}/#{cfg.filename}"
+    if $variable_mode then
+        $program.build_json_file(cfg, fn)
+    else
+        $program.build_config_file(cfg, fn)
+    end
     if cfg.attrs["result"] == $RESULT_PASS then
         FileUtils.cp(fn, $passed_path)
     elsif cfg.attrs["result"] == $RESULT_FAIL then
