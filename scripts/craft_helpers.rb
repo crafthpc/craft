@@ -394,8 +394,9 @@ def run_baseline_performance
     perf_cfg = AppConfig.new($PERFCFG_CUID, "baseline", $STATUS_NONE)
     run_config(perf_cfg)
     FileUtils.cp_r("#{$run_path}#{perf_cfg.filename(false)}", $perf_path[0...-1])
-    $baseline_error = perf_cfg.attrs["error"]
+    $baseline_error   = perf_cfg.attrs["error"]
     $baseline_runtime = perf_cfg.attrs["runtime"]
+    $baseline_casts   = perf_cfg.attrs["casts"]
     return perf_cfg.attrs["result"] == $RESULT_PASS
 end
 
@@ -635,6 +636,7 @@ def get_config_results (cfg)
     result = nil
     error = nil
     runtime = nil
+    casts = 0
     File.foreach(outfn) do |line|
         if line =~ /status:\s*pass/i and result.nil? then
             result = $RESULT_PASS
@@ -647,11 +649,15 @@ def get_config_results (cfg)
             error = error.nil? ? $1.to_f : max(error, $1.to_f)
         elsif line =~ /time:\s*(.+)/i then
             runtime = runtime.nil? ? $1.to_f : min(runtime, $1.to_f)
+        elsif line =~ /(float|double)\s*=>\s*(float|double)\s*:\s*(\d+)/ then
+            casts += $3.to_i
         end
     end
-    cfg.attrs["result"]  = result
-    cfg.attrs["error"]   = error.nil?   ? 0.0 : error
-    cfg.attrs["runtime"] = runtime.nil? ? 1.0 : runtime
+    cfg.attrs["result"]    = result
+    cfg.attrs["error"]     = error.nil?   ? 0.0 : error
+    cfg.attrs["runtime"]   = runtime.nil? ? 1.0 : runtime
+    cfg.attrs["casts"]     = casts
+    cfg.attrs["new_casts"] = casts - $baseline_casts if not $baseline_casts.nil?
 
     # clean up files
     fn = "#{$run_path}#{cfg.filename(false)}/#{cfg.filename}"

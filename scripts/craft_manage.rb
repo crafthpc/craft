@@ -85,7 +85,10 @@ def initialize_search
         puts "Aborting search."
         exit
     end
-    puts "Done.  [Base error: #{$baseline_error}  walltime: #{format_time($baseline_runtime.to_f)}]"
+    print "Done.  [Base error: #{$baseline_error}"
+    print "  walltime: #{format_time($baseline_runtime.to_f)}"
+    print "  casts: #{$baseline_casts}" if $variable_mode
+    puts  "]"
 
     # initial profiling run (if not in variable mode)
     # depends on $program being initialized
@@ -185,6 +188,7 @@ def run_main_search_loop
                     msg += "  Overhead: %.2fx"%[cfg.attrs["runtime"] / $baseline_runtime]
                 end
                 msg += "  Error: %g"%[cfg.attrs["error"]]
+                msg += "  New casts: #{cfg.attrs["new_casts"]}" if $variable_mode
             end
             queue_length = get_workqueue_length
             msg += "  [Queue length: #{"%3d" % (queue_length)}]  "
