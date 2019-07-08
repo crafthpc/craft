@@ -176,13 +176,13 @@ def run_main_search_loop
             get_config_results(cfg)
 
             # print output
-            msg = "Finished testing config #{cfg.shortlabel}: #{cfg.attrs["result"]}"
+            msg = "Finished #{cfg.shortlabel}: #{cfg.attrs["result"]}"
             if cfg.attrs["result"] != $RESULT_ERROR then
-                msg += "\n     Walltime: #{format_time(cfg.attrs["runtime"].to_f)}"
+                msg += "  Walltime: #{format_time(cfg.attrs["runtime"].to_f)}"
                 if $variable_mode then
-                    msg += "   Speedup: %.1fx"%[$baseline_runtime / cfg.attrs["runtime"]]
+                    msg += "  Speedup: %.2fx"%[$baseline_runtime / cfg.attrs["runtime"]]
                 else
-                    msg += "   Overhead: %.1fx"%[cfg.attrs["runtime"] / $baseline_runtime]
+                    msg += "  Overhead: %.2fx"%[cfg.attrs["runtime"] / $baseline_runtime]
                 end
                 msg += "  Error: %g"%[cfg.attrs["error"]]
             end
