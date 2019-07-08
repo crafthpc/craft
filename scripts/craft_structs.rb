@@ -77,7 +77,7 @@ class PPoint
         output_json(config, actions, nil)
         fout["actions"] = actions
         attrs = Hash.new
-        config.attrs.each { |k,v| attrs[k] = v.to_s }
+        config.attrs.each { |k,v| attrs[k] = v.to_s if v.to_s.size < 256 }
         fout["#{$search_tag}_attrs"] = attrs
         File.open(fn, "w") do |f|
             f.puts(JSON.pretty_generate(fout))
