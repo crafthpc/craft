@@ -407,7 +407,7 @@ class AppConfig
         end
         # if file size is too long, use hash instead
         if fn.size > 32 then
-            fn = "#{$search_tag}_#{fn.hash.abs.to_s(16)}"
+            fn = "#{fn.hash.abs.to_s(16)}"
         end
         fn << ($variable_mode ? ".json" : ".cfg") if include_ext
         return fn

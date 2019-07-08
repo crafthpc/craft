@@ -1119,8 +1119,6 @@ end
 def clean_everything
     toDelete = Array.new
     Dir.glob("#{$search_tag}.*") do |fn| toDelete << fn end
-    Dir.glob("#{$search_tag}_*.cfg") do |fn| toDelete << fn end
-    Dir.glob("#{$search_tag}_*.json") do |fn| toDelete << fn end
     Dir.glob("*.log") do |fn| toDelete << fn end
     Dir.glob($perf_path) do |fn| toDelete << fn end
     Dir.glob($prof_path) do |fn| toDelete << fn end
