@@ -28,7 +28,6 @@ def save_settings
     f.puts "skip_nonexecuted=#{$skip_nonexecuted}"
     f.puts "initial_cfg_fn=#{$initial_cfg_fn}"
     f.puts "addt_cfg_fns=#{$addt_cfg_fns.join(',')}"
-    f.puts "cached_fn=#{$cached_fn}"
     f.puts "prof_log_fn=#{$prof_log_fn}"
     f.puts "total_candidates=#{$total_candidates}"
     f.puts "rprec_split_threshold=#{$rprec_split_threshold}"
@@ -74,8 +73,6 @@ def load_settings
             $base_type = value
         when "skip_nonexecuted"
             $skip_nonexecuted = (value == true.to_s)
-        when "cached_fn"
-            $cached_fn = value
         when "initial_cfg_fn"
             $initial_cfg_fn = value
         when "addt_cfg_fns"

@@ -28,7 +28,6 @@ for t in $tests; do
     grep "Total candidates:" inc_$t-pct.txt
     grep "Total configs tested:" inc_$t-pct.txt
     grep "Total executed:" inc_$t-pct.txt
-    grep "Total cached:" inc_$t-pct.txt
     grep "Total skipped:" inc_$t-pct.txt
     grep "Total elapsed walltime:" inc_$t-pct.txt
     echo " "

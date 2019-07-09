@@ -17,8 +17,6 @@ def read_craft_driver
             $status_alternate = $1
         elsif line =~ /^#\s*INITIAL_CFG\s*=\s*(\w+)/ then
             $initial_cfg_fn = $1
-        elsif line =~ /^#\s*CACHED_CFGS\s*=\s*(\w+)/ then
-            $cached_fn = $1
         elsif line =~ /^#\s*FORTRAN_MODE\s*=\s*(\w+)/ then
             if $1 == "yes" then
                 $fortran_mode = true
@@ -79,9 +77,6 @@ def parse_command_line
                 $status_preferred = ARGV.shift
                 $status_alternate = ARGV.shift
                 $fpconf_options = $FPCONF_OPTS[$status_preferred]
-            elsif opt == "-R" then
-                # archived/cached configuration results
-                $cached_fn = File.expand_path(ARGV.shift)
             elsif opt == "-c" then
                 # initial configuration
                 $initial_cfg_fn = ARGV.shift
@@ -806,17 +801,15 @@ def print_status
         status_text << "#{indent}Total candidates:          #{"%13d" % $total_candidates}"
         summary = get_tested_configs_summary
         status_text << "#{indent}Total configs tested:      #{"%13d" % summary["total"]}"
-        status_text << "#{indent}   Total executed:         #{"%13d" % summary["tested"]}"
-        status_text << "#{indent}   Total cached:           #{"%13d" % summary["cached"]}"
         status_text << "#{indent}   Total passed:           #{"%13d" % summary["pass"]}"
-        status_text << "#{indent}     Total skipped:        #{"%13d" % summary["skipped"]}"
+        status_text << "#{indent}     Total skipped:        #{"%13d" % summary["skipped"]}" if not $variable_mode
         status_text << "#{indent}   Total failed:           #{"%13d" % summary["fail"]}"
         status_text << "#{indent}   Total aborted:          #{"%13d" % summary["error"]}"
         status_text << "#{indent}   Module-level:           #{"%13d" % summary[$TYPE_MODULE]}"
         status_text << "#{indent}   Function-level:         #{"%13d" % summary[$TYPE_FUNCTION]}"
-        status_text << "#{indent}   Block-level:            #{"%13d" % summary[$TYPE_BASICBLOCK]}"
-        status_text << "#{indent}   Instruction-level:      #{"%13d" % summary[$TYPE_INSTRUCTION]}"
-        status_text << "#{indent}   Variable-level:         #{"%13d" % summary[$TYPE_VARIABLE]}"
+        status_text << "#{indent}   Block-level:            #{"%13d" % summary[$TYPE_BASICBLOCK]}" if not $variable_mode
+        status_text << "#{indent}   Instruction-level:      #{"%13d" % summary[$TYPE_INSTRUCTION]}" if not $variable_mode
+        status_text << "#{indent}   Variable-level:         #{"%13d" % summary[$TYPE_VARIABLE]}" if $variable_mode
         status_text << "#{indent}Current in-proc length:    #{"%13d" % get_inproc_length}"
         status_text << "#{indent}Current workqueue length:  #{"%13d" % get_workqueue_length}"
         status_text << "#{indent}Total elapsed walltime: #{"%16s" % format_time(elapsed)}"
@@ -1103,15 +1096,12 @@ def get_tested_configs_summary
         if cfg.attrs.has_key?("skipped") and cfg.attrs["skipped"] == "yes" then
             summary["skipped"] += 1
         end
-        if cfg.attrs.has_key?("cached") and cfg.attrs["cached"] == "yes" then
-            summary["cached"] += 1
-        end
         if cfg.attrs.has_key?("level") then
             summary[cfg.attrs["level"]] += 1
         end
     end
     summary["total"] = tested_cfgs.size
-    summary["tested"] = summary["total"] - summary["skipped"] - summary["cached"]
+    summary["tested"] = summary["total"] - summary["skipped"]
     return summary
 end
 

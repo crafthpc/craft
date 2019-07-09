@@ -256,9 +256,8 @@ def finalize_search
     report << "Total candidates:          #{"%11d" % $total_candidates}"
     report << "Total configs tested:      #{"%11d" % summary["total"]}"
     report << "  Total executed:          #{"%11d" % summary["tested"]}"
-    report << "  Total cached:            #{"%11d" % summary["cached"]}"
     report << "  Total passed:            #{"%11d" % summary["pass"]}"
-    report << "    Total skipped:         #{"%11d" % summary["skipped"]}"
+    report << "    Total skipped:         #{"%11d" % summary["skipped"]}" if not $variable_mode
     report << "  Total failed:            #{"%11d" % summary["fail"]}"
     report << "  Total aborted:           #{"%11d" % summary["error"]}"
     report << "Done.  [Total elapsed walltime: #{format_time(elapsed)}]"
