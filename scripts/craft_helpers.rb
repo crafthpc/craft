@@ -827,15 +827,16 @@ def print_status
         if get_inproc_length > 0 or get_workqueue_length > 0 then
             inproc = get_inproc_configs
             queue = get_workqueue_configs
-            status_text << ""
-            progress = "Current workqueue (" + (queue.size > inproc.size ? inproc.size : queue.size).to_s + "/" + queue.size.to_s + "):"
-            if $variable_mode then
-                status_text << "  Currently testing:                                #{"%-33s"%progress}"
-            else
-                status_text << "  Currently testing:                  STA\%   DYN\%   #{"%-33s"%progress}   STA\%   DYN\%"
-            end
             lines_to_print = max(min(inproc.size, MAX_CONFIGS_TO_PRINT),
                                  min(queue.size,  MAX_CONFIGS_TO_PRINT))
+            status_text << ""
+            iprogress = "Currently testing (" + min(inproc.size, lines_to_print).to_s + "/" + inproc.size.to_s + "):"
+            qprogress = "Current workqueue (" + min(queue.size,  lines_to_print).to_s + "/" + queue.size.to_s  + "):"
+            if $variable_mode then
+                status_text << "  #{"%-33s"%iprogress}                 #{"%-33s"%qprogress}"
+            else
+                status_text << "  #{"%-33s"%qprogress}   STA\%   DYN\% #{"%-33s"%qprogress}   STA\%   DYN\%"
+            end
             lines_to_print.times do |i|
                 line = ""
                 if i < inproc.size then
@@ -1065,14 +1066,14 @@ def build_best_runtime_report(num,copy_files=false)
             if copy_files and File.exists?($passed_path + pcfg.filename) then
                 FileUtils.cp($passed_path + pcfg.filename, $best_path)
             end
-            line += "            - %-35s   %-5.2f                %-5.1f"%
+            line += "            - %-35s   %-5.2f                %-5.2f"%
                 [format_text(pcfg.label,35),prtime,speedup]
         end
         report << line if line.strip != ""
     end
     report << " "
     if max_speedup > 1.0 then
-        report << "          Speedup achieved! (max: %.1fx, baseline: %.2fs)"%[max_speedup,$baseline_runtime]
+        report << "          Speedup achieved! (max: %.2fx, baseline: %.2fs)"%[max_speedup,$baseline_runtime]
     else
         report << "          No speedup found."
     end
