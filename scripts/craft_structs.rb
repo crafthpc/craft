@@ -62,12 +62,6 @@ class PPoint
         fout.close
     end
 
-    def build_typeforge_file (config, fn)
-        File.open(fn, "w") do |f|
-            output_typeforge(config, f, nil, "$global")
-        end
-    end
-
     def build_json_file (config, fn)
         fout = Hash.new
         fout["version"] = "1"
@@ -241,32 +235,6 @@ class PPoint
         end
         @children.each do |pt|
             pt.output(config, fout, overload, overload_prec)
-        end
-    end
-
-    def output_typeforge (config, fout, overload=nil, func_name="")
-        if @type == $TYPE_VARIABLE then
-            flag = @orig_status
-            if flag == $STATUS_CANDIDATE then
-                if not overload.nil? then
-                    flag = overload
-                elsif config.exceptions.has_key?(@uid) then
-                    flag = config.exceptions[@uid]
-                end
-                if flag == $STATUS_SINGLE then
-                    fout.puts "change_var_type;#{func_name};#{@attrs["desc"]};float"
-                end
-            end
-        else
-            if config.exceptions.has_key?(@uid) then
-                overload = config.exceptions[@uid]
-            end
-            if @type == $TYPE_FUNCTION then
-                func_name = @attrs["desc"]
-            end
-            @children.each do |c|
-                c.output_typeforge(config, fout, overload, func_name)
-            end
         end
     end
 
