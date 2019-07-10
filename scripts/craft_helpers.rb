@@ -927,6 +927,8 @@ def rebuild_final_config
     if $variable_mode then
         $final_config = $strategy.build_fastest_config(get_tested_configs)
         $program.build_json_file($final_config, $final_config_fn)
+        # also build regular config for UI
+        $program.build_config_file($final_config, $final_config_fn[0...-4]+"cfg", false)
     else
         $final_config = $strategy.build_final_config(get_tested_configs)
         $program.build_config_file($final_config, $final_config_fn, false)
