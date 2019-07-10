@@ -130,7 +130,8 @@ class PPoint
         elsif @uid.include?($TYPE_INSTRUCTION) then
             label = "INSN #{@attrs["addr"]} #{tag}\"#{@attrs["desc"]}\""
         elsif @uid.include?($TYPE_VARIABLE) then
-            label = "VAR #{@attrs["addr"]} #{tag}\"#{@attrs["desc"]}\""
+            f = @attrs["desc"] == "$return" ? ":#{@attrs["scope"]}" : ""
+            label = "VAR #{tag}#{@attrs["desc"]}#{f}"
         end
         return label.strip
     end

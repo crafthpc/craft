@@ -105,8 +105,8 @@ def parse_command_line
                 # variable mode
                 $variable_mode = true
                 $base_type = $TYPE_VARIABLE
-                $strategy_name = "combinational"
                 $disable_queue_sort = true
+                $skip_nonexecuted = false   # no cinst data in variable mode
             elsif opt == '-b' then
                 # stop splitting at basic blocks
                 $base_type = $TYPE_BASICBLOCK
@@ -239,68 +239,76 @@ def initialize_program
 end
 
 def read_json_config(cfg)
-    global_variables = []
-    functions = Hash.new()
+    midx = 0
+    fidx = 0
+    vidx = 0
+    program = PPoint.new("APP #1", $TYPE_APPLICATION, $STATUS_NONE)
+    modules = Hash.new
+    modules["DEFAULT"] = PPoint.new("MOD ##{midx}", $TYPE_MODULE, $STATUS_NONE)
+    modules["DEFAULT"].attrs["desc"] = "DEFAULT"
+    functions = Hash.new    # module name => function name => function
+    functions["DEFAULT"] = Hash.new
     if cfg.has_key?("actions") then
         cfg["actions"].each do |a|
             if a.has_key?("action") and a["action"] == "change_var_basetype" and
                     a.has_key?("to_type") and a["to_type"] == "float" and
                     a.has_key?("handle") then
-                if not a.has_key?("scope") and a["scope"] =~ /function:<(.*)>/ then
-                    func = $1
-                    functions[func] = [] if not functions.has_key?(func)
-                    functions[func] << a
+
+                # find enclosing module (or just the default module)
+                if a.has_key?("source_info") and a["source_info"] =~ /([^\/]*\.\w+)$/ then
+                    modname = $1
+                    if modules.has_key?(modname) then
+                        mod = modules[modname]
+                    else
+                        midx += 1
+                        mod = PPoint.new("MOD ##{midx}", $TYPE_MODULE, $STATUS_NONE)
+                        mod.attrs["desc"] = modname
+                        modules[modname] = mod
+                        functions[modname] = Hash.new
+                        program.children << mod
+                    end
                 else
-                    global_variables << a
+                    modname = "DEFAULT"
+                    mod = modules[modname]
+                end
+
+                # find enclosing function (if any)
+                func = nil
+                if a.has_key?("scope") and a["scope"] =~ /function:<(.*)>/ then
+                    funcname = $1
+                    if functions[modname].has_key?(funcname) then
+                        func = functions[modname][funcname]
+                    else
+                        fidx += 1
+                        func = PPoint.new("FUNC ##{fidx}", $TYPE_FUNCTION, $STATUS_NONE)
+                        func.attrs["desc"] = funcname
+                        functions[modname][funcname] = func
+                        mod.children << func
+                    end
+                end
+
+                # create variable point
+                vidx += 1
+                var = PPoint.new("VAR ##{vidx}", $TYPE_VARIABLE, $STATUS_CANDIDATE)
+                var.attrs["addr"] = a["handle"]
+                if a.has_key?("name") then
+                    var.attrs["desc"] = a["name"]
+                else
+                    var.attrs["desc"] = a["handle"]
+                end
+                var.attrs["scope"] = a["scope"] if a.has_key?("scope")
+                var.attrs["source_info"] = a["source_info"] if a.has_key?("source_info")
+                var.attrs["error"] = a["error"] if a.has_key?("error")
+                var.attrs["ivcount"] = a["ivcount"] if a.has_key?("ivcount")
+                var.attrs["labels"] = a["labels"] if a.has_key?("labels")
+                # TODO: incorporate "uid" field information if present
+
+                if func.nil? then
+                    mod.children << var
+                else
+                    func.children << var
                 end
             end
-        end
-    end
-    program = PPoint.new("APP #1", $TYPE_APPLICATION, $STATUS_NONE)
-    mod     = PPoint.new("MOD #1", $TYPE_MODULE,      $STATUS_NONE)
-    program.children << mod
-    vidx = 0
-    fidx = 0
-    # TODO: incorporate "uid" field information if present
-    global_variables.each do |v|
-        vidx += 1
-        var = PPoint.new("VAR ##{vidx}", $TYPE_VARIABLE, $STATUS_CANDIDATE)
-        var.attrs["addr"] = v["handle"]
-        if v.has_key?("name") then
-            var.attrs["desc"] = v["name"]
-        else
-            var.attrs["desc"] = v["handle"]
-        end
-        var.attrs["scope"] = v["scope"] if v.has_key?("scope")
-        var.attrs["source_info"] = v["source_info"] if v.has_key?("source_info")
-        var.attrs["error"] = v["error"] if v.has_key?("error")
-        var.attrs["ivcount"] = v["ivcount"] if v.has_key?("ivcount")
-        var.attrs["labels"] = v["labels"] if v.has_key?("labels")
-        mod.children << var
-    end
-    functions.each_key do |f|
-        fidx += 1
-        func = PPoint.new("FUNC ##{fidx}", $TYPE_FUNCTION, $STATUS_NONE)
-        func.attrs["desc"] = f
-        mod.children << func
-        bblk = PPoint.new("BBLK ##{fidx}", $TYPE_BASICBLOCK, $STATUS_NONE)
-        bblk.attrs["addr"] = "0x0"
-        func.children << bblk
-        functions[f].each do |v|
-            vidx += 1
-            var = PPoint.new("VAR ##{vidx}", $TYPE_VARIABLE, $STATUS_CANDIDATE)
-            var.attrs["addr"] = v["handle"]
-            if v.has_key?("name") then
-                var.attrs["desc"] = v["name"]
-            else
-                var.attrs["desc"] = v["handle"]
-            end
-            var.attrs["scope"] = v["scope"] if v.has_key?("scope")
-            var.attrs["source_info"] = v["source_info"] if v.has_key?("source_info")
-            var.attrs["error"] = v["error"] if v.has_key?("error")
-            var.attrs["ivcount"] = v["ivcount"] if v.has_key?("ivcount")
-            var.attrs["labels"] = v["labels"] if v.has_key?("labels")
-            func.children << var
         end
     end
     return program
@@ -711,10 +719,8 @@ def print_usage
     puts "   -k             keep all temporary run files"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
     puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"combinational\", \"compositional\", \"rprec\""
-    puts "   -S             disable queue sorting (improves overall performance but may converge slower)"
     puts "   -t <n>         run <n> trials and use max error / min runtime for evaluation"
     puts "   -V             enable variable mode for variable-level tuning and performance testing"
-    puts "                    (-V also sets the default strategy to \"combinational\" and disables queue sorting)"
     puts " "
     puts "Binary-only options (no effect with \"-V\"):"
     puts "   -a             test all generated configs (don't skip non-executed instructions)"
@@ -725,6 +731,7 @@ def print_usage
     puts "                    (-d and -D also adjust the fpconf options appropriately)"
     puts "   -f             stop splitting configs at the function level"
     puts "   -N             enable Fortran mode (passes \"-N\" to fpinst)"
+    puts "   -S             disable queue sorting (improves overall performance but may converge slower)"
     puts " "
     puts "Variable-only options (no effect without \"-V\"):"
     puts "   -g             group variables by labels"
