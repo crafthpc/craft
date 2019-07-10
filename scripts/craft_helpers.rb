@@ -242,9 +242,9 @@ def read_json_config(cfg)
     midx = 0
     fidx = 0
     vidx = 0
-    program = PPoint.new("APP #1", $TYPE_APPLICATION, $STATUS_NONE)
+    program = PPoint.new("#{$TYPE_APPLICATION} #1", $TYPE_APPLICATION, $STATUS_NONE)
     modules = Hash.new
-    modules["DEFAULT"] = PPoint.new("MOD ##{midx}", $TYPE_MODULE, $STATUS_NONE)
+    modules["DEFAULT"] = PPoint.new("#{$TYPE_MODULE} ##{midx}", $TYPE_MODULE, $STATUS_NONE)
     modules["DEFAULT"].attrs["desc"] = "DEFAULT"
     functions = Hash.new    # module name => function name => function
     functions["DEFAULT"] = Hash.new
@@ -261,7 +261,7 @@ def read_json_config(cfg)
                         mod = modules[modname]
                     else
                         midx += 1
-                        mod = PPoint.new("MOD ##{midx}", $TYPE_MODULE, $STATUS_NONE)
+                        mod = PPoint.new("#{$TYPE_MODULE} ##{midx}", $TYPE_MODULE, $STATUS_NONE)
                         mod.attrs["desc"] = modname
                         modules[modname] = mod
                         functions[modname] = Hash.new
@@ -280,7 +280,7 @@ def read_json_config(cfg)
                         func = functions[modname][funcname]
                     else
                         fidx += 1
-                        func = PPoint.new("FUNC ##{fidx}", $TYPE_FUNCTION, $STATUS_NONE)
+                        func = PPoint.new("#{$TYPE_FUNCTION} ##{fidx}", $TYPE_FUNCTION, $STATUS_NONE)
                         func.attrs["desc"] = funcname
                         functions[modname][funcname] = func
                         mod.children << func
@@ -289,7 +289,7 @@ def read_json_config(cfg)
 
                 # create variable point
                 vidx += 1
-                var = PPoint.new("VAR ##{vidx}", $TYPE_VARIABLE, $STATUS_CANDIDATE)
+                var = PPoint.new("#{$TYPE_VARIABLE} ##{vidx}", $TYPE_VARIABLE, $STATUS_CANDIDATE)
                 var.attrs["addr"] = a["handle"]
                 if a.has_key?("name") then
                     var.attrs["desc"] = a["name"]
