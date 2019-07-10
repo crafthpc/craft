@@ -802,9 +802,10 @@ def print_status
         if File.exist?($walltime_fn) then
             elapsed = IO.readlines($walltime_fn)[0].to_f
         end
-        status_text << "#{indent}Application: #{"%27s" % $binary_name}"
+        status_text << "#{indent}Application: #{"%27s" % $binary_name}" unless $variable_mode
         #status_text << "#{indent}Fortran mode:  #{"%24s" % ($fortran_mode ? "Y" : "N")}"
         #status_text << "#{indent}Variable mode:  #{"%24s" % ($variable_mode ? "Y" : "N")}"
+        status_text << "#{indent}Search strategy: #{"%23s" % $strategy_name}"
         status_text << "#{indent}Base type:  #{"%28s" % $base_type}"
         status_text << "#{indent}Max in-proc configs:       #{"%13d" % $max_inproc}"
         status_text << "#{indent}Trials per config:         #{"%13d" % $num_trials}"
@@ -812,13 +813,13 @@ def print_status
         summary = get_tested_configs_summary
         status_text << "#{indent}Total configs tested:      #{"%13d" % summary["total"]}"
         status_text << "#{indent}   Total passed:           #{"%13d" % summary["pass"]}"
-        status_text << "#{indent}     Total skipped:        #{"%13d" % summary["skipped"]}" if not $variable_mode
+        status_text << "#{indent}     Total skipped:        #{"%13d" % summary["skipped"]}" unless $variable_mode
         status_text << "#{indent}   Total failed:           #{"%13d" % summary["fail"]}"
         status_text << "#{indent}   Total aborted:          #{"%13d" % summary["error"]}"
         status_text << "#{indent}   Module-level:           #{"%13d" % summary[$TYPE_MODULE]}"
         status_text << "#{indent}   Function-level:         #{"%13d" % summary[$TYPE_FUNCTION]}"
-        status_text << "#{indent}   Block-level:            #{"%13d" % summary[$TYPE_BASICBLOCK]}" if not $variable_mode
-        status_text << "#{indent}   Instruction-level:      #{"%13d" % summary[$TYPE_INSTRUCTION]}" if not $variable_mode
+        status_text << "#{indent}   Block-level:            #{"%13d" % summary[$TYPE_BASICBLOCK]}" unless $variable_mode
+        status_text << "#{indent}   Instruction-level:      #{"%13d" % summary[$TYPE_INSTRUCTION]}" unless $variable_mode
         status_text << "#{indent}   Variable-level:         #{"%13d" % summary[$TYPE_VARIABLE]}" if $variable_mode
         status_text << "#{indent}Current in-proc length:    #{"%13d" % get_inproc_length}"
         status_text << "#{indent}Current workqueue length:  #{"%13d" % get_workqueue_length}"
