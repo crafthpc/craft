@@ -567,8 +567,10 @@ def start_config (cfg)
     run_fn = "#{cfg_path}#{$craft_run}"
     script = File.new(run_fn, "w")
     script.puts "#!/usr/bin/env bash"
-    script.puts "#SBATCH -J #{cfg.shortlabel}"
-    script.puts "#SBATCH -o #{cfg_path}#{$craft_output}" if $job_mode == "slurm"
+    if $job_mode == "slurm" then
+        script.puts "#SBATCH -J \"#{cfg.shortlabel}\""
+        script.puts "#SBATCH -o #{cfg_path}#{$craft_output}"
+    end
     script.puts "cd #{cfg_path}"
     if $variable_mode then
         script.puts "#{$search_path}#{$craft_builder} #{cfg_file} | tee .build_status"
@@ -590,11 +592,12 @@ def start_config (cfg)
     when "exec"
         pid = fork { exec "#{run_fn} &>#{cfg_path}#{$craft_output}" }
     when "slurm"
-        output = `sbatch #{run_fn}`
+        output = `sbatch #{run_fn} 2>&1`
         if output =~ /Submitted batch job (\d+)/ then
             pid = $1.to_i
         else
             puts "Error submitting batch job: #{output}"
+            exit
         end
     end
     cfg.attrs["pid"] = pid
