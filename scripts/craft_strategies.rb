@@ -172,6 +172,8 @@ end # }}}
 # {{{ BinaryStrategy
 class BinaryStrategy < Strategy
 
+    SPLIT_THRESHOLD = 9
+
     def split_config(config)
         configs = Array.new
 
@@ -220,7 +222,7 @@ class BinaryStrategy < Strategy
         configs.sort! { |c1, c2| c2.attrs["cinst"].to_i <=> c1.attrs["cinst"].to_i }
 
         # merge into two (binary search) if we have a lot of new configs
-        if configs.size > 5 then
+        if configs.size > SPLIT_THRESHOLD then
             pivot = configs.size / 2
             left_cfg  = AppConfig.new(config.cuid + " LEFT",  config.label + " LEFT",  config.default)
             right_cfg = AppConfig.new(config.cuid + " RIGHT", config.label + " RIGHT", config.default)
