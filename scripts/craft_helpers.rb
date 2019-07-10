@@ -84,7 +84,7 @@ def parse_command_line
                 # initial fpconf options
                 $fpconf_options = ARGV.shift
             elsif opt == "-A" then
-                # additional advisory configuration (e.g., ADaPT)
+                # additional advisory configuration (e.g., ADAPT)
                 $addt_cfg_fns << ARGV.shift
             elsif opt == '-m' then
                 # memory-based analysis
@@ -703,7 +703,7 @@ def print_usage
     puts "   -v             print version number and exit"
     puts " "
     puts "Start options:"
-    puts "   -A <file>      use <file> as additional advisory configuration (e.g., ADaPT results)"
+    puts "   -A <file>      use <file> as additional advisory configuration (e.g., ADAPT results)"
     puts "   -c <file>      use <file> as initial base configuration"
     puts "   -j <np>        spawn up to <np> simultaneous jobs/configurations (-1 to remove limit)"
     puts "   -J <name>      use <name> job submission system (default is \"exec\")"
