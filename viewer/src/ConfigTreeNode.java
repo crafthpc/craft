@@ -12,7 +12,7 @@ import javax.swing.tree.*;
 public class ConfigTreeNode extends DefaultMutableTreeNode {
 
     public enum CNType {
-        NONE, APPLICATION, MODULE, FUNCTION, BASIC_BLOCK, INSTRUCTION
+        NONE, APPLICATION, MODULE, FUNCTION, BASIC_BLOCK, INSTRUCTION, VARIABLE
     }
 
     public enum CNStatus {
@@ -28,6 +28,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             case FUNCTION:          str = "FUNC";    break;
             case BASIC_BLOCK:       str = "BBLK";    break;
             case INSTRUCTION:       str = "INSN";    break;
+            case VARIABLE:          str = "VAR";     break;
             default:                                 break;
         }
         return str;
@@ -122,6 +123,9 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         } else if (configLine.contains("INSN")) {
             type = CNType.INSTRUCTION;
             regexTag = "INSN";
+        } else if (configLine.contains("VAR")) {
+            type = CNType.VARIABLE;
+            regexTag = "VAR";
         } else {
             type = CNType.NONE;
             regexTag = "";
@@ -308,6 +312,26 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         return count;
     }
 
+    public long getVarCount() {
+        long count = 0;
+        switch (type) {
+            case APPLICATION:
+            case MODULE:
+            case FUNCTION:
+                Enumeration children = children();
+                while (children.hasMoreElements()) {
+                    count += ((ConfigTreeNode)children.nextElement()).getVarCount();
+                }
+                break;
+            case VARIABLE:
+                count = 1;
+                break;
+            default:
+                break;
+        }
+        return count;
+    }
+
     public void toggleNoneSingle() {
         if (status == CNStatus.NONE) {
             status = CNStatus.SINGLE;
@@ -392,10 +416,11 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         str.append(' ');
         switch (type) {
             case APPLICATION:       str.append("APPLICATION");    break;
-            case MODULE:            str.append("  MODULE");    break;
-            case FUNCTION:          str.append("    FUNC");         break;
-            case BASIC_BLOCK:       str.append("      BBLK");       break;
-            case INSTRUCTION:       str.append("        INSN");     break;
+            case MODULE:            str.append("  MODULE");       break;
+            case FUNCTION:          str.append("    FUNC");       break;
+            case BASIC_BLOCK:       str.append("      BBLK");     break;
+            case INSTRUCTION:       str.append("        INSN");   break;
+            case VARIABLE:          str.append("      VAR");      break;
             default:                str.append("UNKNOWN");        break;
         }
         str.append(" #");
@@ -460,7 +485,7 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             child = (ConfigTreeNode)children.nextElement();
             child.getStatusCounts(counts);
         }
-        if (type == CNType.INSTRUCTION) {
+        if (type == CNType.INSTRUCTION || type == CNType.VARIABLE) {
             Long count = Long.valueOf(1);
             if (counts.containsKey(status)) {
                 count = Long.valueOf(1 + counts.get(status).longValue());
@@ -568,17 +593,18 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
         StringBuffer str = new StringBuffer();
         switch (type) {
             case APPLICATION:       str.append("APPLICATION");    break;
-            case MODULE:            str.append("  MODULE");    break;
-            case FUNCTION:          str.append("    FUNC");         break;
-            case BASIC_BLOCK:       str.append("      BBLK");       break;
-            case INSTRUCTION:       str.append("        INSN");     break;
+            case MODULE:            str.append("  MODULE");       break;
+            case FUNCTION:          str.append("    FUNC");       break;
+            case BASIC_BLOCK:       str.append("      BBLK");     break;
+            case INSTRUCTION:       str.append("        INSN");   break;
+            case VARIABLE:          str.append("      VAR");      break;
             default:                str.append("UNKNOWN");        break;
         }
         if (viewOptions.showID) {
             str.append(String.format("%5d", number));
         }
         str.append(": ");
-        if (type != CNType.APPLICATION) {
+        if (type != CNType.APPLICATION && address != "0") {
             str.append(address);
             str.append(" ");
         }
@@ -647,9 +673,20 @@ public class ConfigTreeNode extends DefaultMutableTreeNode {
             //if (type == CNType.MODULE) {
                 //str.append("   ");
             //}
-            str.append("[");
-            str.append(getInsnCount());
-            str.append(" instruction(s)]");
+
+            long icount = getInsnCount();
+            if (icount > 0) {
+                str.append("[");
+                str.append(icount);
+                str.append(" instruction(s)]");
+            }
+
+            long vcount = getVarCount();
+            if (vcount > 0) {
+                str.append("[");
+                str.append(vcount);
+                str.append(" variable(s)]");
+            }
 
             if (viewOptions.showCodeCoverage) {
                 while (str.length() < 100) {

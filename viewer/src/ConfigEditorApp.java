@@ -234,7 +234,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
 
         bottomPanel = new JPanel();
         bottomPanel.setBackground(Color.WHITE);
-        bottomPanel.add(new JLabel("Instruction counts:  "));
+        bottomPanel.add(new JLabel("Counts:  "));
         noneKeyLabel = new JLabel("NONE");
         noneKeyLabel.setFont(DEFAULT_FONT_MONO_BOLD);
         bottomPanel.add(noneKeyLabel);
@@ -427,7 +427,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     } else if (curNode.type == ConfigTreeNode.CNType.MODULE) {
                         if (curModNode != null) {
                             // clean previous module (remove if it has no children)
-                            if (curModNode.getInsnCount() == 0) {
+                            if (curModNode.getChildCount() == 0) {
                                 TreeNode parent = curModNode.getParent();
                                 if (parent instanceof ConfigTreeNode) {
                                     ((ConfigTreeNode)parent).remove(curModNode);
@@ -442,7 +442,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     } else if (curNode.type == ConfigTreeNode.CNType.FUNCTION) {
                         if (curFuncNode != null) {
                             // clean previous function (remove if it has no children)
-                            if (curFuncNode.getInsnCount() == 0) {
+                            if (curFuncNode.getChildCount() == 0) {
                                 TreeNode parent = curFuncNode.getParent();
                                 if (parent instanceof ConfigTreeNode) {
                                     ((ConfigTreeNode)parent).remove(curFuncNode);
@@ -458,7 +458,7 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                                curFuncNode != null) {
                         if (curBlockNode != null) {
                             // clean previous block (remove if it has no children)
-                            if (curBlockNode.getInsnCount() == 0) {
+                            if (curBlockNode.getChildCount() == 0) {
                                 TreeNode parent = curBlockNode.getParent();
                                 if (parent instanceof ConfigTreeNode) {
                                     ((ConfigTreeNode)parent).remove(curBlockNode);
@@ -473,6 +473,18 @@ public class ConfigEditorApp extends JFrame implements ActionListener, DocumentL
                     } else if (curNode.type == ConfigTreeNode.CNType.INSTRUCTION &&
                                curBlockNode != null) {
                         curBlockNode.add(curNode);
+                        mainConfigEntries.add(curNode);
+                        nodeOfID.put(ConfigTreeNode.type2Str(curNode.type) + 
+                                "_" + curNode.number, curNode);
+                    } else if (curNode.type == ConfigTreeNode.CNType.VARIABLE &&
+                               curFuncNode != null) {
+                        curFuncNode.add(curNode);
+                        mainConfigEntries.add(curNode);
+                        nodeOfID.put(ConfigTreeNode.type2Str(curNode.type) + 
+                                "_" + curNode.number, curNode);
+                    } else if (curNode.type == ConfigTreeNode.CNType.VARIABLE &&
+                               curModNode != null) {
+                        curModNode.add(curNode);
                         mainConfigEntries.add(curNode);
                         nodeOfID.put(ConfigTreeNode.type2Str(curNode.type) + 
                                 "_" + curNode.number, curNode);
