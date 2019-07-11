@@ -291,7 +291,8 @@ class AppConfig
     attr_accessor :defprec          # default precision (int)
     attr_accessor :precisions       # cuid -> int
 
-    MAX_SHORTLABEL_LENGTH=64
+    MAX_FILENAME_LENGTH   = 64
+    MAX_SHORTLABEL_LENGTH = 64
 
     def initialize (cuid, label, default)
         @cuid = cuid
@@ -375,7 +376,7 @@ class AppConfig
             end
         end
         # if file size is too long, use hash instead
-        if fn.size > 32 then
+        if fn.size > MAX_FILENAME_LENGTH then
             fn = "#{fn.hash.abs.to_s(16)}"
         end
         fn << ($variable_mode ? ".json" : ".cfg") if include_ext
