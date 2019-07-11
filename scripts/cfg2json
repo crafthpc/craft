@@ -1,0 +1,43 @@
+#!/usr/bin/env ruby
+#
+# Converts CRAFT config files into JSON config files. This is primarily for
+# testing configurations customized using the UI configuration editor.
+#
+
+require 'json'
+
+require_relative "craft_consts"
+require_relative "craft_structs"
+require_relative "craft_helpers"
+
+def convert(pt, cfg, override=nil)
+    if pt.orig_status != $STATUS_NONE then
+      cfg.exceptions[pt.uid] = pt.orig_status
+    end
+    pt.children.each { |c| convert(c, cfg, override) }
+end
+
+# check command line parameters
+if ARGV.size != 1 then
+    puts "Usage: cfg2json <cfg>"
+    puts "  Converts the CRAFT .cfg file to a JSON configuration"
+    exit
+end
+
+# read CRAFT config file
+program = read_craft_config(IO.read(ARGV.shift))
+
+# convert "orig_status" field from config file into configuration exceptions
+config = AppConfig.new("", "", $STATUS_DOUBLE)
+convert(program, config)
+
+# generate JSON file
+fout = {}
+fout["version"] = "1"
+fout["tool_id"] = "CRAFT"
+actions = []
+program.output_json(config, actions, nil)
+actions.sort! { |a,b| a["uid"].to_i <=> b["uid"].to_i }   # sort by uid
+fout["actions"] = actions
+puts JSON.pretty_generate(fout)
+

@@ -38,11 +38,12 @@ ARGV.each do |fn|
         if a.has_key?("action") and a["action"] == "change_var_basetype" and
                 a.has_key?("to_type") and a["to_type"] == "float" and
                 a.has_key?("uid") then
-            config.exceptions["#{$TYPE_VARIABLE} ##{a["uid"]}"] = $STATUS_SINGLE
+            config.exceptions["#{$TYPE_VARIABLE} ##{a["uid"]}: 0"] = $STATUS_SINGLE
         end
     end
 end
 
 # dump full config file
+$variable_mode = true
 program.output_all(config, STDOUT)
 

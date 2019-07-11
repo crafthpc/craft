@@ -242,7 +242,7 @@ def read_json_config(cfg)
     midx = 0
     fidx = 0
     vidx = 0
-    program = PPoint.new("#{$TYPE_APPLICATION} #1", $TYPE_APPLICATION, $STATUS_NONE)
+    program = PPoint.new("#{$TYPE_APPLICATION} #1: 0", $TYPE_APPLICATION, $STATUS_NONE)
     modules = Hash.new
     modules["DEFAULT"] = PPoint.new("#{$TYPE_MODULE} ##{midx}", $TYPE_MODULE, $STATUS_NONE)
     modules["DEFAULT"].attrs["desc"] = "DEFAULT"
@@ -261,7 +261,7 @@ def read_json_config(cfg)
                         mod = modules[modname]
                     else
                         midx += 1
-                        mod = PPoint.new("#{$TYPE_MODULE} ##{midx}", $TYPE_MODULE, $STATUS_NONE)
+                        mod = PPoint.new("#{$TYPE_MODULE} ##{midx}: 0", $TYPE_MODULE, $STATUS_NONE)
                         mod.attrs["desc"] = modname
                         modules[modname] = mod
                         functions[modname] = Hash.new
@@ -280,7 +280,7 @@ def read_json_config(cfg)
                         func = functions[modname][funcname]
                     else
                         fidx += 1
-                        func = PPoint.new("#{$TYPE_FUNCTION} ##{fidx}", $TYPE_FUNCTION, $STATUS_NONE)
+                        func = PPoint.new("#{$TYPE_FUNCTION} ##{fidx}: 0", $TYPE_FUNCTION, $STATUS_NONE)
                         func.attrs["desc"] = funcname
                         functions[modname][funcname] = func
                         mod.children << func
@@ -289,7 +289,7 @@ def read_json_config(cfg)
 
                 # create variable point
                 vidx += 1
-                var = PPoint.new("#{$TYPE_VARIABLE} ##{vidx}", $TYPE_VARIABLE, $STATUS_CANDIDATE)
+                var = PPoint.new("#{$TYPE_VARIABLE} ##{vidx}: 0", $TYPE_VARIABLE, $STATUS_CANDIDATE)
                 var.attrs["addr"] = a["handle"]
                 if a.has_key?("name") then
                     var.attrs["desc"] = a["name"]
@@ -315,50 +315,63 @@ def read_json_config(cfg)
 end
 
 def read_craft_config(cfg)
-    program =  nil
-    mod = nil
-    func = nil
-    bblk = nil
-    prolog = ""
+    program = nil
+    mod     = nil
+    func    = nil
+    bblk    = nil
+    vars    = {}   # id => var (used to update handles later in parsing)
+    prolog  = []
     cfg.each_line do |line|
-        if line =~ /(APPLICATION #\d+: [x0-9A-Fa-f]+) \"(.+)\"/ then
+        if line =~ /(APPLICATION #\d+: [x0-9A-Fa-f]+) \"(.*)\"/ then
             program = PPoint.new($1, $TYPE_APPLICATION, line[1,1])
             program.attrs["desc"] = $2
-            mod = nil
+            mod  = nil
             func = nil
             bblk = nil
-        elsif line =~ /(MODULE #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
+        elsif line =~ /(MODULE #\d+: [x0-9A-Fa-f]+) \"(.*)\"/ then
             mod = PPoint.new($1, $TYPE_MODULE, line[1,1])
             mod.attrs["desc"] = $2
             program.children << mod if program != nil
             func = nil
             bblk = nil
-        elsif line =~ /(FUNC #\d+: 0x[0-9A-Fa-f]+) \"(.+)\"/ then
+        elsif line =~ /(FUNC #\d+: [x0-9A-Fa-f]+) \"(.*)\"/ then
             func = PPoint.new($1, $TYPE_FUNCTION, line[1,1])
             func.attrs["desc"] = $2
             mod.children << func if mod != nil
             bblk = nil
-        elsif line =~ /(BBLK #\d+: (0x[0-9A-Fa-f]+))/ then
+        elsif line =~ /(BBLK #\d+: [x0-9A-Fa-f]+)/ then
             bblk = PPoint.new($1, $TYPE_BASICBLOCK, line[1,1])
             bblk.attrs["addr"] = $2
             func.children << bblk if func != nil
-        elsif line =~ /(INSN #\d+: (0x[0-9A-Fa-f]+)) \"(.+)\"/ then
+        elsif line =~ /(INSN #\d+: ([x0-9A-Fa-f]+)) \"(.*)\"/ then
             insn = PPoint.new($1, $TYPE_INSTRUCTION, line[1,1])
             insn.attrs["addr"] = $2
             insn.attrs["desc"] = $3
             bblk.children << insn if bblk != nil
-        elsif line =~ /(VAR #\d+: (0x[0-9A-Fa-f]+)) \"(.+)\"/ then
+        elsif line =~ /(VAR #\d+: ([x0-9A-Fa-f]+)) \"(.*)\"/ then
             var = PPoint.new($1, $TYPE_VARIABLE, line[1,1])
+            vars[var.id] = var
             var.attrs["addr"] = $2
             var.attrs["desc"] = $3
             bblk.children << var if bblk != nil
-            mod.children  << var if bblk == nil
+            func.children << var if func != nil
+            mod.children  << var if func == nil
         else
             prolog << line.chomp
-            prolog << "\n"
         end
     end
-    program.attrs["prolog"] = prolog
+    prolog.each do |line|
+        if line =~ /VAR_(\d+)_handle=\"(.+)\"/ then
+            vars[$1.to_i].attrs["addr"] = $2
+        elsif line =~ /VAR_(\d+)_scope=\"(.+)\"/ then
+            vars[$1.to_i].attrs["scope"] = $2
+        elsif line =~ /VAR_(\d+)_source_info=\"(.+)\"/ then
+            vars[$1.to_i].attrs["source_info"] = $2
+        elsif line =~ /VAR_(\d+)_error=\"(.+)\"/ then
+            vars[$1.to_i].attrs["error"] = $2
+        end
+    end
+    program.attrs["prolog"] = prolog.join("\n")
     return program
 end
 

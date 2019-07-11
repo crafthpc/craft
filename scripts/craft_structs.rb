@@ -159,14 +159,23 @@ class PPoint
         fout.print(" ")
         fout.print($TYPE_SPACES[@type])     # indentation
         fout.print(@uid)
-        if @attrs.has_key?("desc") then
-            fout.print(" \"")
-            fout.print(@attrs["desc"])
-            fout.print("\"")
-        end
-        fout.print("\n")
+        fout.print(" \"")
+        fout.print(@attrs["desc"]) if @attrs.has_key?("desc")
+        fout.print("\"\n")
         if not prec_line.nil? then
             fout.puts prec_line
+        end
+        if $variable_mode and @attrs.has_key?("addr") then
+            fout.puts "#{$TYPE_VARIABLE}_#{@id}_handle=\"#{@attrs["addr"]}\""
+        end
+        if $variable_mode and @attrs.has_key?("scope") then
+            fout.puts "#{$TYPE_VARIABLE}_#{@id}_scope=\"#{@attrs["scope"]}\""
+        end
+        if $variable_mode and @attrs.has_key?("source_info") then
+            fout.puts "#{$TYPE_VARIABLE}_#{@id}_source_info=\"#{@attrs["source_info"]}\""
+        end
+        if $variable_mode and @attrs.has_key?("error") then
+            fout.puts "#{$TYPE_VARIABLE}_#{@id}_error=\"#{@attrs["error"]}\""
         end
         @children.each do |pt|
             pt.output_all(config, fout)
@@ -227,12 +236,9 @@ class PPoint
         fout.print(" ")
         fout.print($TYPE_SPACES[@type])     # indentation
         fout.print(@uid)
-        if @attrs.has_key?("desc") then
-            fout.print(" \"")
-            fout.print(@attrs["desc"])
-            fout.print("\"")
-        end
-        fout.print("\n")
+        fout.print(" \"")
+        fout.print(@attrs["desc"]) if @attrs.has_key?("desc")
+        fout.print("\"\n")
         if not prec_line.nil? then
             fout.puts prec_line
         end
@@ -244,24 +250,22 @@ class PPoint
     def output_json (config, actions, overload=nil)
         if @type == $TYPE_VARIABLE then
             flag = @orig_status
-            if flag == $STATUS_CANDIDATE then
-                if not overload.nil? then
-                    flag = overload
-                elsif config.exceptions.has_key?(@uid) then
-                    flag = config.exceptions[@uid]
-                end
-                if flag == $STATUS_SINGLE then
-                    a = Hash.new
-                    a["uid"] = @id.to_s
-                    a["action"] = "change_var_basetype"
-                    a["handle"] = @attrs["addr"]
-                    a["name"] = @attrs["desc"]
-                    a["scope"] = @attrs["scope"] if @attrs.has_key?("scope")
-                    a["source_info"] = @attrs["source_info"] if @attrs.has_key?("source_info")
-                    a["to_type"] = "float"
-                    a["labels"] = @attrs["labels"] if @attrs.has_key?("labels")
-                    actions << a
-                end
+            if not overload.nil? then
+                flag = overload
+            elsif config.exceptions.has_key?(@uid) then
+                flag = config.exceptions[@uid]
+            end
+            if flag == $STATUS_SINGLE then
+                a = Hash.new
+                a["uid"] = @id.to_s
+                a["action"] = "change_var_basetype"
+                a["handle"] = @attrs["addr"]
+                a["name"] = @attrs["desc"]
+                a["scope"] = @attrs["scope"] if @attrs.has_key?("scope")
+                a["source_info"] = @attrs["source_info"] if @attrs.has_key?("source_info")
+                a["to_type"] = "float"
+                a["labels"] = @attrs["labels"] if @attrs.has_key?("labels")
+                actions << a
             end
         else
             if config.exceptions.has_key?(@uid) then
