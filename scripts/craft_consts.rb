@@ -1,0 +1,50 @@
+$RESULT_PASS  = "Success!"                          # test result possibilities
+$RESULT_FAIL  = "FAILED!"
+$RESULT_ERROR = "ERROR!!!"
+
+$TYPE_APPLICATION = "APPLICATION"                   # control point levels
+$TYPE_MODULE      = "MODULE"
+$TYPE_FUNCTION    = "FUNC"
+$TYPE_BASICBLOCK  = "BBLK"
+$TYPE_INSTRUCTION = "INSN"
+$TYPE_VARIABLE    = "VAR"
+$TYPE_SPACES = Hash.new("")
+$TYPE_SPACES[$TYPE_APPLICATION] = ""                # for pretty output
+$TYPE_SPACES[$TYPE_MODULE]      = "  "
+$TYPE_SPACES[$TYPE_FUNCTION]    = "    "
+$TYPE_SPACES[$TYPE_BASICBLOCK]  = "      "
+$TYPE_SPACES[$TYPE_INSTRUCTION] = "        "
+$TYPE_SPACES[$TYPE_VARIABLE]    = "        "
+$TYPE_RANK = Hash.new(0)
+$TYPE_RANK[$TYPE_APPLICATION] = 1
+$TYPE_RANK[$TYPE_MODULE]      = 2
+$TYPE_RANK[$TYPE_FUNCTION]    = 3
+$TYPE_RANK[$TYPE_BASICBLOCK]  = 4
+$TYPE_RANK[$TYPE_INSTRUCTION] = 5
+$TYPE_RANK[$TYPE_VARIABLE]    = 5
+$TYPE_RRANK = $TYPE_RANK.invert
+
+$STATUS_NONE      = " "                             # replacement status posibilities
+$STATUS_IGNORE    = "!"
+$STATUS_SINGLE    = "s"
+$STATUS_DOUBLE    = "d"
+$STATUS_CANDIDATE = "?"
+$STATUS_NULL      = "x"
+$STATUS_CINST     = "i"
+$STATUS_DCANCEL   = "c"
+$STATUS_DNAN      = "n"
+$STATUS_TRANGE    = "t"
+$STATUS_RPREC     = "r"
+
+$FPCONF_OPTS = Hash.new("")
+$FPCONF_OPTS[$STATUS_SINGLE]  = "-c --svinp single"
+$FPCONF_OPTS[$STATUS_DOUBLE]  = "-c --svinp double"
+$FPCONF_OPTS[$STATUS_NULL]    = "-c --null"
+$FPCONF_OPTS[$STATUS_CINST]   = "-c --cinst"
+$FPCONF_OPTS[$STATUS_DCANCEL] = "-c --dcancel"
+$FPCONF_OPTS[$STATUS_DNAN]    = "-c --dnan"
+$FPCONF_OPTS[$STATUS_TRANGE]  = "-c --trange"
+$FPCONF_OPTS[$STATUS_RPREC]   = "-c --rprec 52"
+
+$PERFCFG_CUID  = "BASELINE"                         # special config; baseline performance run
+$FINALCFG_CUID = "FINAL"                            # special config; represents "best" final results
