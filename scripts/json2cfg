@@ -1,0 +1,48 @@
+#!/usr/bin/env ruby
+#
+# Merges and converts JSON config files into CRAFT config files. This is
+# primarily to enable the use of the UI configuration viewer to view config
+# files created in variable mode.
+#
+# Note: JSON config files do not contain the entire program structure in every
+# file, unlike CRAFT config files. Thus, you must include an initial config file
+# to seed the program structure. This should usually be the "craft_orig.json"
+# that is emitted as part of a normal execution.
+#
+
+require 'json'
+
+require_relative "craft_consts"
+require_relative "craft_structs"
+require_relative "craft_helpers"
+
+# check command line parameters
+if ARGV.size < 1 then
+    puts "Usage: json2cfg <orig-cfg> [<cfg1> <cfg2> <cfg3> ...]"
+    puts "  Converts the union of all given JSON configurations as a CRAFT .cfg file"
+    puts "    (<orig-cfg> must be an initial configuration with the full program structure)"
+    exit
+end
+
+# read program structure
+program = read_json_config(JSON.parse(IO.read(ARGV.shift)))
+config = AppConfig.new("", "", $STATUS_DOUBLE)
+
+ARGV.each do |fn|
+    next unless File.exists?(fn)
+    cfg = JSON.parse(IO.read(fn))
+    next unless cfg.has_key?("actions")
+
+    # add each replacement as an exception (duplicate exceptions have no effect)
+    cfg["actions"].each do |a|
+        if a.has_key?("action") and a["action"] == "change_var_basetype" and
+                a.has_key?("to_type") and a["to_type"] == "float" and
+                a.has_key?("uid") then
+            config.exceptions["#{$TYPE_VARIABLE} ##{a["uid"]}"] = $STATUS_SINGLE
+        end
+    end
+end
+
+# dump full config file
+program.output_all(config, STDOUT)
+
