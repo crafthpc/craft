@@ -13,7 +13,15 @@ if [ "$PROFILER" = "y" ]; then
     VMOPTS="$VMOPTS -Xrunhprof:cpu=samples,interval=20,depth=5"
 fi
 
-SCRIPT_PATH=$(cd $(dirname $0); pwd -P)
+# get the path of this script, regardless of any symlinks
+#   (from https://stackoverflow.com/a/246128)
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_PATH="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 
 if [ "$BACKGROUND" = "y" ]; then
     java $VMOPTS -jar $SCRIPT_PATH/../viewer/fpconfed.jar $@ &
