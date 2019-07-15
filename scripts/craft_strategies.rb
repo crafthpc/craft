@@ -3,11 +3,13 @@
 # Provides rules and procedures governing the search process. This class is
 # intended to be inherited and overloaded; this particular implementation does a
 # very simple, naive, breadth-first search through the application. It also has
-# two simple optimizations:
+# three simple optimizations:
 #
 #   1) Ignore program control branches that do not contain any FP instructions
 #   2) Ignore program control branches that only have a single child (just do
 #      that one instead)
+#   3) Do not split passing configurations (e.g., if replacing an entire
+#      function passes, do not attempt any subsets of that function)
 #
 # {{{ Strategy
 class Strategy
