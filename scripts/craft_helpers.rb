@@ -1,48 +1,4 @@
-
-
-def read_craft_driver
-    if !File.exists?("#{$search_path}#{$craft_driver}") then
-        puts "No craft_driver found here."
-        exit
-    end
-    IO.foreach("#{$search_path}#{$craft_driver}") do |line|
-        if line =~ /^#\s*BINARY\s*=\s*(.*)/ then
-            $binary_name = File.basename($1)
-            $binary_path = File.expand_path($1)
-        elsif line =~ /^#\s*NUM_WORKERS\s*=\s*(\d+)/ then
-            $max_inproc = $1.to_i
-        elsif line =~ /^#\s*PREFERRED_STATUS\s*=\s*(.)/ then
-            $status_preferred = $1
-        elsif line =~ /^#\s*ALTERNATE_STATUS\s*=\s*(.)/ then
-            $status_alternate = $1
-        elsif line =~ /^#\s*INITIAL_CFG\s*=\s*(\w+)/ then
-            $initial_cfg_fn = $1
-        elsif line =~ /^#\s*FORTRAN_MODE\s*=\s*(\w+)/ then
-            if $1 == "yes" then
-                $fortran_mode = true
-            end
-        elsif line =~ /^#\s*BASE_TYPE\s*=\s*(\w*)/ then
-            type = $1.chomp.downcase
-            if type =~ /ins/ then
-                $base_type = $TYPE_INSTRUCTION
-            elsif type =~ /var/ then
-                $base_type = $TYPE_VARIABLE
-            elsif type =~ /block/ then
-                $base_type = $TYPE_BASICBLOCK
-            elsif type =~ /func/ then
-                $base_type = $TYPE_FUNCTION
-            elsif type =~ /mod/ then
-                $base_type = $TYPE_MODULE
-            elsif type =~ /app/ then
-                $base_type = $TYPE_APPLICATION
-            end
-        elsif line =~ /^#\s*SEARCH_STRAT\s*=\s*(\w+)/ then
-            if not ($1 == "default") then
-                $strategy_name = $1
-            end
-        end
-    end
-end
+# {{{ initialization
 
 
 def parse_command_line
@@ -376,24 +332,25 @@ def read_craft_config(cfg)
 end
 
 def initialize_strategy
-    if $strategy_name == "simple" then
+    case $strategy_name
+    when "simple"
         $strategy = Strategy.new($program, $status_preferred, $status_alternate)
-    elsif $strategy_name == "bin_simple" then
+    when "bin_simple"
         $strategy = BinaryStrategy.new($program, $status_preferred, $status_alternate)
-    elsif $strategy_name == "exhaustive" then
+    when "exhaustive"
         $strategy = ExhaustiveStrategy.new($program, $status_preferred, $status_alternate)
-    elsif $strategy_name == "combinational" then
+    when "combinational"
         $strategy = ExhaustiveCombinationalStrategy.new($program, $status_preferred, $status_alternate)
-    elsif $strategy_name == "compositional" then
+    when "compositional"
         $strategy = CompositionalStrategy.new($program, $status_preferred, $status_alternate)
-    elsif $strategy_name == "comp_simple" then
+    when "comp_simple"
         $strategy = SimpleCompositionalStrategy.new($program, $status_preferred, $status_alternate)
-    elsif $strategy_name == "rprec" then
+    when "rprec"
         $strategy = RPrecStrategy.new($program, $status_preferred, $status_alternate)
         $strategy.split_threshold = $rprec_split_threshold
         $strategy.runtime_pct_threshold = $rprec_runtime_pct_threshold
         $strategy.skip_app_level = $rprec_skip_app_level
-    elsif $strategy_name == "ddebug" then
+    when "ddebug"
         $strategy = DeltaDebugStrategy.new($program, $status_preferred, $status_alternate)
     else
         puts "Unrecognized search strategy \"#{$strategy_name}\""
@@ -454,7 +411,6 @@ def run_profiler
     Dir.chdir($search_path)
     return passed
 end
-
 
 def read_profiler_data
     pt_by_id = Hash.new
@@ -706,6 +662,7 @@ def max(a, b)
     return a > b ? a : b
 end
 
+
 # }}}
 # {{{ output
 
@@ -733,7 +690,7 @@ def print_usage
     puts "   -c <file>      use <file> as initial base configuration"
     puts "   -j <np>        spawn up to <np> simultaneous jobs/configurations (-1 to remove limit)"
     puts "   -J <name>      use <name> job submission system (default is \"exec\")"
-    puts "                    valid systems: \"exec\", \"slurm\""
+    puts "                    valid systems:  \"exec\", \"slurm\""
     puts "   -k             keep all temporary run files"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
     puts "                    valid strategies:  \"simple\", \"bin_simple\", \"comp_simple\", \"exhaustive\","
@@ -775,7 +732,6 @@ def print_usage
     puts "Using Ruby #{RUBY_VERSION} #{RUBY_RELEASE_DATE}"
     puts " "
 end
-
 
 def get_status
     overall_status = "not running"
@@ -918,14 +874,12 @@ def print_status
     end
 end
 
-
 def format_time (elapsed)
     mins, secs = elapsed.divmod 60.0
     hrs, mins = mins.divmod 60.0
     #return "%d:%02d:%05.2f"%[hrs.to_i, mins.to_i, secs]
     return "%d:%02d:%02d"%[hrs.to_i, mins.to_i, secs.to_i]
 end
-
 
 def format_text (str, width)
     if str.size > width then
@@ -952,7 +906,6 @@ def rebuild_final_config
     end
 end
 
-
 def is_single_base (cfg, type)
     isb = false
     if cfg.exceptions.keys.size == 1 then
@@ -963,7 +916,6 @@ def is_single_base (cfg, type)
     end
     return isb
 end
-
 
 def build_best_report(num,copy_files=false)
     if $strategy_name == "rprec" then
@@ -1134,7 +1086,6 @@ def get_tested_configs_summary
     summary["tested"] = summary["total"] - summary["skipped"]
     return summary
 end
-
 
 def clean_everything
     toDelete = Array.new

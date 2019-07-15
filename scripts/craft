@@ -5,7 +5,7 @@
 # Generate floating-point precision configurations for a target application and
 # test them. Assemble a final recommended configuration.
 #
-# Copyright (C) 2018 Mike Lam, UMD/JMU/LLNL
+# Copyright (C) 2019 Mike Lam, UMD/JMU/LLNL
 # Original version written October 2012
 #
 
@@ -25,27 +25,27 @@ require 'json'
 # needed for quick set membership checking
 require 'set'
 
-# Global constants
+# global constants
 require_relative 'craft_consts'
 
-# Data structures
+# data structures
 require_relative 'craft_structs'
 
-# Search strategy routines
+# search strategy routines
 require_relative 'craft_strategies'
 
-# Search management routines
+# search management routines
 require_relative 'craft_manage'
 
-# File I/O routines
+# file I/O routines
 require_relative 'craft_filemanip'
 
-# Helper routines
+# helper routines
 require_relative 'craft_helpers'
 
 $CRAFT_VERSION = "1.2"
 
-# App entry point
+# app entry point
 def main
     srand
 
@@ -127,7 +127,6 @@ def main
     end
 
     # read search options
-    read_craft_driver
     parse_command_line
     if $main_mode == "resume" or $main_mode == "status" then
         if not File.exists?($settings_fn) then
