@@ -634,6 +634,30 @@ class CompositionalStrategy < Strategy
     end
 end # }}}
 
+# SimpleCompositionalStrategy
+#
+# Works like simple when a configuration fails (e.g., split it up) and like
+# compositional when a configuration passes (e.g., combine it with other passing
+# configurations). The only trick is making sure we don't try to split
+# combinations again.
+#
+# {{{ SimpleCompositionalStrategy
+class SimpleCompositionalStrategy < Strategy
+
+    def initialize(program, pref, alt)
+        super(program, pref, alt)
+        @comp = CompositionalStrategy.new(program, pref, alt, true)
+    end
+
+    def handle_completed_config(config)
+        if config.attrs["result"] == $RESULT_PASS then
+            @comp.handle_completed_config(config)
+        elsif not config.cuid.include?(CompositionalStrategy::SEP) then
+            super(config)
+        end
+    end
+end # }}}
+
 # RPrecStrategy
 #
 # Search algorithm that find the lowest reduced-precision level for each

@@ -386,6 +386,8 @@ def initialize_strategy
         $strategy = ExhaustiveCombinationalStrategy.new($program, $status_preferred, $status_alternate)
     elsif $strategy_name == "compositional" then
         $strategy = CompositionalStrategy.new($program, $status_preferred, $status_alternate)
+    elsif $strategy_name == "comp_simple" then
+        $strategy = SimpleCompositionalStrategy.new($program, $status_preferred, $status_alternate)
     elsif $strategy_name == "rprec" then
         $strategy = RPrecStrategy.new($program, $status_preferred, $status_alternate)
         $strategy.split_threshold = $rprec_split_threshold
@@ -734,7 +736,8 @@ def print_usage
     puts "                    valid systems: \"exec\", \"slurm\""
     puts "   -k             keep all temporary run files"
     puts "   -s <name>      use <name> strategy (default is \"bin_simple\")"
-    puts "                    valid strategies:  \"simple\", \"bin_simple\", \"exhaustive\", \"combinational\", \"compositional\", \"rprec\""
+    puts "                    valid strategies:  \"simple\", \"bin_simple\", \"comp_simple\", \"exhaustive\","
+    puts "                                       \"combinational\", \"compositional\", \"rprec\""
     puts "   -t <n>         run <n> trials and use max error / min runtime for evaluation"
     puts "   -V             enable variable mode for variable-level tuning and performance testing"
     puts " "
