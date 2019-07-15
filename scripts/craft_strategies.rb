@@ -563,6 +563,13 @@ class CompositionalStrategy < Strategy
 
     SEP="+"
 
+    attr_accessor :skip1card
+
+    def initialize(program, pref, alt, powers_of_two_only=false)
+        super(program, pref, alt)
+        @skip1card = powers_of_two_only
+    end
+
     def build_initial_configs
         all_configs = []
         find_points(@program).each do |pt|
@@ -603,11 +610,12 @@ class CompositionalStrategy < Strategy
         # build 2k and k+1 cardinality configurations by combining other passing
         # k and 1 cardinality configurations
         k = config.exceptions.keys.size
-        [1,k].uniq.each do |nk|
+        (@skip1card ? [k] : [1,k]).uniq.each do |nk|
             good_configs[nk].each do |cfg|
 
                 # get list of combined replacements
                 ids   = (config.cuid.split(SEP)  | cfg.cuid.split(SEP)).sort
+                next if ids.size != k+nk   # skip if there were duplicates
                 names = (config.label.split(SEP) | cfg.label.split(SEP)).sort
 
                 # build new configuration
@@ -620,8 +628,7 @@ class CompositionalStrategy < Strategy
                 end
                 new_cfg.attrs["level"] = config.attrs["level"]
 
-                # add configuration if it's actually different
-                add_to_workqueue(new_cfg) if new_cfg.exceptions.keys.size > k
+                add_to_workqueue(new_cfg)
             end
         end
     end
