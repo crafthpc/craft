@@ -123,9 +123,7 @@ def initialize_search
     save_settings
 
     # initialize work queue
-    configs = $strategy.build_initial_configs
-    configs = group_by_label(configs) if $group_by_label
-    add_to_workqueue_bulk(configs)
+    add_to_workqueue_bulk(group_by_labels($strategy.build_initial_configs))
     $max_queue_length = get_workqueue_length
 
 end # }}}

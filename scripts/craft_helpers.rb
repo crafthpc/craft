@@ -94,7 +94,7 @@ def parse_command_line
                 $num_trials = ARGV.shift.to_i
             elsif opt == '-g' then
                 # group by label
-                $group_by_label = true
+                $group_by_labels.concat(ARGV.shift.split(","))
             elsif opt == '-J' then
                 # job submission system
                 $job_mode = ARGV.shift
@@ -458,7 +458,8 @@ def update_cinst (pt)
     end
 end
 
-def group_by_label (configs)
+def group_by_labels (configs)
+    return configs if $group_by_labels.size == 0
     grouped_cfgs = []
     groups = Hash.new
     configs.each do |cfg|
@@ -466,12 +467,19 @@ def group_by_label (configs)
             grouped_cfgs << cfg
             next
         end
+        added_to_group = false
         cfg.attrs["labels"].each do |lbl|
+
+            # is there a label that we want to group by?
+            group = false
+            $group_by_labels.each { |tag| group = true if lbl.start_with?(tag) }
+            next unless group
+
             if groups.has_key?(lbl) then
                 # add to existing group config
                 grp = groups[lbl]
                 cfg.exceptions.keys.each do |x|
-                    grp.exceptions[x] = @preferred
+                    grp.exceptions[x] = cfg.exceptions[x]
                 end
                 if grp.attrs.has_key?("cinst") and cfg.attrs.has_key?("cinst") then
                     grp.attrs["cinst"] += cfg.attrs["cinst"]
@@ -483,8 +491,12 @@ def group_by_label (configs)
                 groups[lbl] = cfg
                 grouped_cfgs << cfg
             end
+            added_to_group = true
         end
+        grouped_cfgs << cfg unless added_to_group
     end
+    puts "Grouped by labels: #{$group_by_labels.join(",")}" +
+         " (merged #{configs.size} configs down to #{grouped_cfgs.size})"
     return grouped_cfgs
 end
 
@@ -710,7 +722,8 @@ def print_usage
     puts "   -S             disable queue sorting (improves overall performance but may converge slower)"
     puts " "
     puts "Variable-only options (no effect without \"-V\"):"
-    puts "   -g             group variables by labels"
+    puts "   -g <tag>       group variables by labels beginning with the given tag"
+    puts "                    valid tags: \"set-analysis\""
     puts " "
     puts "Shortcuts:"
     puts "   -m             memory-based mixed-precision analysis"

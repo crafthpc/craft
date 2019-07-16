@@ -38,7 +38,7 @@ def save_settings
     f.puts "num_trials=#{$num_trials.to_s}"
     f.puts "max_inproc=#{$max_inproc.to_s}"
     f.puts "keep_all_runs=#{$keep_all_runs ? "yes" : "no"}"
-    f.puts "group_by_label=#{$group_by_label ? "yes" : "no"}"
+    f.puts "group_by_labels=#{$group_by_labels.join(",")}"
 
     f.close
 end
@@ -97,8 +97,8 @@ def load_settings
             $max_inproc = value.to_i
         when "keep_all_runs"
             $keep_all_runs = (value == "yes")
-        when "group_by_label"
-            $group_by_label = (value == "yes")
+        when "group_by_labels"
+            $group_by_labels = value.split(",")
         end
         temp = f.gets
     end
