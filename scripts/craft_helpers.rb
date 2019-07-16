@@ -462,7 +462,7 @@ def group_by_label (configs)
     grouped_cfgs = []
     groups = Hash.new
     configs.each do |cfg|
-        if not cfg.attrs.has_key?("labels") then
+        if not cfg.attrs.has_key?("labels") or cfg.attrs["labels"].size == 0 then
             grouped_cfgs << cfg
             next
         end
