@@ -39,6 +39,7 @@ def save_settings
     f.puts "max_inproc=#{$max_inproc.to_s}"
     f.puts "keep_all_runs=#{$keep_all_runs ? "yes" : "no"}"
     f.puts "group_by_labels=#{$group_by_labels.join(",")}"
+    f.puts "merge_overlapping_groups=#{$merge_overlapping_groups ? "yes" : "no"}"
 
     f.close
 end
@@ -99,6 +100,8 @@ def load_settings
             $keep_all_runs = (value == "yes")
         when "group_by_labels"
             $group_by_labels = value.split(",")
+        when "merge_overlapping_groups"
+            $merge_overlapping_groups = (value == "yes")
         end
         temp = f.gets
     end

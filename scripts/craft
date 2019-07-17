@@ -85,6 +85,7 @@ def main
     $num_trials = 1                         # default number of trials
     $keep_all_runs = false                  # don't keep temporary files
     $group_by_labels = []                   # group by labels (variable mode only)
+    $merge_overlapping_groups = false       # merge overlapping groups (variable mode only)
     $job_mode = "exec"                      # how to submit jobs ("exec", "slurm")
 
     # plain text info files

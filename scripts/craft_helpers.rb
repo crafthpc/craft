@@ -95,6 +95,9 @@ def parse_command_line
             elsif opt == '-g' then
                 # group by label
                 $group_by_labels.concat(ARGV.shift.split(","))
+            elsif opt == '-M' then
+                # merge overlapping groups
+                $merge_overlapping_groups = true
             elsif opt == '-J' then
                 # job submission system
                 $job_mode = ARGV.shift
@@ -467,7 +470,7 @@ def group_by_labels (configs)
             grouped_cfgs << cfg
             next
         end
-        added_to_group = false
+        added_to_group = nil
         cfg.attrs["labels"].each do |lbl|
 
             # is there a label that we want to group by?
@@ -476,27 +479,45 @@ def group_by_labels (configs)
             next unless group
 
             if groups.has_key?(lbl) then
-                # add to existing group config
-                grp = groups[lbl]
-                cfg.exceptions.keys.each do |x|
-                    grp.exceptions[x] = cfg.exceptions[x]
+                if added_to_group.nil? or not $merge_overlapping_groups then
+                    # add to existing group config
+                    #puts "  adding #{cfg.cuid} to #{lbl}"
+                    grp = groups[lbl]
+                    cfg.exceptions.each do |k,v|
+                        grp.exceptions[k] = v
+                    end
+                    if grp.attrs.has_key?("cinst") and cfg.attrs.has_key?("cinst") then
+                        grp.attrs["cinst"] += cfg.attrs["cinst"]
+                    end
+                    added_to_group = grp
+                elsif $merge_overlapping_groups then
+                    # merge groups
+                    grp = added_to_group
+                    merge_grp = groups[lbl]
+                    #puts "  merging #{merge_grp.cuid} into #{grp.cuid}"
+                    merge_grp.exceptions.each do |k,v|
+                        grp.exceptions[k] = v
+                    end
+                    if grp.attrs.has_key?("cinst") and merge_grp.attrs.has_key?("cinst") then
+                        grp.attrs["cinst"] += merge_grp.attrs["cinst"]
+                    end
+                    groups[merge_grp.cuid] = grp
+                    grouped_cfgs.delete(merge_grp)
                 end
-                if grp.attrs.has_key?("cinst") and cfg.attrs.has_key?("cinst") then
-                    grp.attrs["cinst"] += cfg.attrs["cinst"]
-                end
-            else
+            elsif added_to_group.nil? then
                 # new group config
+                #puts "  adding #{cfg.cuid} to create #{lbl}"
                 cfg.cuid = lbl
                 cfg.label = lbl
                 groups[lbl] = cfg
                 grouped_cfgs << cfg
+                added_to_group = cfg
             end
-            added_to_group = true
         end
         grouped_cfgs << cfg unless added_to_group
     end
     puts "Grouped by labels: #{$group_by_labels.join(",")}" +
-         " (merged #{configs.size} configs down to #{grouped_cfgs.size})"
+         " (before: #{configs.size} configs, after: #{grouped_cfgs.size} configs)"
     return grouped_cfgs
 end
 
@@ -724,6 +745,7 @@ def print_usage
     puts "Variable-only options (no effect without \"-V\"):"
     puts "   -g <tag>       group variables by labels beginning with the given tag"
     puts "                    valid tags: \"set-analysis\""
+    puts "   -M             merge overlapping groups (no effect without \"-g\")"
     puts " "
     puts "Shortcuts:"
     puts "   -m             memory-based mixed-precision analysis"
