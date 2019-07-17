@@ -56,6 +56,20 @@ class Strategy
         return configs
     end
 
+    def find_configs(pt, configs)
+        if pt.type == @base_type then
+            cfg = AppConfig.new(pt.build_cuid, pt.build_label, @alternate)
+            cfg.add_pt_info(pt)
+            cfg.exceptions[pt.uid] = @preferred
+            cfg.attrs["level"] = pt.type
+            configs << cfg
+        else
+            pt.children.each do |child|
+                find_configs(child, configs)
+            end
+        end
+    end
+
     def handle_completed_config(config, force_add=false)
         if force_add or (config.attrs["result"] != $RESULT_PASS and
                          not is_single_base(config, $base_type)) then
@@ -283,21 +297,23 @@ class DeltaDebugStrategy < Strategy
 
     def build_config(change_set)
         # take complement of change set to obtain replacements
-        replacements = @all_variables - change_set
+        replacements = @all_configs - change_set
 
         # generate CUID and label
-        cuid  = replacements.map { |pt| pt.id.to_s }.sort.join("_")
+        cuid  = replacements.map { |cfg| cfg.cuid.to_s }.sort.join("+")
         cuid  = "NONE" if cuid == ""
-        label = replacements.map { |pt| pt.attrs["desc"] }.sort.join("_")
+        cuid.gsub!("#{@base_type} ","")
+        label = replacements.map { |cfg| cfg.label }.sort.join("+")
         label = "NONE" if label == ""
+        label.gsub!("#{@base_type} ","")
+        label.gsub!(" ","_")
 
         # create configuration object
         cfg = AppConfig.new(cuid, label, @alternate)
-        replacements.each do |pt|
-            cfg.add_pt_info(pt)
-            cfg.exceptions[pt.uid] = @preferred
-            cfg.attrs["level"] = pt.type
+        replacements.each do |c|
+            c.exceptions.each { |k,v| cfg.exceptions[k] = v }
         end
+        cfg.attrs["level"] = @base_type
         cfg.attrs["changeset"] = change_set
         return cfg
     end
@@ -309,14 +325,11 @@ class DeltaDebugStrategy < Strategy
     def run_custom_supervisor
 
         # get set of all possible basetype-level changes (usually variables)
-        @all_variables = []
-        find_variables(@program, @all_variables)
+        @all_configs = []
+        find_configs(@program, @all_configs)
 
-        #puts @all_variables.map { |v| v.attrs["desc"] +
-                                  #(v.attrs.has_key?("error") ? " " + v.attrs["error"].to_s : "") }
-
-        # sort variables by error (if present; e.g., provided by ADAPT)
-        @all_variables.sort! do |x,y|
+        # sort by error (if present; e.g., provided by ADAPT)
+        @all_configs.sort! do |x,y|
             if x.attrs.has_key?("error") and y.attrs.has_key?("error") then
                 y.attrs["error"].to_f <=> x.attrs["error"].to_f
             else
@@ -324,15 +337,14 @@ class DeltaDebugStrategy < Strategy
             end
         end
 
-        #puts "SORTED:"
-        #puts @all_variables.map { |v| v.attrs["desc"] +
-                                  #(v.attrs.has_key?("error") ? " " + v.attrs["error"].to_s : "") }
+        # group by labels
+        @all_configs = group_by_labels(@all_configs)
 
         # number of divisions at current level
         div = 2
 
         # lowest-cost change set found so far
-        @lc = @all_variables
+        @lc = @all_configs
         @lc_cfg = build_config(@lc)
         @lc_cfg.attrs["runtime"] = $baseline_runtime
 
@@ -360,7 +372,7 @@ class DeltaDebugStrategy < Strategy
                 end
 
                 # build and test complement set
-                com_cfg = build_config(@all_variables - divs[i])
+                com_cfg = build_config(@all_configs - divs[i])
                 if com_cfg.exceptions.keys.size > 0 then
                     new_cfgs << com_cfg
                     com_cuids << com_cfg.cuid
@@ -466,20 +478,6 @@ class ExhaustiveStrategy < Strategy
         configs = Array.new
         find_configs(@program, configs)
         return configs
-    end
-
-    def find_configs(pt, configs)
-        if pt.type == @base_type then
-            cfg = AppConfig.new(pt.build_cuid, pt.build_label, @alternate)
-            cfg.add_pt_info(pt)
-            cfg.exceptions[pt.uid] = @preferred
-            cfg.attrs["level"] = pt.type
-            configs << cfg
-        else
-            pt.children.each do |child|
-                find_configs(child, configs)
-            end
-        end
     end
 
     def split_config(config)
