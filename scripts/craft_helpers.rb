@@ -569,23 +569,27 @@ def start_config (cfg)
 
     # create run script
     run_fn = "#{cfg_path}#{$craft_run}"
+    out_fn = "#{cfg_path}#{$craft_output}"
     script = File.new(run_fn, "w")
     script.puts "#!/usr/bin/env bash"
     if $job_mode == "slurm" then
         script.puts "#SBATCH -J \"#{cfg.shortlabel}\""
-        script.puts "#SBATCH -o #{cfg_path}#{$craft_output}"
+        script.puts "#SBATCH -o #{cfg_path}slurm.log"
     end
     script.puts "cd #{cfg_path}"
     if $variable_mode then
-        script.puts "#{$search_path}#{$craft_builder} #{cfg_file} | tee .build_status"
+        script.print "#{$search_path}#{$craft_builder} #{cfg_file} | tee .build_status"
+        script.puts " &>> #{out_fn}"
     else
         script.print "#{$fpinst_invoke} -i #{$fortran_mode ? "-N" : ""}"
-        script.puts " -c #{cfg_file} #{$binary_path} | tee .build_status"
+        script.print " -c #{cfg_file} #{$binary_path} | tee .build_status"
+        script.puts " &>> #{out_fn}"
     end
     script.puts 'if [ -z "$(grep -E "status:\s*error" .build_status)" ]; then'
     $num_trials.times do
         script.print "    #{$search_path}#{$craft_driver}"
-        script.puts $variable_mode ? "" : " #{cfg_path}mutant"
+        script.print $variable_mode ? "" : " #{cfg_path}mutant"
+        script.puts " &>> #{out_fn}"
     end
     script.puts 'fi'
 
@@ -594,7 +598,8 @@ def start_config (cfg)
     File.chmod(0700, run_fn)
     case $job_mode
     when "exec"
-        pid = fork { exec "#{run_fn} &>#{cfg_path}#{$craft_output}" }
+        pid = fork { exec "#{run_fn}" }
+        Process.detach(pid)
     when "slurm"
         output = `sbatch #{run_fn} 2>&1`
         if output =~ /Submitted batch job (\d+)/ then
@@ -620,17 +625,11 @@ def is_config_running? (cfg)
 end
 
 def wait_for_config (cfg)
-    case $job_mode
-    when "exec"
-        Process.wait(cfg.attrs["pid"])
-    else
-        # default: just poll and wait
-        wait_time = 1
-        while is_config_running?(cfg)
-            sleep wait_time
-            wait_time *= 2
-            wait_time = min(wait_time, 60)  # check at least once per minute
-        end
+    wait_time = 1
+    while is_config_running?(cfg)
+        sleep wait_time
+        wait_time *= 2
+        wait_time = min(wait_time, 60)  # check at least once per minute
     end
 end
 
