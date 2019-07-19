@@ -232,8 +232,8 @@ def finalize_search
     puts ""
     puts "Candidate queue exhausted.  [Max queue length: ~#{$max_queue_length} item(s)]"
 
-    # generate and test final config file
-    print "Generating and final configuration ... "
+    # generate final config file
+    print "Generating final configuration ... "
     $stdout.flush
     rebuild_final_config
     puts "Done."
