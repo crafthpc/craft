@@ -139,8 +139,8 @@ def main
 
     # important single configuration files (must be initialized after loading
     # settings to ascertain correct extension)
-    $orig_config_fn  = "#{$search_path}craft_orig.#{ $variable_mode ? "json" : "cfg"}"
-    $final_config_fn = "#{$search_path}craft_final.#{$variable_mode ? "json" : "cfg"}"
+    $orig_config_fn  = "#{$search_path}#{$search_tag}_orig.#{ $variable_mode ? "json" : "cfg"}"
+    $final_config_fn = "#{$search_path}#{$search_tag}_final.#{$variable_mode ? "json" : "cfg"}"
 
     if $main_mode == "status" then
         load_data_structures
