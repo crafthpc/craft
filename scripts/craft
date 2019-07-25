@@ -87,6 +87,7 @@ def main
     $group_by_labels = []                   # group by labels (variable mode only)
     $merge_overlapping_groups = false       # merge overlapping groups (variable mode only)
     $job_mode = "exec"                      # how to submit jobs ("exec", "slurm")
+    $timeout_limit = nil                    # cancel tests after this many seconds (1.5x baseline by default)
 
     # plain text info files
     $settings_fn = "#{$search_path}#{$search_tag}.settings"

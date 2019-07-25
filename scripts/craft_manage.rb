@@ -89,6 +89,7 @@ def initialize_search
     print "  walltime: #{format_time($baseline_runtime.to_f)}"
     print "  casts: #{$baseline_casts}" if $variable_mode
     puts  "]"
+    puts "Configuration test timeout limit is #{$timeout_limit} second(s)."
 
     # initial profiling run (if not in variable mode)
     # depends on $program being initialized
@@ -170,6 +171,15 @@ end # }}}
 def run_main_search_loop
     wait_time = 1   # exponential backoff for queue monitoring
     while get_workqueue_length + get_inproc_length > 0 do
+
+        # check for configs that have timed out
+        get_inproc_configs.each do |cfg|
+            rtime = Time.now.to_i - cfg.attrs["start_time"]
+            limit = max($timeout_limit * ($num_trials+1), 30) # numtrials+1 b/c of instrumentation
+            if rtime > limit then
+                halt_config(cfg)
+            end
+        end
 
         # check for any completed configurations
         get_inproc_configs.select { |cfg| not is_config_running?(cfg) }.each do |cfg|

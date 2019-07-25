@@ -36,6 +36,7 @@ def save_settings
     f.puts "disable_queue_sort=#{$disable_queue_sort.to_s}"
     f.puts "mixed_use_rprec=#{$mixed_use_rprec.to_s}"
     f.puts "num_trials=#{$num_trials.to_s}"
+    f.puts "timeout_limit=#{$timeout_limit.to_s}"
     f.puts "max_inproc=#{$max_inproc.to_s}"
     f.puts "keep_all_runs=#{$keep_all_runs ? "yes" : "no"}"
     f.puts "group_by_labels=#{$group_by_labels.join(",")}"
@@ -94,6 +95,8 @@ def load_settings
             $mixed_use_rprec = (value == true.to_s)
         when "num_trials"
             $num_trials = value.to_i
+        when "timeout_limit"
+            $timeout_limit = value.to_i
         when "max_inproc"
             $max_inproc = value.to_i
         when "keep_all_runs"

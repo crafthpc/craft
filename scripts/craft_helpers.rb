@@ -92,6 +92,9 @@ def parse_command_line
             elsif opt == '-t' then
                 # set trial count
                 $num_trials = ARGV.shift.to_i
+            elsif opt == '-T' then
+                # set timeout interval
+                $timeout_limit = ARGV.shift.to_i
             elsif opt == '-g' then
                 # group by label
                 $group_by_labels.concat(ARGV.shift.split(","))
@@ -375,6 +378,11 @@ def run_baseline_performance
     $baseline_error   = perf_cfg.attrs["error"]
     $baseline_runtime = perf_cfg.attrs["runtime"]
     $baseline_casts   = perf_cfg.attrs["casts"]
+
+    # calculate timeout limit if not provided as a command-line argument;
+    # baseline runtime (unless it's less than 1 sec) and increase by 50%
+    $timeout_limit = (max($baseline_runtime,1.0) * 1.5).to_i if $timeout_limit.nil?
+
     return perf_cfg.attrs["result"] == $RESULT_PASS
 end
 
@@ -545,6 +553,29 @@ def calculate_pct_stats (cfg)
     cfg.attrs["pct_cinst"] = pct_cinst.to_s
 end
 
+def get_all_child_pids (pid)
+
+    # build ppid => [pids] lookup table
+    children = {}
+    `ps -eo pid= -o ppid=`.split("\n").map { |s| s.split }.each do |p,pp|
+        children[pp.to_i] = [] if not children.has_key?(pp.to_i)
+        children[pp.to_i] << p.to_i
+    end
+
+    # breadth-first search through ppid => [pid] relationship
+    pids = Set.new
+    todo = [pid]
+    while todo.size > 0
+        p = todo.shift
+        next if not children.has_key?(p)
+        children[p].each do |c|
+            todo << c if not pids.include?(c)
+            pids.add(c)
+        end
+    end
+    return pids.to_a
+end
+
 def run_config (cfg)
     # synchronous wrapper around the following calls
     start_config(cfg)
@@ -610,17 +641,39 @@ def start_config (cfg)
         end
     end
     cfg.attrs["pid"] = pid
+    cfg.attrs["start_time"] = Time.now.to_i
 end
 
 def is_config_running? (cfg)
     case $job_mode
     when "exec"
+        # TODO: check all child pids as well? (unnecessary so far in testing)
         return `ps -o state= -p #{cfg.attrs["pid"]}`.chomp =~ /R|D|S/
     when "slurm"
         status = `sacct -nDX -o state -j #{cfg.attrs["pid"]}`
         return false if status =~ /BOOT_FAIL|CANCELLED|COMPLETED|DEADLINE|FAILED/
         return false if status =~ /NODE_FAIL|OUT_OF_MEMORY|PREEMPTED|TIMEOUT/
         return true
+    end
+end
+
+def halt_config (cfg)
+
+    # stop the running job
+    pid = cfg.attrs["pid"].to_i
+    case $job_mode
+    when "exec"
+        pids = [pid] + get_all_child_pids(pid)
+        pids.each { |p| Process.kill("KILL", p.to_i) }
+    when "slurm"
+        `scancel #{pid}`
+    end
+
+    # make sure output file has enough info for get_config_results to work
+    outfn = "#{$run_path}#{cfg.filename(false)}/#{$craft_output}"
+    File.open(outfn, "a") do |f|
+        f.puts "status:  fail"
+        f.puts "runtime: #{$timeout_limit}"
     end
 end
 
@@ -728,6 +781,7 @@ def print_usage
     puts "                    valid strategies:  \"simple\", \"bin_simple\", \"comp_simple\", \"exhaustive\","
     puts "                                       \"combinational\", \"compositional\", \"rprec\""
     puts "   -t <n>         run <n> trials and use max error / min runtime for evaluation"
+    puts "   -T <n>         timeout trials after <n> seconds (default is 1.5x baseline runtime)"
     puts "   -V             enable variable mode for variable-level tuning and performance testing"
     puts " "
     puts "Binary-only options (no effect with \"-V\"):"
