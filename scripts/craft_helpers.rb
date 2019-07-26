@@ -604,7 +604,7 @@ def start_config (cfg)
     script = File.new(run_fn, "w")
     script.puts "#!/usr/bin/env bash"
     if $job_mode == "slurm" then
-        script.puts "#SBATCH -J \"#{cfg.shortlabel}\""
+        script.puts "#SBATCH -J \"#{cfg.shortlabel.gsub(/"/," ")}\""
         script.puts "#SBATCH -o #{cfg_path}slurm.log"
     end
     script.puts "cd #{cfg_path}"
