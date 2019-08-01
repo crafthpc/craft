@@ -257,6 +257,7 @@ def read_json_config(cfg)
                 else
                     var.attrs["desc"] = a["handle"]
                 end
+                var.attrs["desc"] = var.attrs["desc"][/([^:]*)$/, 1]   # strip name from FQN
                 var.attrs["scope"] = a["scope"] if a.has_key?("scope")
                 var.attrs["source_info"] = a["source_info"] if a.has_key?("source_info")
                 var.attrs["error"] = a["error"] if a.has_key?("error")
