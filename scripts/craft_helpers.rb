@@ -663,7 +663,13 @@ def halt_config (cfg)
     case $job_mode
     when "exec"
         pids = [pid] + get_all_child_pids(pid)
-        pids.each { |p| Process.kill("KILL", p.to_i) }
+        pids.each do |p|
+            begin
+                Process.kill("KILL", p.to_i)
+            rescue => e
+                # process has already died
+            end
+        end
     when "slurm"
         `scancel #{pid}`
     end
