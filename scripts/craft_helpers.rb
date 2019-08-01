@@ -217,7 +217,7 @@ def read_json_config(cfg)
                     a.has_key?("handle") then
 
                 # find enclosing module (or just the default module)
-                if a.has_key?("source_info") and a["source_info"] =~ /([^\/]*\.\w+)$/ then
+                if a.has_key?("source_info") and a["source_info"] =~ /([^\/]*\.\w+)(:\d+)*$/ then
                     modname = $1
                     if modules.has_key?(modname) then
                         mod = modules[modname]
