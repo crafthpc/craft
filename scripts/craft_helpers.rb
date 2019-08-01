@@ -175,9 +175,8 @@ def merge_additional_configs
                 puts "Done."
             end
         rescue => e
-            puts "ERROR: Unable to read configuration #{fn}"
+            puts "Error: Unable to read additional configuration #{fn}"
             puts e
-            exit
         end
     end
     File.open($orig_config_fn, "w") do |f|

@@ -56,7 +56,7 @@ def initialize_search
         end
     else
         if $variable_mode then
-            puts "\nERROR: Must provide initial configuration ('-c <file>') in variable mode"
+            puts "\nError: Must provide initial configuration ('-c <file>') in variable mode"
             exit
         else
             # run fpconf to generate config
