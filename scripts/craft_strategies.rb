@@ -597,7 +597,7 @@ class CompositionalStrategy < Strategy
         good_configs = []
         get_tested_configs.each do |cfg|
             if cfg.attrs["result"] == $RESULT_PASS then
-                ck = cfg.exceptions.keys.size
+                ck = cfg.cuid.split(SEP).size
                 while good_configs.size < ck+1 do
                     good_configs << []
                 end
@@ -607,7 +607,7 @@ class CompositionalStrategy < Strategy
 
         # build 2k and k+1 cardinality configurations by combining other passing
         # k and 1 cardinality configurations
-        k = config.exceptions.keys.size
+        k = config.cuid.split(SEP).size
         (@skip1card ? [k] : [1,k]).uniq.each do |nk|
             good_configs[nk].each do |cfg|
 
