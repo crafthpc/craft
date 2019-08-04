@@ -207,6 +207,7 @@ def read_json_config(cfg)
     modules = Hash.new
     modules["DEFAULT"] = PPoint.new("#{$TYPE_MODULE} ##{midx}", $TYPE_MODULE, $STATUS_NONE)
     modules["DEFAULT"].attrs["desc"] = "DEFAULT"
+    program.children << modules["DEFAULT"]
     functions = Hash.new    # module name => function name => function
     functions["DEFAULT"] = Hash.new
     if cfg.has_key?("actions") then
