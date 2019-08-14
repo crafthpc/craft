@@ -722,6 +722,7 @@ def get_config_results (cfg)
             casts += $3.to_i
         end
     end
+    runtime = 0.00001 if runtime == 0.0
     cfg.attrs["result"]    = result
     cfg.attrs["error"]     = error.nil?   ? 0.0 : error
     cfg.attrs["runtime"]   = runtime.nil? ? 1.0 : runtime
