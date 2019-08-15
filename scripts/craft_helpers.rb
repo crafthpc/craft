@@ -680,7 +680,7 @@ def halt_config (cfg)
     outfn = "#{$run_path}#{cfg.filename(false)}/#{$craft_output}"
     File.open(outfn, "a") do |f|
         f.puts "status:  fail"
-        f.puts "runtime: #{$timeout_limit}"
+        f.puts "time: #{$timeout_limit}"
     end
 end
 
@@ -707,18 +707,18 @@ def get_config_results (cfg)
     runtime = nil
     casts = 0
     File.foreach(outfn) do |line|
-        if line =~ /status:\s*pass/i and result.nil? then
+        if line =~ /^\s*status:\s*pass/i and result.nil? then
             result = $RESULT_PASS
-        elsif line =~ /status:\s*fail/i and (result.nil? or
+        elsif line =~ /^\s*status:\s*fail/i and (result.nil? or
                                                 result == $RESULT_PASS) then
             result = $RESULT_FAIL
-        elsif line =~ /status:\s*error/i and
+        elsif line =~ /^\s*status:\s*error/i and
             result = $RESULT_ERROR
-        elsif line =~ /error:\s*(.+)/i then
+        elsif line =~ /^\s*error:\s*(.+)/i then
             error = error.nil? ? $1.to_f : max(error, $1.to_f)
-        elsif line =~ /time:\s*(.+)/i then
+        elsif line =~ /^\s*time:\s*(.+)/i then
             runtime = runtime.nil? ? $1.to_f : min(runtime, $1.to_f)
-        elsif line =~ /(float|double)\s*=>\s*(float|double)\s*:\s*(\d+)/ then
+        elsif line =~ /^\s*(float|double)\s*=>\s*(float|double)\s*:\s*(\d+)/ then
             casts += $3.to_i
         end
     end
