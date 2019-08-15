@@ -382,7 +382,7 @@ def run_baseline_performance
 
     # calculate timeout limit if not provided as a command-line argument;
     # baseline runtime (unless it's less than 1 sec) and increase by 50%
-    $timeout_limit = (max($baseline_runtime,1.0) * 1.5).to_i if $timeout_limit.nil?
+    $timeout_limit = (max($baseline_runtime,1.0) * 1.5).ceil if $timeout_limit.nil?
 
     return perf_cfg.attrs["result"] == $RESULT_PASS
 end
@@ -675,6 +675,8 @@ def halt_config (cfg)
     when "slurm"
         `scancel #{pid}`
     end
+    cfg.attrs["timeout"] = "yes"
+    puts "Configuration #{cfg.shortlabel} failed due to timeout."
 
     # make sure output file has enough info for get_config_results to work
     outfn = "#{$run_path}#{cfg.filename(false)}/#{$craft_output}"
@@ -883,6 +885,7 @@ def print_status
         status_text << "#{indent}   Total passed:           #{"%13d" % summary["pass"]}"
         status_text << "#{indent}     Total skipped:        #{"%13d" % summary["skipped"]}" unless $variable_mode
         status_text << "#{indent}   Total failed:           #{"%13d" % summary["fail"]}"
+        status_text << "#{indent}     Total timed out:      #{"%13d" % summary["timeout"]}"
         status_text << "#{indent}   Total aborted:          #{"%13d" % summary["error"]}"
         status_text << "#{indent}   Module-level:           #{"%13d" % summary[$TYPE_MODULE]}"
         status_text << "#{indent}   Function-level:         #{"%13d" % summary[$TYPE_FUNCTION]}"
@@ -1176,6 +1179,9 @@ def get_tested_configs_summary
         end
         if cfg.attrs.has_key?("level") then
             summary[cfg.attrs["level"]] += 1
+        end
+        if cfg.attrs.has_key?("timeout") then
+            summary["timeout"] += 1
         end
     end
     summary["total"] = tested_cfgs.size
