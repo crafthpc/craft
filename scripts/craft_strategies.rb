@@ -295,6 +295,13 @@ class DeltaDebugStrategy < Strategy
         return cfg.attrs["runtime"].to_f
     end
 
+    def format_change_sets(cfgs)
+        labels = cfgs.map do |cfg|
+            cfg.label.to_s.gsub("#{@base_type} ","").gsub(" ","_")
+        end
+        return "{" + labels.sort.join(",") + "}"
+    end
+
     def build_config(change_set)
         # take complement of change set to obtain replacements
         replacements = @all_configs - change_set
@@ -351,7 +358,8 @@ class DeltaDebugStrategy < Strategy
         done = false
         while not done do
 
-            puts "Current LC: #{@lc_cfg.exceptions.size} change(s), cost=#{get_cost(@lc_cfg)}, label=#{@lc_cfg.shortlabel}"
+            puts "Current LC: #{@lc.size} in change set, cost=#{get_cost(@lc_cfg)}, label=#{@lc_cfg.shortlabel}"
+            puts "  LC = #{format_change_sets(@lc)}"
 
             # partition current
 
@@ -362,7 +370,7 @@ class DeltaDebugStrategy < Strategy
             new_cfgs = []
             divs.size.times do |i|
 
-                puts "Test subset #{i+1}/#{divs.size} in round of #{div}"
+                puts "Testing subset #{i+1}/#{divs.size} in round of #{div}: #{format_change_sets(divs[i])}"
 
                 # build and test subset
                 set_cfg = build_config(divs[i])
@@ -392,7 +400,7 @@ class DeltaDebugStrategy < Strategy
             configs.each do |cfg|
                 if cfg.attrs["result"] == $RESULT_PASS and
                         (set_cuids.include?(cfg.cuid) or com_cuids.include?(cfg.cuid)) then
-                    puts "EVALUATING: #{cfg.shortlabel}  cost=#{get_cost(cfg)} result=#{cfg.attrs["result"]}"
+                    puts "EVALUATING PASSING CONFIG: #{cfg.shortlabel}  cost=#{get_cost(cfg)}"
                     if set_cuids.include?(cfg.cuid) and get_cost(cfg) < get_cost(@lc_cfg) then
                         @lc = cfg.attrs["changeset"]
                         @lc_cfg = cfg
