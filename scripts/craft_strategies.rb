@@ -380,7 +380,7 @@ class DeltaDebugStrategy < Strategy
                 end
 
                 # build and test complement set
-                com_cfg = build_config(@all_configs - divs[i])
+                com_cfg = build_config(@lc - divs[i])
                 if com_cfg.exceptions.keys.size > 0 then
                     new_cfgs << com_cfg
                     com_cuids << com_cfg.cuid
