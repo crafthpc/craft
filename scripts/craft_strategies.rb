@@ -348,7 +348,7 @@ class DeltaDebugStrategy < Strategy
         @all_configs = group_by_labels(@all_configs)
 
         # number of divisions at current level
-        div = 2
+        div = 1
 
         # lowest-cost change set found so far
         @lc = @all_configs
@@ -422,6 +422,7 @@ class DeltaDebugStrategy < Strategy
             if changed then
                 puts "FOUND NEW LC: #{@lc_cfg.shortlabel}  cost=#{get_cost(@lc_cfg)}"
                 div = lc_div
+                done = true if @lc.size == 0  # no more variables in change set
             else
                 print "NO NEW LC - "
                 if div > @lc.size then
